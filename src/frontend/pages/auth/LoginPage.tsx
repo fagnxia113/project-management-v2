@@ -66,8 +66,8 @@ export default function LoginPage() {
               <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white mt-4">汇升智合项目管理系统</h1>
-          <p className="text-blue-200 mt-2">企业级项目管理解决方案</p>
+          <h1 className="text-2xl font-bold text-white mt-4">四为信网项目管理系统</h1>
+          <p className="text-blue-200 mt-2">江苏四为信网检测技术有限公司</p>
         </div>
 
         {/* 登录表单 */}
@@ -117,7 +117,7 @@ export default function LoginPage() {
 
         {/* 底部信息 */}
         <div className="text-center mt-8 text-blue-200 text-sm">
-          <p>© 2026 汇升智合 · 版权所有</p>
+          <p>© 2026 江苏四为信网检测技术有限公司 · 版权所有</p>
         </div>
       </div>
     </div>

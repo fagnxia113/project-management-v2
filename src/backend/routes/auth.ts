@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from '../database/connection.js'
 
 const router = Router()
-const JWT_SECRET = process.env.JWT_SECRET || 'huisheng-zhihe-secret-key-2026'
+const JWT_SECRET = process.env.JWT_SECRET || 'siweixinwang-secret-key-2026'
 
 // 确保users表存在
 async function ensureUsersTable() {

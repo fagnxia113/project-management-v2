@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
+import pinyin from 'pinyin';
 import {
   WorkflowInstance,
   WorkflowTask,
@@ -18,6 +19,7 @@ import { approverResolver } from './ApproverResolver.js';
 import { gatewayHandler } from './GatewayHandler.js';
 import { executionLogger } from './ExecutionLogger.js';
 import { performanceMonitor } from './PerformanceMonitor.js';
+import { db } from '../database/connection.js';
 
 // 流程引擎配置
 interface WorkflowEngineConfig {
@@ -610,9 +612,143 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     console.log(`[EnhancedWorkflowEngine] 执行服务任务: ${node.name}`);
     
-    // TODO: 实现服务任务执行逻辑
+    const serviceType = node.config?.serviceType;
+    const serviceConfig = node.config?.serviceConfig;
+    
+    if (serviceType === 'createEmployee') {
+      await this.executeCreateEmployeeService(instance, serviceConfig);
+    }
     
     await this.executeGatewayOrUserTask(instance, definition, node);
+  }
+
+  /**
+   * 执行创建员工服务任务
+   */
+  private async executeCreateEmployeeService(
+    instance: WorkflowInstance,
+    config: any
+  ): Promise<void> {
+    try {
+      const formData = instance.variables?.formData || {};
+      const dataMapping = config?.dataMapping || {};
+      
+      // 提取员工信息
+      const employeeName = this.resolveDataMapping(dataMapping.name, formData);
+      const employeeNo = this.resolveDataMapping(dataMapping.employee_no, formData);
+      const departmentId = this.resolveDataMapping(dataMapping.department_id, formData);
+      const positionId = this.resolveDataMapping(dataMapping.position_id, formData);
+      const hireDate = this.resolveDataMapping(dataMapping.hire_date, formData);
+      const employeeType = this.resolveDataMapping(dataMapping.employee_type, formData);
+      const email = formData.email || '';
+      const phone = formData.phone || '';
+      
+      if (!employeeName) {
+        console.error('[EnhancedWorkflowEngine] 员工姓名为空，无法创建员工记录');
+        return;
+      }
+      
+      // 生成拼音用户名
+      const username = await this.generatePinyinUsername(employeeName);
+      
+      // 1. 创建员工记录
+      const employeeId = uuidv4();
+      await db.execute(
+        `INSERT INTO employees (id, name, employee_no, department_id, position_id, email, phone, hire_date, employee_type, status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [employeeId, employeeName, employeeNo, departmentId, positionId, email, phone, hireDate, employeeType, 'active']
+      );
+      console.log(`[EnhancedWorkflowEngine] 员工记录创建成功: ${employeeName} (${employeeId})`);
+      
+      // 2. 创建用户账号
+      const userId = uuidv4();
+      const defaultPassword = '123456'; // 默认密码
+      await db.execute(
+        `INSERT INTO users (id, username, password, name, email, role, status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [userId, username, defaultPassword, employeeName, email, 'user', 'active']
+      );
+      console.log(`[EnhancedWorkflowEngine] 用户账号创建成功: ${username} (${userId})`);
+      
+      // 3. 更新员工记录关联的用户ID
+      await db.execute(
+        `UPDATE employees SET user_id = ? WHERE id = ?`,
+        [userId, employeeId]
+      );
+      
+      // 记录执行日志
+      if (this.config.enableExecutionLog) {
+        await executionLogger.log({
+          executionId: uuidv4(),
+          action: 'create_employee_and_user',
+          instanceId: instance.id,
+          details: { employeeId, userId, username, employeeName },
+          timestamp: new Date()
+        });
+      }
+      
+    } catch (error) {
+      console.error('[EnhancedWorkflowEngine] 创建员工和用户失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 解析数据映射
+   */
+  private resolveDataMapping(mapping: string, formData: any): any {
+    if (!mapping) return null;
+    
+    // 处理 ${formData.xxx} 格式
+    const match = mapping.match(/^\$\{formData\.(\w+)\}$/);
+    if (match) {
+      return formData[match[1]];
+    }
+    
+    // 直接返回值
+    return mapping;
+  }
+
+  /**
+   * 生成拼音用户名
+   */
+  private async generatePinyinUsername(name: string): Promise<string> {
+    // 转换为拼音（小写，无空格）
+    const py = pinyin(name, {
+      style: 'normal', // 普通风格，不带声调
+      heteronym: false // 不启用多音字
+    });
+    
+    let baseUsername = py.map((item: string[]) => item[0]).join('').toLowerCase();
+    
+    // 移除特殊字符，只保留字母和数字
+    baseUsername = baseUsername.replace(/[^a-z0-9]/g, '');
+    
+    if (!baseUsername) {
+      baseUsername = 'user';
+    }
+    
+    // 检查用户名是否已存在
+    let username = baseUsername;
+    let counter = 1;
+    
+    while (await this.isUsernameExists(username)) {
+      username = `${baseUsername}${counter}`;
+      counter++;
+    }
+    
+    return username;
+  }
+
+  /**
+   * 检查用户名是否已存在
+   */
+  private async isUsernameExists(username: string): Promise<boolean> {
+    const result = await db.queryOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM users WHERE username = ?',
+      [username]
+    );
+    return result ? result.count > 0 : false;
   }
 
   // ==================== 缓存管理 ====================
