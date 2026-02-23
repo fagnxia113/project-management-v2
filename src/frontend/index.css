@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.3);
+}
+
+body {
+  margin: 0;
+  font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+@layer components {
+  .premium-card {
+    @apply bg-white rounded-2xl border border-slate-200 shadow-sm transition-all duration-300;
+  }
+  .premium-card:hover {
+    @apply shadow-md border-primary/20 -translate-y-0.5;
+  }
+  .glass-card {
+    @apply backdrop-blur-md bg-white/70 border border-white/30 shadow-xl;
+  }
+  .btn-primary {
+    @apply px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all active:scale-95 font-medium shadow-lg shadow-blue-500/20 text-sm;
+  }
+  .btn-secondary {
+    @apply px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all active:scale-95 font-medium text-sm;
+  }
+  .input-standard {
+    @apply w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm;
+  }
+  .status-badge {
+    @apply px-2.5 py-1 rounded-lg text-xs font-semibold uppercase tracking-wider;
+  }
+}
+
+/* Custom Gradients */
+.bg-mesh {
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(215, 94%, 87%, 0.3) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(220, 100%, 78%, 0.2) 0px, transparent 50%);
+}
+
+.animate-pulse-subtle {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .8; }
+}

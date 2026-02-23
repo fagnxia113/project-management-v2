@@ -1,0 +1,272 @@
+import { db } from '../database/connection.js';
+import { ApproverSource, Approver, ProcessContext } from '../types/workflow.js';
+
+export class ApproverResolver {
+  async resolveApprovers(
+    source: ApproverSource,
+    context: ProcessContext
+  ): Promise<Approver[]> {
+    try {
+      const approvers = await this.doResolveApprovers(source, context);
+      if (approvers.length > 0) {
+        return approvers;
+      }
+
+      // 尝试备选审批人
+      if (source.fallback) {
+        return this.resolveApprovers(source.fallback, context);
+      }
+
+      return [];
+    } catch (error) {
+      console.error('解析审批人失败:', error);
+      if (source.fallback) {
+        return this.resolveApprovers(source.fallback, context);
+      }
+      return [];
+    }
+  }
+
+  private async doResolveApprovers(
+    source: ApproverSource,
+    context: ProcessContext
+  ): Promise<Approver[]> {
+    switch (source.type) {
+      case 'fixed':
+      case 'user':
+        return this.resolveFixed(source.value);
+      
+      case 'role':
+        return this.resolveByRole(source.value, context);
+      
+      case 'department':
+        return this.resolveByDepartment(source.value, context);
+      
+      case 'superior':
+        return this.resolveSuperior(context.initiator.id, source.value);
+      
+      case 'department_manager':
+        return this.resolveByRole('department_manager', context);
+      
+      case 'project_manager':
+        return this.resolveByRole('project_manager', context);
+      
+      case 'form_field':
+        return this.resolveFromFormField(source.value, context.formData);
+      
+      case 'expression':
+        return this.resolveByExpression(source.value, context);
+      
+      case 'previous_handler':
+        return this.resolvePreviousHandler(context);
+      
+      case 'initiator':
+        return [context.initiator];
+      
+      default:
+        return [];
+    }
+  }
+
+  private async resolveFixed(value: string | string[]): Promise<Approver[]> {
+    const userIds = Array.isArray(value) ? value : [value];
+    const approvers: Approver[] = [];
+
+    for (const userId of userIds) {
+      const user = await this.getUserInfo(userId);
+      if (user) {
+        approvers.push(user);
+      }
+      // 如果数据库中找不到用户，不添加默认审批人
+      // 这样可以支持"无审批人时跳过"的场景
+    }
+
+    return approvers;
+  }
+
+  private async resolveByRole(value: string | string[], context: ProcessContext): Promise<Approver[]> {
+    const roles = Array.isArray(value) ? value : [value];
+    const approvers: Approver[] = [];
+
+    for (const role of roles) {
+      const users = await this.getUsersByRole(role);
+      approvers.push(...users);
+    }
+
+    return approvers;
+  }
+
+  private async resolveByDepartment(value: string | string[], context: ProcessContext): Promise<Approver[]> {
+    const departments = Array.isArray(value) ? value : [value];
+    const approvers: Approver[] = [];
+
+    for (const department of departments) {
+      const users = await this.getUsersByDepartment(department);
+      approvers.push(...users);
+    }
+
+    return approvers;
+  }
+
+  private async resolveSuperior(userId: string, level: string): Promise<Approver[]> {
+    // 这里简化处理，实际应该根据职级层级获取
+    // 例如，level为"direct"获取直接上级，"second"获取间接上级
+    const user = await this.getUserInfo(userId);
+    if (!user) {
+      return [];
+    }
+
+    // 假设我们有一个employee_hierarchy表存储层级关系
+    const rows = await db.query<any>(
+      `SELECT id, name, department_id, position FROM employees WHERE department_id = ? AND position IN ('manager', 'director')`,
+      [user.department]
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      department: row.department_id,
+      position: row.position
+    }));
+  }
+
+  private async resolveFromFormField(value: string | string[], formData: Record<string, any>): Promise<Approver[]> {
+    const fields = Array.isArray(value) ? value : [value];
+    const approvers: Approver[] = [];
+
+    for (const field of fields) {
+      const userId = this.getFormFieldValue(formData, field);
+      if (userId) {
+        const user = await this.getUserInfo(userId);
+        if (user) {
+          approvers.push(user);
+        }
+      }
+    }
+
+    return approvers;
+  }
+
+  private async resolveByExpression(value: string, context: ProcessContext): Promise<Approver[]> {
+    try {
+      // 支持简单表达式，如 "${formData.managerId}" 或 "${variables.departmentHead}"
+      const expression = value.replace(/\$\{(.*?)\}/g, (_, expr) => {
+        const parts = expr.split('.');
+        let current = {
+          formData: context.formData,
+          variables: context.variables,
+          initiator: context.initiator
+        };
+
+        for (const part of parts) {
+          if (current && typeof current === 'object') {
+            current = current[part];
+          } else {
+            return '';
+          }
+        }
+
+        return current || '';
+      });
+
+      // 表达式可能返回单个ID或ID数组
+      if (expression) {
+        if (expression.includes(',')) {
+          const userIds = expression.split(',').map((id: string) => id.trim());
+          return this.resolveFixed(userIds);
+        } else {
+          const user = await this.getUserInfo(expression);
+          return user ? [user] : [];
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('解析表达式失败:', error);
+      return [];
+    }
+  }
+
+  private async resolvePreviousHandler(context: ProcessContext): Promise<Approver[]> {
+    if (!context.currentTask) {
+      return [];
+    }
+
+    // 查询前一个任务的处理人
+    const rows = await db.query<any>(
+      `SELECT DISTINCT assignee_id, assignee_name FROM workflow_tasks 
+       WHERE instance_id = ? AND id != ? AND assignee_id IS NOT NULL
+       ORDER BY completed_at DESC LIMIT 1`,
+      [context.process.id, context.currentTask.id]
+    );
+
+    return rows.map((row: any) => ({
+      id: row.assignee_id,
+      name: row.assignee_name
+    }));
+  }
+
+  private async getUserInfo(userId: string): Promise<Approver | null> {
+    const row = await db.queryOne<any>(
+      `SELECT id, name, department_id, position FROM employees WHERE id = ?`,
+      [userId]
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      name: row.name,
+      department: row.department_id,
+      position: row.position
+    };
+  }
+
+  private async getUsersByRole(role: string): Promise<Approver[]> {
+    const rows = await db.query<any>(
+      `SELECT id, name, department_id, position FROM employees WHERE role = ? AND status = 'active'`,
+      [role]
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      department: row.department_id,
+      position: row.position
+    }));
+  }
+
+  private async getUsersByDepartment(department: string): Promise<Approver[]> {
+    const rows = await db.query<any>(
+      `SELECT id, name, department_id, position FROM employees 
+       WHERE department_id = ? AND status = 'active'`,
+      [department]
+    );
+
+    return rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      department: row.department_id,
+      position: row.position
+    }));
+  }
+
+  private getFormFieldValue(formData: Record<string, any>, fieldPath: string): string | null {
+    const parts = fieldPath.split('.');
+    let current = formData;
+
+    for (const part of parts) {
+      if (current && typeof current === 'object') {
+        current = current[part];
+      } else {
+        return null;
+      }
+    }
+
+    return current as string || null;
+  }
+}
+
+export const approverResolver = new ApproverResolver();

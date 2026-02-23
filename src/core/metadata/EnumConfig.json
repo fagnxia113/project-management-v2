@@ -1,0 +1,412 @@
+{
+  "enums": {
+    "ProjectStatus": {
+      "label": "项目状态",
+      "values": [
+        { "value": "proposal", "label": "立项", "color": "gray" },
+        { "value": "in_progress", "label": "进行中", "color": "blue" },
+        { "value": "completed", "label": "已结项", "color": "green" },
+        { "value": "paused", "label": "暂停", "color": "orange" },
+        { "value": "delayed", "label": "延期", "color": "red" }
+      ]
+    },
+    "ProjectType": {
+      "label": "项目类型",
+      "values": [
+        { "value": "domestic", "label": "国内" },
+        { "value": "foreign", "label": "国外" },
+        { "value": "rd", "label": "研发" },
+        { "value": "service", "label": "服务" }
+      ]
+    },
+    "Country": {
+      "label": "所属国家",
+      "values": [
+        { "value": "China", "label": "中国" },
+        { "value": "USA", "label": "美国" },
+        { "value": "Singapore", "label": "新加坡" },
+        { "value": "Malaysia", "label": "马来西亚" },
+        { "value": "Indonesia", "label": "印尼" },
+        { "value": "Other", "label": "其他" }
+      ]
+    },
+    "PhaseName": {
+      "label": "项目阶段",
+      "values": [
+        { "value": "CX1", "label": "CX1" },
+        { "value": "CX2", "label": "CX2" },
+        { "value": "CX3", "label": "CX3" },
+        { "value": "CX4", "label": "CX4" },
+        { "value": "CX5", "label": "CX5" },
+        { "value": "CX6", "label": "CX6" },
+        { "value": "CX7", "label": "CX7" },
+        { "value": "ProjectPrep", "label": "项目预备阶段" },
+        { "value": "DomesticTest", "label": "国内项目常规测试阶段" },
+        { "value": "Settlement", "label": "结算收款阶段" },
+        { "value": "ProjectProposal", "label": "项目立项" }
+      ]
+    },
+    "PhaseStatus": {
+      "label": "阶段状态",
+      "values": [
+        { "value": "not_started", "label": "未开始", "color": "gray" },
+        { "value": "in_progress", "label": "进行中", "color": "blue" },
+        { "value": "completed", "label": "已完成", "color": "green" },
+        { "value": "paused", "label": "已暂停", "color": "orange" }
+      ]
+    },
+    "WarningLevel": {
+      "label": "预警状态",
+      "values": [
+        { "value": "normal", "label": "正常", "color": "green" },
+        { "value": "warning", "label": "预警", "color": "orange" },
+        { "value": "severe", "label": "严重滞后", "color": "red" }
+      ]
+    },
+    "TaskType": {
+      "label": "任务类型",
+      "values": [
+        { "value": "milestone", "label": "里程碑" },
+        { "value": "subtask", "label": "子任务" },
+        { "value": "process", "label": "工序" }
+      ]
+    },
+    "TaskLevel": {
+      "label": "任务层级",
+      "values": [
+        { "value": "milestone", "label": "里程碑", "order": 1 },
+        { "value": "subtask", "label": "子任务", "order": 2 },
+        { "value": "process", "label": "工序", "order": 3 }
+      ]
+    },
+    "TaskStatus": {
+      "label": "任务状态",
+      "values": [
+        { "value": "unassigned", "label": "未分配", "color": "gray" },
+        { "value": "pending_confirm", "label": "待接收", "color": "blue" },
+        { "value": "accepted", "label": "已接收", "color": "blue" },
+        { "value": "in_progress", "label": "进行中", "color": "blue" },
+        { "value": "completed", "label": "已完成", "color": "green" },
+        { "value": "closed", "label": "已结项", "color": "green" },
+        { "value": "rejected", "label": "已驳回", "color": "red" }
+      ]
+    },
+    "Priority": {
+      "label": "优先级",
+      "values": [
+        { "value": "high", "label": "高", "color": "red" },
+        { "value": "medium", "label": "中", "color": "orange" },
+        { "value": "low", "label": "低", "color": "green" }
+      ]
+    },
+    "QualityLevel": {
+      "label": "完成质量",
+      "values": [
+        { "value": "excellent", "label": "优秀" },
+        { "value": "good", "label": "良好" },
+        { "value": "qualified", "label": "合格" },
+        { "value": "unqualified", "label": "不合格" }
+      ]
+    },
+    "EquipmentCategory": {
+      "label": "设备类型",
+      "values": [
+        { "value": "instrument", "label": "仪器" },
+        { "value": "fake_load", "label": "假负载" }
+      ]
+    },
+    "Unit": {
+      "label": "单位",
+      "values": [
+        { "value": "piece", "label": "台" },
+        { "value": "set", "label": "套" },
+        { "value": "unit", "label": "个" },
+        { "value": "item", "label": "件" }
+      ]
+    },
+    "EquipmentHostStatus": {
+      "label": "主机状态",
+      "values": [
+        { "value": "normal", "label": "正常", "color": "green" },
+        { "value": "slightly_damaged", "label": "轻微损坏", "color": "yellow" },
+        { "value": "affected_use", "label": "影响使用", "color": "orange" },
+        { "value": "repairing", "label": "维修中", "color": "blue" },
+        { "value": "scrapped", "label": "报废", "color": "red" }
+      ]
+    },
+    "EquipmentUseStatus": {
+      "label": "使用状态",
+      "values": [
+        { "value": "idle", "label": "闲置" },
+        { "value": "in_use", "label": "使用中" }
+      ]
+    },
+    "EquipmentLocationStatus": {
+      "label": "位置状态",
+      "values": [
+        { "value": "warehouse", "label": "在库" },
+        { "value": "in_project", "label": "在项目" },
+        { "value": "repairing", "label": "维修中" },
+        { "value": "transferring", "label": "调拨中" }
+      ]
+    },
+    "StockLocationType": {
+      "label": "库存位置类型",
+      "values": [
+        { "value": "warehouse", "label": "仓库" },
+        { "value": "project", "label": "项目" }
+      ]
+    },
+    "EmployeeStatus": {
+      "label": "员工状态",
+      "values": [
+        { "value": "active", "label": "在职", "color": "green" },
+        { "value": "resigned", "label": "离职", "color": "gray" },
+        { "value": "probation", "label": "试用期", "color": "blue" }
+      ]
+    },
+    "CurrentStatus": {
+      "label": "当前状态",
+      "values": [
+        { "value": "on_duty", "label": "在岗" },
+        { "value": "leave", "label": "请假" },
+        { "value": "business_trip", "label": "出差" },
+        { "value": "other", "label": "其他" }
+      ]
+    },
+    "EmployeeType": {
+      "label": "员工性质",
+      "values": [
+        { "value": "full_time", "label": "正式员工" },
+        { "value": "intern", "label": "实习生" },
+        { "value": "outsource", "label": "外包" }
+      ]
+    },
+    "SystemRole": {
+      "label": "系统角色",
+      "values": [
+        { "value": "admin", "label": "管理员" },
+        { "value": "project_manager", "label": "项目经理" },
+        { "value": "hr_manager", "label": "人事管理员" },
+        { "value": "equipment_manager", "label": "仪器管理员" },
+        { "value": "implementer", "label": "实施人员" },
+        { "value": "user", "label": "普通用户" }
+      ]
+    },
+    "DataPermission": {
+      "label": "数据权限",
+      "values": [
+        { "value": "all", "label": "全部" },
+        { "value": "department", "label": "本部门" },
+        { "value": "self", "label": "本人" }
+      ]
+    },
+    "Gender": {
+      "label": "性别",
+      "values": [
+        { "value": "male", "label": "男" },
+        { "value": "female", "label": "女" }
+      ]
+    },
+"CustomerType": {
+      "label": "客户类型",
+      "values": [
+        { "value": "direct", "label": "直签客户", "color": "blue" },
+        { "value": "channel", "label": "渠道客户", "color": "green" },
+        { "value": "agent", "label": "代理商", "color": "purple" }
+      ]
+    },
+    "WarehouseType": {
+      "label": "仓库类型",
+      "values": [
+        { "value": "main", "label": "主仓库" },
+        { "value": "branch", "label": "分仓库" },
+        { "value": "project", "label": "项目现场仓库" }
+      ]
+    },
+    "WarehouseStatus": {
+      "label": "仓库状态",
+      "values": [
+        { "value": "active", "label": "正常" },
+        { "value": "inactive", "label": "停用" }
+      ]
+    },
+    "ApprovalType": {
+      "label": "审批类型",
+      "values": [
+        { "value": "person_onboard", "label": "人员入职" },
+        { "value": "person_offboard", "label": "人员离职" },
+        { "value": "person_admin_transfer", "label": "行政调动" },
+        { "value": "person_project_transfer", "label": "项目调拨" },
+        { "value": "equipment_inbound", "label": "设备入库" },
+        { "value": "equipment_outbound", "label": "设备出库" },
+        { "value": "equipment_transfer_stock", "label": "设备调拨（国内有库存）" },
+        { "value": "equipment_transfer_no_stock", "label": "设备调拨（国内无库存）" },
+        { "value": "equipment_transfer_foreign", "label": "设备调拨（国外项目间）" },
+        { "value": "equipment_repair", "label": "设备维修" },
+        { "value": "equipment_scrap", "label": "设备报废" },
+        { "value": "purchase", "label": "采购申请" },
+        { "value": "project_completion", "label": "项目结项" },
+        { "value": "task_completion", "label": "任务结项" },
+        { "value": "phase_update", "label": "阶段更新" },
+        { "value": "leave_request", "label": "请假申请" },
+        { "value": "task_assignment", "label": "任务分配" },
+        { "value": "project_proposal", "label": "项目立项" }
+      ]
+    },
+    "ApprovalStatus": {
+      "label": "审批状态",
+      "values": [
+        { "value": "pending", "label": "待审批", "color": "orange" },
+        { "value": "in_progress", "label": "审批中", "color": "blue" },
+        { "value": "approved", "label": "已通过", "color": "green" },
+        { "value": "rejected", "label": "已拒绝", "color": "red" },
+        { "value": "withdrawn", "label": "已撤销", "color": "gray" }
+      ]
+    },
+    "WorkflowStatus": {
+      "label": "流程单据状态",
+      "values": [
+        { "value": "draft", "label": "草稿", "color": "gray" },
+        { "value": "pending", "label": "待审批", "color": "orange" },
+        { "value": "approved", "label": "已通过", "color": "green" },
+        { "value": "rejected", "label": "已拒绝", "color": "red" }
+      ]
+    },
+    "InboundType": {
+      "label": "入库类型",
+      "values": [
+        { "value": "purchase", "label": "采购入库" },
+        { "value": "repair_return", "label": "维修入库" },
+        { "value": "project_end", "label": "项目结束入库" },
+        { "value": "other", "label": "其他" }
+      ]
+    },
+    "OutboundType": {
+      "label": "出库类型",
+      "values": [
+        { "value": "project_use", "label": "项目领用" },
+        { "value": "repair", "label": "维修出库" },
+        { "value": "scrap", "label": "报废出库" }
+      ]
+    },
+    "TransferScene": {
+      "label": "调拨场景",
+      "values": [
+        { "value": "A", "label": "A-国内有库存" },
+        { "value": "B", "label": "B-国内无库存" },
+        { "value": "C", "label": "C-国外项目间" }
+      ]
+    },
+    "TransferSolution": {
+      "label": "处理方案",
+      "values": [
+        { "value": "borrow", "label": "外借" },
+        { "value": "purchase", "label": "紧急采购" }
+      ]
+    },
+    "TransferStatus": {
+      "label": "调拨状态",
+      "values": [
+        { "value": "draft", "label": "草稿", "color": "gray" },
+        { "value": "pending_from", "label": "待调出方审批", "color": "orange" },
+        { "value": "pending_to", "label": "待调入方审批", "color": "orange" },
+        { "value": "shipping", "label": "运输中", "color": "blue" },
+        { "value": "receiving", "label": "待收货确认", "color": "blue" },
+        { "value": "completed", "label": "已完成", "color": "green" },
+        { "value": "rejected", "label": "已拒绝", "color": "red" },
+        { "value": "withdrawn", "label": "已撤销", "color": "gray" }
+      ]
+    },
+    "LocationType": {
+      "label": "位置类型",
+      "values": [
+        { "value": "warehouse", "label": "仓库" },
+        { "value": "project", "label": "项目" }
+      ]
+    },
+    "TransportMethod": {
+      "label": "运输方式",
+      "values": [
+        { "value": "land", "label": "陆运" },
+        { "value": "air", "label": "空运" },
+        { "value": "express", "label": "快递" },
+        { "value": "self", "label": "自提" }
+      ]
+    },
+    "ReceiveStatus": {
+      "label": "接收状态",
+      "values": [
+        { "value": "pending", "label": "待接收", "color": "orange" },
+        { "value": "accepted", "label": "已接收", "color": "green" },
+        { "value": "rejected", "label": "已拒绝", "color": "red" }
+      ]
+    },
+    "LeaveType": {
+      "label": "请假类型",
+      "values": [
+        { "value": "annual", "label": "年假" },
+        { "value": "sick", "label": "病假" },
+        { "value": "personal", "label": "事假" },
+        { "value": "comp", "label": "调休" }
+      ]
+    },
+    "ProjectEmployeeStatus": {
+      "label": "项目人员在岗状态",
+      "values": [
+        { "value": "on_duty", "label": "在岗", "color": "green" },
+        { "value": "leave", "label": "请假", "color": "orange" },
+        { "value": "transferred", "label": "已调出", "color": "gray" }
+      ]
+    },
+    "RepairType": {
+      "label": "维修类型",
+      "values": [
+        { "value": "internal", "label": "内部维修" },
+        { "value": "external", "label": "外部维修" }
+      ]
+    },
+    "RepairResult": {
+      "label": "维修结果",
+      "values": [
+        { "value": "fixed", "label": "已修复", "color": "green" },
+        { "value": "cannot_fix", "label": "无法修复", "color": "orange" },
+        { "value": "scrapped", "label": "报废", "color": "red" }
+      ]
+    },
+    "DisposalMethod": {
+      "label": "处理方式",
+      "values": [
+        { "value": "destroy", "label": "销毁" },
+        { "value": "sell", "label": "变卖" },
+        { "value": "donate", "label": "捐赠" }
+      ]
+    },
+    "TransferType": {
+      "label": "调动类型",
+      "values": [
+        { "value": "department", "label": "部门调动" },
+        { "value": "branch", "label": "分公司调动" },
+        { "value": "project", "label": "项目调动" }
+      ]
+    },
+    "ResignType": {
+      "label": "离职类型",
+      "values": [
+        { "value": "voluntary", "label": "主动离职" },
+        { "value": "involuntary", "label": "被动离职" },
+        { "value": "contract_end", "label": "合同到期" }
+      ]
+    },
+    "TransferDetailStatus": {
+      "label": "调拨明细状态",
+      "values": [
+        { "value": "pending", "label": "待审批", "color": "orange" },
+        { "value": "approved", "label": "已批准", "color": "green" },
+        { "value": "partial", "label": "部分批准", "color": "blue" },
+        { "value": "rejected", "label": "已拒绝", "color": "red" },
+        { "value": "completed", "label": "已完成", "color": "green" }
+      ]
+    }
+  }
+}

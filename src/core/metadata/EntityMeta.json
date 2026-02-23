@@ -1,0 +1,3032 @@
+{
+  "entities": {
+    "Project": {
+      "name": "项目信息",
+      "table": "projects",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "code": {
+          "type": "string",
+          "label": "项目编号",
+          "autoGenerate": "XM-{seq}",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "项目名称",
+          "required": true
+        },
+        "type": {
+          "type": "enum",
+          "enumRef": "ProjectType",
+          "label": "项目类型",
+          "default": "domestic"
+        },
+        "country": {
+          "type": "enum",
+          "enumRef": "Country",
+          "label": "所属国家",
+          "required": true
+        },
+        "address": {
+          "type": "string",
+          "label": "项目地址"
+        },
+        "manager_id": {
+          "type": "uuid",
+          "label": "项目经理ID",
+          "relatedEntity": "Employee",
+          "refEntity": "manager"
+        },
+        "manager": {
+          "type": "string",
+          "label": "项目经理",
+          "relationField": "manager_id",
+          "refDisplay": "name"
+        },
+        "tech_manager_id": {
+          "type": "uuid",
+          "label": "技术负责人ID",
+          "relatedEntity": "Employee",
+          "refEntity": "tech_manager"
+        },
+        "tech_manager": {
+          "type": "string",
+          "label": "技术负责人",
+          "relationField": "tech_manager_id",
+          "refDisplay": "name"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "ProjectStatus",
+          "label": "项目状态",
+          "default": "proposal"
+        },
+        "progress": {
+          "type": "number",
+          "label": "整体进度(%)",
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        "start_date": {
+          "type": "date",
+          "label": "计划开始日期",
+          "required": true
+        },
+        "end_date": {
+          "type": "date",
+          "label": "计划结束日期"
+        },
+        "actual_start_date": {
+          "type": "date",
+          "label": "实际开始日期"
+        },
+        "actual_end_date": {
+          "type": "date",
+          "label": "实际结束日期"
+        },
+        "budget": {
+          "type": "number",
+          "label": "预算(万元)",
+          "default": 0
+        },
+        "customer_id": {
+          "type": "uuid",
+          "label": "客户ID",
+          "relatedEntity": "Customer",
+          "refEntity": "customer"
+        },
+        "customer_name": {
+          "type": "string",
+          "label": "客户名称",
+          "relationField": "customer_id",
+          "refDisplay": "name"
+        },
+        "description": {
+          "type": "text",
+          "label": "项目描述"
+        },
+        "area": {
+          "type": "number",
+          "label": "建筑面积(m²)"
+        },
+        "capacity": {
+          "type": "number",
+          "label": "IT容量(MW)"
+        },
+        "rack_count": {
+          "type": "number",
+          "label": "机柜数量"
+        },
+        "rack_power": {
+          "type": "number",
+          "label": "单机柜功率(KW)"
+        },
+        "power_arch": {
+          "type": "text",
+          "label": "电力架构"
+        },
+        "hvac_arch": {
+          "type": "text",
+          "label": "暖通架构"
+        },
+        "fire_arch": {
+          "type": "text",
+          "label": "消防架构"
+        },
+        "weak_arch": {
+          "type": "text",
+          "label": "弱电架构"
+        },
+        "attachments": {
+          "type": "json",
+          "label": "项目附件"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "ProjectPhase": {
+      "name": "项目阶段",
+      "table": "project_phases",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project",
+          "required": true
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "relationField": "project_id",
+          "refDisplay": "name"
+        },
+        "phase_name": {
+          "type": "enum",
+          "enumRef": "PhaseName",
+          "label": "项目阶段",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "PhaseStatus",
+          "label": "阶段状态",
+          "default": "not_started"
+        },
+        "planned_start_date": {
+          "type": "date",
+          "label": "预计开始日期",
+          "required": true
+        },
+        "planned_end_date": {
+          "type": "date",
+          "label": "预计结束日期",
+          "required": true
+        },
+        "actual_start_date": {
+          "type": "date",
+          "label": "实际开始日期"
+        },
+        "actual_end_date": {
+          "type": "date",
+          "label": "实际结束日期"
+        },
+        "planned_days": {
+          "type": "number",
+          "label": "预计使用天数",
+          "computed": true
+        },
+        "used_days": {
+          "type": "number",
+          "label": "已使用天数",
+          "computed": true
+        },
+        "remaining_days": {
+          "type": "number",
+          "label": "剩余天数",
+          "computed": true
+        },
+        "progress": {
+          "type": "number",
+          "label": "完成进度(%)",
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        "planned_progress": {
+          "type": "number",
+          "label": "计划进度(%)",
+          "computed": true
+        },
+        "progress_deviation": {
+          "type": "number",
+          "label": "进度偏差",
+          "computed": true
+        },
+        "warning_level": {
+          "type": "enum",
+          "enumRef": "WarningLevel",
+          "label": "预警状态",
+          "computed": true
+        },
+        "manager_id": {
+          "type": "uuid",
+          "label": "阶段负责人ID",
+          "relatedEntity": "Employee",
+          "refEntity": "manager"
+        },
+        "manager": {
+          "type": "string",
+          "label": "阶段负责人",
+          "relationField": "manager_id",
+          "refDisplay": "name"
+        },
+        "description": {
+          "type": "text",
+          "label": "阶段说明"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "Task": {
+      "name": "任务管理",
+      "table": "tasks",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "code": {
+          "type": "string",
+          "label": "任务编号",
+          "autoGenerate": "RW-{project.code}-{seq}",
+          "required": true
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project",
+          "required": true
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "relationField": "project_id",
+          "refDisplay": "name"
+        },
+        "phase_id": {
+          "type": "uuid",
+          "label": "关联阶段ID",
+          "relatedEntity": "ProjectPhase"
+        },
+        "phase_name": {
+          "type": "string",
+          "label": "项目阶段",
+          "relationField": "phase_id",
+          "refDisplay": "phase_name"
+        },
+        "parent_id": {
+          "type": "uuid",
+          "label": "父任务ID",
+          "relatedEntity": "Task",
+          "refEntity": "parent"
+        },
+        "wbs_code": {
+          "type": "string",
+          "label": "WBS编号",
+          "required": true
+        },
+        "task_type": {
+          "type": "enum",
+          "enumRef": "TaskType",
+          "label": "任务类型",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "任务名称",
+          "required": true
+        },
+        "level": {
+          "type": "enum",
+          "enumRef": "TaskLevel",
+          "label": "任务层级",
+          "default": "milestone"
+        },
+        "description": {
+          "type": "text",
+          "label": "任务描述"
+        },
+        "assignee_id": {
+          "type": "uuid",
+          "label": "负责人ID",
+          "relatedEntity": "Employee",
+          "refEntity": "assignee"
+        },
+        "assignee": {
+          "type": "string",
+          "label": "负责人",
+          "relationField": "assignee_id",
+          "refDisplay": "name"
+        },
+        "creator_id": {
+          "type": "uuid",
+          "label": "创建人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "creator": {
+          "type": "string",
+          "label": "创建人",
+          "relationField": "creator_id",
+          "refDisplay": "name"
+        },
+        "planned_start_date": {
+          "type": "date",
+          "label": "计划开始日期",
+          "required": true
+        },
+        "planned_end_date": {
+          "type": "date",
+          "label": "计划结束日期",
+          "required": true
+        },
+        "planned_days": {
+          "type": "number",
+          "label": "预计工期",
+          "computed": true
+        },
+        "actual_start_date": {
+          "type": "date",
+          "label": "实际开始日期"
+        },
+        "actual_end_date": {
+          "type": "date",
+          "label": "实际结束日期"
+        },
+        "actual_days": {
+          "type": "number",
+          "label": "实际工期",
+          "computed": true
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "TaskStatus",
+          "label": "任务状态",
+          "default": "unassigned"
+        },
+        "confirm_date": {
+          "type": "datetime",
+          "label": "接收确认日期"
+        },
+        "progress": {
+          "type": "number",
+          "label": "任务进度(%)",
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        "quality": {
+          "type": "enum",
+          "enumRef": "QualityLevel",
+          "label": "完成质量"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "estimated_days": {
+          "type": "number",
+          "label": "预估人天"
+        },
+        "actual_days_worked": {
+          "type": "number",
+          "label": "实际人天"
+        },
+        "priority": {
+          "type": "enum",
+          "enumRef": "Priority",
+          "label": "优先级",
+          "default": "medium"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+"EquipmentModel": {
+      "name": "设备型号",
+      "table": "equipment_models",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "category": {
+          "type": "enum",
+          "enumRef": "EquipmentCategory",
+          "label": "设备类型",
+          "default": "instrument"
+        },
+        "name": {
+          "type": "string",
+          "label": "设备名称",
+          "required": true
+        },
+        "model_no": {
+          "type": "string",
+          "label": "型号编号",
+          "required": true
+        },
+        "brand": {
+          "type": "string",
+          "label": "品牌"
+        },
+        "unit": {
+          "type": "string",
+          "label": "单位",
+          "default": "台"
+        },
+        "calibration_cycle": {
+          "type": "number",
+          "label": "校准周期(月)",
+          "default": 12
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EquipmentInstance": {
+      "name": "设备实例",
+      "table": "equipment_instances",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "model_id": {
+          "type": "uuid",
+          "label": "设备型号ID",
+          "relatedEntity": "EquipmentModel",
+          "required": true
+        },
+        "model_name": {
+          "type": "string",
+          "label": "设备名称",
+          "relationField": "model_id",
+          "refDisplay": "name"
+        },
+        "serial_number": {
+          "type": "string",
+          "label": "出厂编号"
+        },
+        "manage_code": {
+          "type": "string",
+          "label": "管理编号",
+          "unique": true,
+          "required": true
+        },
+        "health_status": {
+          "type": "enum",
+          "enumRef": "EquipmentHostStatus",
+          "label": "健康状态",
+          "default": "normal"
+        },
+        "usage_status": {
+          "type": "enum",
+          "enumRef": "EquipmentUseStatus",
+          "label": "使用状态",
+          "default": "idle"
+        },
+        "location_status": {
+          "type": "enum",
+          "enumRef": "EquipmentLocationStatus",
+          "label": "位置状态",
+          "default": "warehouse"
+        },
+        "location_id": {
+          "type": "uuid",
+          "label": "位置ID"
+        },
+        "keeper_id": {
+          "type": "uuid",
+          "label": "保管人ID",
+          "relatedEntity": "Employee"
+        },
+        "purchase_date": {
+          "type": "date",
+          "label": "购置日期"
+        },
+        "purchase_price": {
+          "type": "number",
+          "label": "购置价格"
+        },
+        "calibration_expiry": {
+          "type": "date",
+          "label": "校准到期日"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "Equipment": {
+      "name": "设备信息",
+      "table": "equipment",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "manage_code": {
+          "type": "string",
+          "label": "管理编号",
+          "unique": true,
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "设备名称",
+          "required": true
+        },
+        "model": {
+          "type": "string",
+          "label": "型号"
+        },
+        "category": {
+          "type": "enum",
+          "enumRef": "EquipmentCategory",
+          "label": "设备类型",
+          "required": true
+        },
+        "unit": {
+          "type": "enum",
+          "enumRef": "Unit",
+          "label": "单位",
+          "default": "piece"
+        },
+        "host_status": {
+          "type": "enum",
+          "enumRef": "EquipmentHostStatus",
+          "label": "主机状态",
+          "default": "normal"
+        },
+        "use_status": {
+          "type": "enum",
+          "enumRef": "EquipmentUseStatus",
+          "label": "使用状态",
+          "default": "idle"
+        },
+        "location_status": {
+          "type": "enum",
+          "enumRef": "EquipmentLocationStatus",
+          "label": "位置状态",
+          "default": "warehouse"
+        },
+        "warehouse_id": {
+          "type": "uuid",
+          "label": "关联仓库ID",
+          "relatedEntity": "Warehouse"
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project"
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "relationField": "project_id",
+          "refDisplay": "name"
+        },
+        "owner_id": {
+          "type": "uuid",
+          "label": "负责人ID",
+          "relatedEntity": "Employee",
+          "refEntity": "owner"
+        },
+        "owner": {
+          "type": "string",
+          "label": "负责人",
+          "relationField": "owner_id",
+          "refDisplay": "name"
+        },
+        "serial_number": {
+          "type": "string",
+          "label": "仪器出厂编号"
+        },
+        "location": {
+          "type": "string",
+          "label": "存放位置"
+        },
+        "accessories_info": {
+          "type": "text",
+          "label": "配件情况"
+        },
+        "damage_description": {
+          "type": "text",
+          "label": "损坏说明"
+        },
+        "attachments": {
+          "type": "json",
+          "label": "仪器负载及配件详图"
+        },
+        "purchase_date": {
+          "type": "date",
+          "label": "购置日期"
+        },
+        "purchase_price": {
+          "type": "number",
+          "label": "购置价格(元)"
+        },
+        "purchase_record": {
+          "type": "text",
+          "label": "购买记录"
+        },
+        "manufacturer": {
+          "type": "string",
+          "label": "生产厂商"
+        },
+        "phone": {
+          "type": "string",
+          "label": "联系方式"
+        },
+        "calibration_cycle": {
+          "type": "number",
+          "label": "校准周期(月)",
+          "default": 12
+        },
+        "calibration_no": {
+          "type": "string",
+          "label": "证书编号"
+        },
+        "issuing_authority": {
+          "type": "string",
+          "label": "发证单位"
+        },
+        "calibration_expiry": {
+          "type": "date",
+          "label": "证书截止日期"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "Employee": {
+      "name": "员工信息",
+      "table": "employees",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "user_id": {
+          "type": "string",
+          "label": "关联用户ID"
+        },
+        "employee_no": {
+          "type": "string",
+          "label": "工号",
+          "unique": true
+        },
+        "name": {
+          "type": "string",
+          "label": "姓名",
+          "required": true
+        },
+        "gender": {
+          "type": "enum",
+          "enumRef": "Gender",
+          "label": "性别"
+        },
+        "phone": {
+          "type": "string",
+          "label": "手机号",
+          "required": true
+        },
+        "email": {
+          "type": "string",
+          "label": "邮箱"
+        },
+        "id_card": {
+          "type": "string",
+          "label": "身份证号"
+        },
+        "department": {
+          "type": "string",
+          "label": "所属部门",
+          "required": true
+        },
+        "position": {
+          "type": "string",
+          "label": "岗位",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "EmployeeStatus",
+          "label": "员工状态",
+          "default": "active"
+        },
+        "current_status": {
+          "type": "enum",
+          "enumRef": "CurrentStatus",
+          "label": "当前状态",
+          "default": "on_duty"
+        },
+        "leave_start_date": {
+          "type": "date",
+          "label": "请假开始日期"
+        },
+        "leave_end_date": {
+          "type": "date",
+          "label": "请假结束日期"
+        },
+        "hire_date": {
+          "type": "date",
+          "label": "入职日期",
+          "required": true
+        },
+        "leave_date": {
+          "type": "date",
+          "label": "离职日期"
+        },
+        "employee_type": {
+          "type": "enum",
+          "enumRef": "EmployeeType",
+          "label": "员工性质",
+          "default": "full_time"
+        },
+        "role": {
+          "type": "enum",
+          "enumRef": "SystemRole",
+          "label": "系统角色",
+          "default": "user"
+        },
+        "data_permission": {
+          "type": "enum",
+          "enumRef": "DataPermission",
+          "label": "数据权限",
+          "default": "self"
+        },
+        "skills": {
+          "type": "array",
+          "itemType": "string",
+          "label": "技能标签"
+        },
+        "daily_cost": {
+          "type": "number",
+          "label": "日成本"
+        },
+        "avatar_color": {
+          "type": "string",
+          "label": "头像颜色"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "Customer": {
+      "name": "客户信息",
+      "table": "customers",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "customer_no": {
+          "type": "string",
+          "label": "客户编号",
+          "autoGenerate": "KH-{seq}",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "客户名称",
+          "required": true
+        },
+        "type": {
+          "type": "enum",
+          "enumRef": "CustomerType",
+          "label": "客户类型",
+          "default": "direct"
+        },
+        "contact": {
+          "type": "string",
+          "label": "联系人",
+          "required": true
+        },
+        "phone": {
+          "type": "string",
+          "label": "联系电话",
+          "required": true
+        },
+        "address": {
+          "type": "text",
+          "label": "公司地址"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "Warehouse": {
+      "name": "仓库信息",
+      "table": "warehouses",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "warehouse_no": {
+          "type": "string",
+          "label": "仓库编号",
+          "autoGenerate": "CK-{seq}",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "仓库名称",
+          "required": true
+        },
+        "type": {
+          "type": "enum",
+          "enumRef": "WarehouseType",
+          "label": "仓库类型",
+          "default": "main"
+        },
+        "location": {
+          "type": "string",
+          "label": "所在地区",
+          "required": true
+        },
+        "address": {
+          "type": "text",
+          "label": "详细地址",
+          "required": true
+        },
+        "manager_id": {
+          "type": "uuid",
+          "label": "仓库管理员ID",
+          "relatedEntity": "Employee",
+          "refEntity": "manager"
+        },
+        "manager": {
+          "type": "string",
+          "label": "仓库管理员",
+          "relationField": "manager_id",
+          "refDisplay": "name"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WarehouseStatus",
+          "label": "仓库状态",
+          "default": "active"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EquipmentInboundOrder": {
+      "name": "设备入库单",
+      "table": "equipment_inbound_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "入库单号",
+          "autoGenerate": "RK-{date}-{seq}",
+          "required": true
+        },
+        "inbound_type": {
+          "type": "enum",
+          "enumRef": "InboundType",
+          "label": "入库类型",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "warehouse_id": {
+          "type": "uuid",
+          "label": "入库仓库ID",
+          "relatedEntity": "Warehouse",
+          "required": true
+        },
+        "warehouse_name": {
+          "type": "string",
+          "label": "仓库名称",
+          "relationField": "warehouse_id",
+          "refDisplay": "name"
+        },
+        "equipment_id": {
+          "type": "uuid",
+          "label": "关联设备ID",
+          "relatedEntity": "Equipment"
+        },
+        "equipment_code": {
+          "type": "string",
+          "label": "管理编号"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "设备名称"
+        },
+        "new_equipment_name": {
+          "type": "string",
+          "label": "新设备名称"
+        },
+        "new_equipment_model": {
+          "type": "string",
+          "label": "新设备型号"
+        },
+        "new_equipment_category": {
+          "type": "enum",
+          "enumRef": "EquipmentCategory",
+          "label": "新设备类型"
+        },
+        "new_equipment_serial": {
+          "type": "string",
+          "label": "出厂编号"
+        },
+        "new_equipment_manufacturer": {
+          "type": "string",
+          "label": "生产厂商"
+        },
+        "new_equipment_price": {
+          "type": "number",
+          "label": "购置价格"
+        },
+        "new_equipment_purchase_date": {
+          "type": "date",
+          "label": "购置日期"
+        },
+        "new_equipment_calibration_cycle": {
+          "type": "number",
+          "label": "校准周期(月)"
+        },
+        "inbound_reason": {
+          "type": "text",
+          "label": "入库原因",
+          "required": true
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EquipmentOutboundOrder": {
+      "name": "设备出库单",
+      "table": "equipment_outbound_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "出库单号",
+          "autoGenerate": "CK-{date}-{seq}",
+          "required": true
+        },
+        "outbound_type": {
+          "type": "enum",
+          "enumRef": "OutboundType",
+          "label": "出库类型",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "warehouse_id": {
+          "type": "uuid",
+          "label": "出库仓库ID",
+          "relatedEntity": "Warehouse",
+          "required": true
+        },
+        "warehouse_name": {
+          "type": "string",
+          "label": "仓库名称",
+          "relationField": "warehouse_id",
+          "refDisplay": "name"
+        },
+        "equipment_id": {
+          "type": "uuid",
+          "label": "设备ID",
+          "relatedEntity": "Equipment",
+          "required": true
+        },
+        "equipment_code": {
+          "type": "string",
+          "label": "管理编号"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "设备名称"
+        },
+        "equipment_category": {
+          "type": "string",
+          "label": "设备类型"
+        },
+        "target_project_id": {
+          "type": "uuid",
+          "label": "目标项目ID",
+          "relatedEntity": "Project"
+        },
+        "target_project_name": {
+          "type": "string",
+          "label": "目标项目名称",
+          "relationField": "target_project_id",
+          "refDisplay": "name"
+        },
+        "repair_unit": {
+          "type": "string",
+          "label": "维修单位"
+        },
+        "outbound_reason": {
+          "type": "text",
+          "label": "出库原因",
+          "required": true
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EquipmentTransferOrder": {
+      "name": "设备调拨单",
+      "table": "equipment_transfer_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "调拨单号",
+          "autoGenerate": "DB-{date}-{seq}",
+          "required": true
+        },
+        "transfer_scene": {
+          "type": "enum",
+          "enumRef": "TransferScene",
+          "label": "调拨场景",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "equipment_id": {
+          "type": "uuid",
+          "label": "设备ID",
+          "relatedEntity": "Equipment",
+          "required": true
+        },
+        "equipment_code": {
+          "type": "string",
+          "label": "管理编号"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "设备名称"
+        },
+        "equipment_category": {
+          "type": "string",
+          "label": "设备类型"
+        },
+        "from_location_type": {
+          "type": "enum",
+          "enumRef": "LocationType",
+          "label": "调出位置类型",
+          "required": true
+        },
+        "from_warehouse_id": {
+          "type": "uuid",
+          "label": "调出仓库ID",
+          "relatedEntity": "Warehouse"
+        },
+        "from_warehouse_name": {
+          "type": "string",
+          "label": "调出仓库名称"
+        },
+        "from_project_id": {
+          "type": "uuid",
+          "label": "调出项目ID",
+          "relatedEntity": "Project"
+        },
+        "from_project_name": {
+          "type": "string",
+          "label": "调出项目名称"
+        },
+        "from_manager_id": {
+          "type": "uuid",
+          "label": "调出方负责人ID",
+          "relatedEntity": "Employee"
+        },
+        "from_manager": {
+          "type": "string",
+          "label": "调出方负责人"
+        },
+        "to_location_type": {
+          "type": "enum",
+          "enumRef": "LocationType",
+          "label": "调入位置类型",
+          "required": true
+        },
+        "to_warehouse_id": {
+          "type": "uuid",
+          "label": "调入仓库ID",
+          "relatedEntity": "Warehouse"
+        },
+        "to_warehouse_name": {
+          "type": "string",
+          "label": "调入仓库名称"
+        },
+        "to_project_id": {
+          "type": "uuid",
+          "label": "调入项目ID",
+          "relatedEntity": "Project"
+        },
+        "to_project_name": {
+          "type": "string",
+          "label": "调入项目名称"
+        },
+        "to_manager_id": {
+          "type": "uuid",
+          "label": "调入方负责人ID",
+          "relatedEntity": "Employee"
+        },
+        "to_manager": {
+          "type": "string",
+          "label": "调入方负责人"
+        },
+        "solution": {
+          "type": "enum",
+          "enumRef": "TransferSolution",
+          "label": "处理方案"
+        },
+        "estimated_arrival": {
+          "type": "date",
+          "label": "预计到货时间"
+        },
+        "transfer_reason": {
+          "type": "text",
+          "label": "调拨原因",
+          "required": true
+        },
+        "estimated_ship_date": {
+          "type": "date",
+          "label": "预计发货日期"
+        },
+        "estimated_arrival_date": {
+          "type": "date",
+          "label": "预计到达日期"
+        },
+        "transport_method": {
+          "type": "enum",
+          "enumRef": "TransportMethod",
+          "label": "运输方式"
+        },
+        "tracking_no": {
+          "type": "string",
+          "label": "物流单号"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "TransferStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "from_approved_at": {
+          "type": "datetime",
+          "label": "调出方审批时间"
+        },
+        "from_approved_by": {
+          "type": "uuid",
+          "label": "调出方审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "from_approval_comment": {
+          "type": "text",
+          "label": "调出方审批意见"
+        },
+        "to_approved_at": {
+          "type": "datetime",
+          "label": "调入方审批时间"
+        },
+        "to_approved_by": {
+          "type": "uuid",
+          "label": "调入方审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "to_approval_comment": {
+          "type": "text",
+          "label": "调入方审批意见"
+        },
+        "shipped_at": {
+          "type": "datetime",
+          "label": "发货时间"
+        },
+        "shipped_by": {
+          "type": "uuid",
+          "label": "发货人ID",
+          "relatedEntity": "Employee"
+        },
+        "received_at": {
+          "type": "datetime",
+          "label": "收货时间"
+        },
+        "received_by": {
+          "type": "uuid",
+          "label": "收货人ID",
+          "relatedEntity": "Employee"
+        },
+        "receive_comment": {
+          "type": "text",
+          "label": "收货备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "TaskAssignmentOrder": {
+      "name": "任务分配单",
+      "table": "task_assignment_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "分配单号",
+          "autoGenerate": "FP-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project",
+          "required": true
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "relationField": "project_id",
+          "refDisplay": "name"
+        },
+        "phase_id": {
+          "type": "uuid",
+          "label": "关联阶段ID",
+          "relatedEntity": "ProjectPhase"
+        },
+        "phase_name": {
+          "type": "string",
+          "label": "阶段名称",
+          "relationField": "phase_id",
+          "refDisplay": "phase_name"
+        },
+        "wbs_code": {
+          "type": "string",
+          "label": "WBS编号",
+          "required": true
+        },
+        "task_type": {
+          "type": "enum",
+          "enumRef": "TaskType",
+          "label": "任务类型",
+          "required": true
+        },
+        "task_name": {
+          "type": "string",
+          "label": "任务名称",
+          "required": true
+        },
+        "parent_task_id": {
+          "type": "uuid",
+          "label": "父任务ID",
+          "relatedEntity": "Task"
+        },
+        "task_level": {
+          "type": "enum",
+          "enumRef": "TaskLevel",
+          "label": "任务层级",
+          "required": true
+        },
+        "task_description": {
+          "type": "text",
+          "label": "任务描述"
+        },
+        "assignee_id": {
+          "type": "uuid",
+          "label": "负责人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "assignee": {
+          "type": "string",
+          "label": "负责人",
+          "relationField": "assignee_id",
+          "refDisplay": "name"
+        },
+        "planned_start_date": {
+          "type": "date",
+          "label": "计划开始日期",
+          "required": true
+        },
+        "planned_end_date": {
+          "type": "date",
+          "label": "计划结束日期",
+          "required": true
+        },
+        "task_requirements": {
+          "type": "text",
+          "label": "任务要求",
+          "required": true
+        },
+        "receive_status": {
+          "type": "enum",
+          "enumRef": "ReceiveStatus",
+          "label": "接收状态",
+          "default": "pending"
+        },
+        "received_at": {
+          "type": "datetime",
+          "label": "接收时间"
+        },
+        "reject_reason": {
+          "type": "text",
+          "label": "拒绝原因"
+        },
+        "created_task_id": {
+          "type": "uuid",
+          "label": "创建的任务ID",
+          "relatedEntity": "Task"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "LeaveRequest": {
+      "name": "请假申请",
+      "table": "leave_requests",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "请假单号",
+          "autoGenerate": "QJ-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project"
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "relationField": "project_id",
+          "refDisplay": "name"
+        },
+        "leave_type": {
+          "type": "enum",
+          "enumRef": "LeaveType",
+          "label": "请假类型",
+          "required": true
+        },
+        "start_date": {
+          "type": "date",
+          "label": "请假开始日期",
+          "required": true
+        },
+        "end_date": {
+          "type": "date",
+          "label": "请假结束日期",
+          "required": true
+        },
+        "leave_days": {
+          "type": "number",
+          "label": "请假天数",
+          "required": true
+        },
+        "leave_reason": {
+          "type": "text",
+          "label": "请假原因",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "DailyReport": {
+      "name": "日报管理",
+      "table": "daily_reports",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "report_no": {
+          "type": "string",
+          "label": "日报编号",
+          "autoGenerate": "RB-{date}-{seq}",
+          "required": true
+        },
+        "report_date": {
+          "type": "date",
+          "label": "填报日期",
+          "required": true
+        },
+        "reporter_id": {
+          "type": "uuid",
+          "label": "填报人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "reporter": {
+          "type": "string",
+          "label": "填报人",
+          "relationField": "reporter_id",
+          "refDisplay": "name"
+        },
+        "task_id": {
+          "type": "uuid",
+          "label": "关联任务ID",
+          "relatedEntity": "Task"
+        },
+        "task_name": {
+          "type": "string",
+          "label": "任务名称",
+          "relationField": "task_id",
+          "refDisplay": "name"
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Task",
+          "relationField": "task_id",
+          "refDisplay": "project_id"
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称"
+        },
+        "work_content": {
+          "type": "text",
+          "label": "今日工作内容",
+          "required": true
+        },
+        "progress": {
+          "type": "number",
+          "label": "今日完成进度(%)",
+          "required": true,
+          "min": 0,
+          "max": 100
+        },
+        "tomorrow_plan": {
+          "type": "text",
+          "label": "明日工作计划",
+          "required": true
+        },
+        "problems": {
+          "type": "text",
+          "label": "遇到的问题"
+        },
+        "support_needed": {
+          "type": "text",
+          "label": "需要的支持"
+        },
+        "work_hours": {
+          "type": "number",
+          "label": "今日工时",
+          "default": 8
+        },
+        "overtime_hours": {
+          "type": "number",
+          "label": "加班工时",
+          "default": 0
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "审核状态",
+          "default": "draft"
+        },
+        "reviewer_id": {
+          "type": "uuid",
+          "label": "审核人ID",
+          "relatedEntity": "Employee"
+        },
+        "reviewer": {
+          "type": "string",
+          "label": "审核人",
+          "relationField": "reviewer_id",
+          "refDisplay": "name"
+        },
+        "review_comment": {
+          "type": "text",
+          "label": "审核意见"
+        },
+        "reviewed_at": {
+          "type": "datetime",
+          "label": "审核时间"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "ProjectEmployee": {
+      "name": "项目人员信息管理",
+      "table": "project_employees",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project",
+          "required": true
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "relationField": "project_id",
+          "refDisplay": "name"
+        },
+        "employee_id": {
+          "type": "uuid",
+          "label": "关联人员ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "employee_name": {
+          "type": "string",
+          "label": "姓名",
+          "relationField": "employee_id",
+          "refDisplay": "name"
+        },
+        "department": {
+          "type": "string",
+          "label": "所属部门"
+        },
+        "position": {
+          "type": "string",
+          "label": "岗位"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "ProjectEmployeeStatus",
+          "label": "在岗状态",
+          "default": "on_duty"
+        },
+        "join_date": {
+          "type": "date",
+          "label": "调入时间",
+          "required": true
+        },
+        "leave_date": {
+          "type": "date",
+          "label": "调出时间"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EquipmentRepairOrder": {
+      "name": "设备维修单",
+      "table": "equipment_repair_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "维修单号",
+          "autoGenerate": "WX-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "equipment_id": {
+          "type": "uuid",
+          "label": "设备ID",
+          "relatedEntity": "Equipment",
+          "required": true
+        },
+        "equipment_code": {
+          "type": "string",
+          "label": "管理编号"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "设备名称"
+        },
+        "fault_description": {
+          "type": "text",
+          "label": "故障现象",
+          "required": true
+        },
+        "fault_cause": {
+          "type": "text",
+          "label": "故障原因"
+        },
+        "repair_type": {
+          "type": "enum",
+          "enumRef": "RepairType",
+          "label": "维修类型",
+          "required": true
+        },
+        "repair_unit": {
+          "type": "string",
+          "label": "维修单位"
+        },
+        "estimated_cost": {
+          "type": "number",
+          "label": "预计维修费用",
+          "default": 0
+        },
+        "actual_cost": {
+          "type": "number",
+          "label": "实际维修费用",
+          "default": 0
+        },
+        "repair_result": {
+          "type": "enum",
+          "enumRef": "RepairResult",
+          "label": "维修结果"
+        },
+        "repair_description": {
+          "type": "text",
+          "label": "维修说明"
+        },
+        "completed_at": {
+          "type": "datetime",
+          "label": "维修完成时间"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EquipmentScrapOrder": {
+      "name": "设备报废单",
+      "table": "equipment_scrap_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "报废单号",
+          "autoGenerate": "BF-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "equipment_id": {
+          "type": "uuid",
+          "label": "设备ID",
+          "relatedEntity": "Equipment",
+          "required": true
+        },
+        "equipment_code": {
+          "type": "string",
+          "label": "管理编号"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "设备名称"
+        },
+        "purchase_date": {
+          "type": "date",
+          "label": "购置日期"
+        },
+        "purchase_price": {
+          "type": "number",
+          "label": "购置价格"
+        },
+        "scrap_reason": {
+          "type": "text",
+          "label": "报废原因",
+          "required": true
+        },
+        "residual_value": {
+          "type": "number",
+          "label": "残值评估",
+          "default": 0
+        },
+        "disposal_method": {
+          "type": "enum",
+          "enumRef": "DisposalMethod",
+          "label": "处理方式"
+        },
+        "disposed_at": {
+          "type": "date",
+          "label": "处理时间"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "TaskCompletionOrder": {
+      "name": "任务结项申请",
+      "table": "task_completion_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "结项单号",
+          "autoGenerate": "JJ-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "task_id": {
+          "type": "uuid",
+          "label": "关联任务ID",
+          "relatedEntity": "Task",
+          "required": true
+        },
+        "task_name": {
+          "type": "string",
+          "label": "任务名称",
+          "relationField": "task_id",
+          "refDisplay": "name"
+        },
+        "project_id": {
+          "type": "uuid",
+          "label": "关联项目ID",
+          "relatedEntity": "Project"
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称"
+        },
+        "assignee_id": {
+          "type": "uuid",
+          "label": "任务负责人ID",
+          "relatedEntity": "Employee"
+        },
+        "planned_end_date": {
+          "type": "date",
+          "label": "计划结束时间"
+        },
+        "current_progress": {
+          "type": "number",
+          "label": "当前任务进度"
+        },
+        "actual_end_date": {
+          "type": "date",
+          "label": "实际结束时间",
+          "required": true
+        },
+        "final_progress": {
+          "type": "number",
+          "label": "最终完成进度",
+          "default": 100
+        },
+        "task_result": {
+          "type": "text",
+          "label": "任务成果",
+          "required": true
+        },
+        "result_attachments": {
+          "type": "json",
+          "label": "成果附件"
+        },
+        "issues": {
+          "type": "text",
+          "label": "遗留问题"
+        },
+        "quality_score": {
+          "type": "number",
+          "label": "工作质量评分(1-5)",
+          "min": 1,
+          "max": 5
+        },
+        "efficiency_score": {
+          "type": "number",
+          "label": "工作效率评分(1-5)",
+          "min": 1,
+          "max": 5
+        },
+        "attitude_score": {
+          "type": "number",
+          "label": "工作态度评分(1-5)",
+          "min": 1,
+          "max": 5
+        },
+        "overall_score": {
+          "type": "number",
+          "label": "综合评分"
+        },
+        "quality_level": {
+          "type": "enum",
+          "enumRef": "QualityLevel",
+          "label": "评价等级"
+        },
+        "review_comment": {
+          "type": "text",
+          "label": "评价意见"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EmployeeOnboardOrder": {
+      "name": "人员入职申请",
+      "table": "employee_onboard_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "入职单号",
+          "autoGenerate": "RZ-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "姓名",
+          "required": true
+        },
+        "gender": {
+          "type": "enum",
+          "enumRef": "Gender",
+          "label": "性别"
+        },
+        "phone": {
+          "type": "string",
+          "label": "手机号",
+          "required": true
+        },
+        "email": {
+          "type": "string",
+          "label": "邮箱"
+        },
+        "id_card": {
+          "type": "string",
+          "label": "身份证号",
+          "required": true
+        },
+        "department": {
+          "type": "string",
+          "label": "入职部门",
+          "required": true
+        },
+        "position": {
+          "type": "string",
+          "label": "入职岗位",
+          "required": true
+        },
+        "hire_date": {
+          "type": "date",
+          "label": "入职日期",
+          "required": true
+        },
+        "employee_type": {
+          "type": "enum",
+          "enumRef": "EmployeeType",
+          "label": "员工性质",
+          "default": "full_time"
+        },
+        "employee_no": {
+          "type": "string",
+          "label": "员工编号",
+          "autoGenerate": "YG-{seq}"
+        },
+        "created_employee_id": {
+          "type": "uuid",
+          "label": "创建的员工ID",
+          "relatedEntity": "Employee"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EmployeeResignOrder": {
+      "name": "人员离职申请",
+      "table": "employee_resign_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "离职单号",
+          "autoGenerate": "LZ-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "employee_id": {
+          "type": "uuid",
+          "label": "员工ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "employee_name": {
+          "type": "string",
+          "label": "姓名",
+          "relationField": "employee_id",
+          "refDisplay": "name"
+        },
+        "department": {
+          "type": "string",
+          "label": "所属部门"
+        },
+        "position": {
+          "type": "string",
+          "label": "岗位"
+        },
+        "resign_type": {
+          "type": "enum",
+          "enumRef": "ResignType",
+          "label": "离职类型",
+          "required": true
+        },
+        "resign_reason": {
+          "type": "text",
+          "label": "离职原因",
+          "required": true
+        },
+        "expected_leave_date": {
+          "type": "date",
+          "label": "预计离职日期",
+          "required": true
+        },
+        "handover_person_id": {
+          "type": "uuid",
+          "label": "工作交接人ID",
+          "relatedEntity": "Employee"
+        },
+        "handover_person": {
+          "type": "string",
+          "label": "工作交接人",
+          "relationField": "handover_person_id",
+          "refDisplay": "name"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "EmployeeTransferOrder": {
+      "name": "人员调动申请",
+      "table": "employee_transfer_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "调动单号",
+          "autoGenerate": "DD-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "employee_id": {
+          "type": "uuid",
+          "label": "员工ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "employee_name": {
+          "type": "string",
+          "label": "姓名",
+          "relationField": "employee_id",
+          "refDisplay": "name"
+        },
+        "from_department": {
+          "type": "string",
+          "label": "原部门"
+        },
+        "from_position": {
+          "type": "string",
+          "label": "原岗位"
+        },
+        "transfer_type": {
+          "type": "enum",
+          "enumRef": "TransferType",
+          "label": "调动类型",
+          "required": true
+        },
+        "to_department": {
+          "type": "string",
+          "label": "新部门",
+          "required": true
+        },
+        "to_position": {
+          "type": "string",
+          "label": "新岗位",
+          "required": true
+        },
+        "transfer_reason": {
+          "type": "text",
+          "label": "调动原因",
+          "required": true
+        },
+        "effective_date": {
+          "type": "date",
+          "label": "生效日期",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "ProjectProposalOrder": {
+      "name": "项目立项申请",
+      "table": "project_proposal_orders",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "order_no": {
+          "type": "string",
+          "label": "立项单号",
+          "autoGenerate": "LX-{date}-{seq}",
+          "required": true
+        },
+        "applicant_id": {
+          "type": "uuid",
+          "label": "申请人ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "applicant": {
+          "type": "string",
+          "label": "申请人",
+          "relationField": "applicant_id",
+          "refDisplay": "name"
+        },
+        "apply_date": {
+          "type": "date",
+          "label": "申请日期",
+          "required": true
+        },
+        "project_name": {
+          "type": "string",
+          "label": "项目名称",
+          "required": true
+        },
+        "manager_id": {
+          "type": "uuid",
+          "label": "项目经理ID",
+          "relatedEntity": "Employee",
+          "required": true
+        },
+        "manager": {
+          "type": "string",
+          "label": "项目经理",
+          "relationField": "manager_id",
+          "refDisplay": "name"
+        },
+        "tech_manager_id": {
+          "type": "uuid",
+          "label": "技术负责人ID",
+          "relatedEntity": "Employee"
+        },
+        "tech_manager": {
+          "type": "string",
+          "label": "技术负责人",
+          "relationField": "tech_manager_id",
+          "refDisplay": "name"
+        },
+        "start_date": {
+          "type": "date",
+          "label": "项目开始日期",
+          "required": true
+        },
+        "end_date": {
+          "type": "date",
+          "label": "项目结束日期"
+        },
+        "country": {
+          "type": "enum",
+          "enumRef": "Country",
+          "label": "所属国家",
+          "required": true
+        },
+        "address": {
+          "type": "string",
+          "label": "项目地址"
+        },
+        "description": {
+          "type": "text",
+          "label": "项目描述"
+        },
+        "area": {
+          "type": "number",
+          "label": "建筑面积(m²)"
+        },
+        "capacity": {
+          "type": "number",
+          "label": "IT容量(MW)"
+        },
+        "rack_count": {
+          "type": "number",
+          "label": "机柜数量"
+        },
+        "rack_power": {
+          "type": "number",
+          "label": "单机柜功率(KW)"
+        },
+        "power_arch": {
+          "type": "text",
+          "label": "电力架构"
+        },
+        "hvac_arch": {
+          "type": "text",
+          "label": "暖通架构"
+        },
+        "fire_arch": {
+          "type": "text",
+          "label": "消防架构"
+        },
+        "weak_arch": {
+          "type": "text",
+          "label": "弱电架构"
+        },
+        "customer_id": {
+          "type": "uuid",
+          "label": "客户ID",
+          "relatedEntity": "Customer"
+        },
+        "customer_name": {
+          "type": "string",
+          "label": "客户名称"
+        },
+        "budget": {
+          "type": "number",
+          "label": "预算金额(万元)"
+        },
+        "attachments": {
+          "type": "json",
+          "label": "项目文件"
+        },
+        "created_project_id": {
+          "type": "uuid",
+          "label": "创建的项目ID",
+          "relatedEntity": "Project"
+        },
+        "project_no": {
+          "type": "string",
+          "label": "项目编号"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "WorkflowStatus",
+          "label": "单据状态",
+          "default": "draft"
+        },
+        "approval_id": {
+          "type": "uuid",
+          "label": "关联审批ID",
+          "relatedEntity": "Approval"
+        },
+        "approved_at": {
+          "type": "datetime",
+          "label": "审批通过时间"
+        },
+        "approved_by": {
+          "type": "uuid",
+          "label": "审批人ID",
+          "relatedEntity": "Employee"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    },
+    "Department": {
+      "name": "部门信息",
+      "table": "departments",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "code": {
+          "type": "string",
+          "label": "部门编号",
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "label": "部门名称",
+          "required": true
+        },
+        "parent_id": {
+          "type": "uuid",
+          "label": "上级部门ID"
+        },
+        "manager_id": {
+          "type": "uuid",
+          "label": "部门负责人ID"
+        },
+        "level": {
+          "type": "number",
+          "label": "层级",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "Status",
+          "label": "状态",
+          "default": "active"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间"
+        }
+      }
+    },
+    "Organization": {
+      "name": "组织架构",
+      "table": "departments",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "name": {
+          "type": "string",
+          "label": "部门名称",
+          "required": true
+        },
+        "parent_id": {
+          "type": "uuid",
+          "label": "上级部门ID"
+        },
+        "level": {
+          "type": "number",
+          "label": "层级",
+          "required": true
+        }
+      }
+    },
+    "Position": {
+      "name": "岗位信息",
+      "table": "positions",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "name": {
+          "type": "string",
+          "label": "岗位名称",
+          "required": true
+        },
+        "dept_id": {
+          "type": "uuid",
+          "label": "所属部门ID"
+        }
+      }
+    },
+    "EquipmentTransferDetail": {
+      "name": "设备调拨明细",
+      "table": "equipment_transfer_details",
+      "category": "workflow",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "primaryKey": true,
+          "label": "ID"
+        },
+        "transfer_id": {
+          "type": "uuid",
+          "label": "调拨单ID",
+          "relatedEntity": "EquipmentTransferOrder",
+          "required": true
+        },
+        "equipment_id": {
+          "type": "uuid",
+          "label": "设备ID",
+          "relatedEntity": "Equipment"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "仪器负载名称"
+        },
+        "equipment_code": {
+          "type": "string",
+          "label": "管理编号"
+        },
+        "model": {
+          "type": "string",
+          "label": "品牌及型号"
+        },
+        "serial_number": {
+          "type": "string",
+          "label": "仪器出厂编号"
+        },
+        "host_status": {
+          "type": "string",
+          "label": "主机状态"
+        },
+        "accessories_status": {
+          "type": "text",
+          "label": "配件情况"
+        },
+        "unit": {
+          "type": "string",
+          "label": "单位"
+        },
+        "image_url": {
+          "type": "text",
+          "label": "设备图片"
+        },
+        "requested_quantity": {
+          "type": "number",
+          "label": "申请调拨数量",
+          "default": 1
+        },
+        "approved_quantity": {
+          "type": "number",
+          "label": "审批批准数量",
+          "default": 0
+        },
+        "actual_quantity": {
+          "type": "number",
+          "label": "实际调拨数量",
+          "default": 0
+        },
+        "reason": {
+          "type": "text",
+          "label": "调拨原因"
+        },
+        "notes": {
+          "type": "text",
+          "label": "备注"
+        },
+        "status": {
+          "type": "enum",
+          "enumRef": "TransferDetailStatus",
+          "label": "明细状态",
+          "default": "pending"
+        },
+        "created_at": {
+          "type": "datetime",
+          "label": "创建时间",
+          "autoValue": "now"
+        },
+        "updated_at": {
+          "type": "datetime",
+          "label": "更新时间",
+          "autoValue": "now_on_update"
+        }
+      }
+    }
+  }
+}
