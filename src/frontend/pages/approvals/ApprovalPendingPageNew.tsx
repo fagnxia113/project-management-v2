@@ -118,7 +118,7 @@ export default function ApprovalPendingPageNew() {
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<ApprovalTask[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('table')
   const [filter, setFilter] = useState<'all' | 'high' | 'normal' | 'low'>('all')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedTask, setSelectedTask] = useState<ApprovalTask | null>(null)

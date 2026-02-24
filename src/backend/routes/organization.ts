@@ -135,6 +135,8 @@ router.get('/positions', async (req: Request, res: Response) => {
   try {
     const { department_id, status, category, include_inactive } = req.query;
     
+    console.log('[DEBUG] /positions query params:', req.query);
+    
     const positions = await positionService.getPositions({
       department_id: department_id as string,
       status: status as string,
@@ -144,6 +146,7 @@ router.get('/positions', async (req: Request, res: Response) => {
     
     res.json({ success: true, data: positions });
   } catch (error: any) {
+    console.error('[DEBUG] /positions error:', error);
     res.status(500).json({ error: error.message });
   }
 });

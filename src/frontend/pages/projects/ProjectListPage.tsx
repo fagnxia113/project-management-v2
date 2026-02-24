@@ -67,14 +67,15 @@ export default function ProjectListPage() {
     if (!confirm('确定要删除此项目吗？')) return
 
     try {
-      const response = await fetch(`${API_URL.DATA}/projects/${id}`, {
+      const response = await fetch(API_URL.PROJECTS.DETAIL(id), {
         method: 'DELETE'
       })
 
-      if (response.ok) {
+      const result = await response.json()
+      if (result.success) {
         await loadProjects()
       } else {
-        alert('删除失败')
+        alert(result.error || '删除失败')
       }
     } catch (error) {
       console.error('删除项目失败:', error)
@@ -85,18 +86,18 @@ export default function ProjectListPage() {
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       proposal: 'bg-yellow-100 text-yellow-700',
-      planning: 'bg-blue-100 text-blue-700',
+      initiated: 'bg-yellow-100 text-yellow-700',
       in_progress: 'bg-indigo-100 text-indigo-700',
       completed: 'bg-green-100 text-green-700',
       paused: 'bg-gray-100 text-gray-700',
       delayed: 'bg-red-100 text-red-700'
     }
     const labels: Record<string, string> = {
-      proposal: '提案中',
-      planning: '规划中',
+      proposal: '立项',
+      initiated: '立项',
       in_progress: '进行中',
-      completed: '已完成',
-      paused: '已暂停',
+      completed: '已结项',
+      paused: '暂停',
       delayed: '已延期'
     }
     return (
@@ -104,6 +105,17 @@ export default function ProjectListPage() {
         {labels[status] || status}
       </span>
     )
+  }
+
+  // 格式化日期显示
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
   }
 
   const getTypeBadge = (type: string) => {
@@ -146,7 +158,7 @@ export default function ProjectListPage() {
           </button>
         </form>
         <button
-          onClick={() => { window.history.pushState({}, '', '/projects/new'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          onClick={() => navigate('/projects/create')}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
         >
           + 新建项目
@@ -186,7 +198,7 @@ export default function ProjectListPage() {
                     </td>
                     <td className="px-6 py-4">{getStatusBadge(project.status)}</td>
                     <td className="px-6 py-4 text-sm text-gray-700">{project.country}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{project.start_date}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{formatDate(project.start_date)}</td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => handleDelete(project.id)}

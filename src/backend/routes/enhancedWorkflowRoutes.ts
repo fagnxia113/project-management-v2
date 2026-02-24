@@ -4,6 +4,7 @@ import { executionLogger } from '../services/ExecutionLogger.js';
 import { performanceMonitor } from '../services/PerformanceMonitor.js';
 import { instanceService } from '../services/InstanceService.js';
 import { taskService } from '../services/TaskService.js';
+import { definitionService } from '../services/DefinitionService.js';
 
 const router = Router();
 
@@ -238,7 +239,7 @@ router.get('/tasks/assignee/:userId', async (req, res) => {
     
     // 解析状态参数
     const statusArray = status ? (status as string).split(',') : undefined;
-    const tasks = await enhancedWorkflowEngine.getTasksByAssignee(userId, statusArray);
+    const tasks = await enhancedWorkflowEngine.getTasksByAssignee(userId);
 
     res.json({
       success: true,
@@ -714,6 +715,44 @@ router.get('/process/instance/:instanceId/tasks', async (req, res) => {
   }
 });
 
+// 获取流程实例的任务列表（v2 API 别名）
+router.get('/tasks/instance/:instanceId', async (req, res) => {
+  try {
+    const { instanceId } = req.params;
+    const tasks = await taskService.getTasksByInstance(instanceId);
+
+    res.json({
+      success: true,
+      data: tasks
+    });
+  } catch (error) {
+    console.error('获取任务列表失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取任务列表失败'
+    });
+  }
+});
+
+// 获取流程实例的执行日志
+router.get('/process/instance/:instanceId/logs', async (req, res) => {
+  try {
+    const { instanceId } = req.params;
+    const logs = await executionLogger.getHistory(instanceId);
+
+    res.json({
+      success: true,
+      data: logs
+    });
+  } catch (error) {
+    console.error('获取执行日志失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '获取执行日志失败'
+    });
+  }
+});
+
 // 获取流程实例的操作历史
 router.get('/process/instance/:instanceId/history', async (req, res) => {
   try {
@@ -746,7 +785,7 @@ router.get('/admin/instance/:instanceId/nodes', async (req, res) => {
       });
     }
 
-    const definition = await instanceService.getDefinition(instance.definition_id);
+    const definition = await definitionService.getDefinition(instance.definition_id);
     
     if (!definition || !definition.node_config) {
       return res.status(404).json({

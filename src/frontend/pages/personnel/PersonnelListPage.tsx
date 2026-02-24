@@ -5,13 +5,24 @@ import { API_URL } from '../../config/api'
 
 interface Employee {
   id: string
+  employee_no: string
   name: string
   position: string
-  department: string
+  department_id: string
   email: string | null
   phone: string | null
   status: string
   created_at: string
+}
+
+interface Position {
+  id: string
+  name: string
+}
+
+interface Department {
+  id: string
+  name: string
 }
 
 interface ApiResponse<T> {
@@ -40,6 +51,8 @@ const [total, setTotal] = useState(0)
   const [editFormData, setEditFormData] = useState({
     name: '', phone: '', email: '', department: '', position: '', status: 'active'
   })
+  const [positions, setPositions] = useState<Position[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -47,7 +60,51 @@ const [total, setTotal] = useState(0)
       setCurrentUser(JSON.parse(userStr))
     }
     loadEmployees()
+    loadPositions()
+    loadDepartments()
   }, [page, searchTerm])
+
+  const loadPositions = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.DATA('Position')}?pageSize=1000`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+      const result = await response.json()
+      setPositions(result.data || [])
+    } catch (error) {
+      console.error('加载岗位失败:', error)
+    }
+  }
+
+  const loadDepartments = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.DATA('Department')}?pageSize=1000`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+      const result = await response.json()
+      setDepartments(result.data || [])
+    } catch (error) {
+      console.error('加载部门失败:', error)
+    }
+  }
+
+  const getPositionName = (positionId: string) => {
+    const position = positions.find(p => p.id === positionId)
+    return position?.name || positionId
+  }
+
+  const getDepartmentName = (departmentId: string) => {
+    const department = departments.find(d => d.id === departmentId)
+    return department?.name || departmentId
+  }
 
   const loadEmployees = async () => {
     try {
@@ -264,9 +321,9 @@ if (response.ok) {
 
   const columns = [
     {
-      key: 'id' as keyof Employee,
+      key: 'employee_no' as keyof Employee,
       header: '员工工号',
-      width: '100px'
+      width: '150px'
     },
     {
       key: 'name' as keyof Employee,
@@ -275,11 +332,12 @@ if (response.ok) {
     {
       key: 'position' as keyof Employee,
       header: '职位',
-      render: (value: string) => getPositionBadge(value)
+      render: (value: string) => getPositionName(value)
     },
     {
-      key: 'department' as keyof Employee,
-      header: '部门'
+      key: 'department_id' as keyof Employee,
+      header: '部门',
+      render: (value: string) => getDepartmentName(value)
     },
     {
       key: 'email' as keyof Employee,

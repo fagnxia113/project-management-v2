@@ -39,10 +39,10 @@ const DailyReportDashboard = lazy(() => import('./pages/reports/DailyReportDashb
 const MetadataConfigPage = lazy(() => import('./pages/settings/MetadataConfigPage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const AdminDataPage = lazy(() => import('./pages/admin/AdminDataPage'))
-const ProcessFormPresetsPage = lazy(() => import('./pages/workflow/ProcessFormPresetsPage'))
 const WorkflowVisualizationPage = lazy(() => import('./pages/workflow/WorkflowVisualizationPage'))
 const WorkflowDesignerNewPage = lazy(() => import('./pages/workflow/WorkflowDesignerNewPage'))
 const WorkflowDefinitionListPage = lazy(() => import('./pages/workflow/WorkflowDefinitionListPage'))
+const ProcessInstanceDetailPage = lazy(() => import('./pages/workflow/ProcessInstanceDetailPage'))
 const WorkflowMonitorPage = lazy(() => import('./pages/admin/WorkflowMonitorPage'))
 const DepartmentPage = lazy(() => import('./pages/organization/DepartmentPage'))
 const PositionPage = lazy(() => import('./pages/organization/PositionPage'))
@@ -146,8 +146,8 @@ function App() {
           <Route path="/workflow/definitions" element={<WorkflowDefinitionListPage />} />
           <Route path="/workflow/designer/new" element={<WorkflowDesignerNewPage />} />
           <Route path="/workflow/designer/:id" element={<WorkflowDesignerNewPage />} />
-          <Route path="/workflow/presets" element={<ProcessFormPresetsPage />} />
           <Route path="/workflow/visualization/:instanceId" element={<WorkflowVisualizationPage />} />
+          <Route path="/workflow/instance/:instanceId" element={<ProcessInstanceDetailPage />} />
           <Route path="/purchase/request" element={<PurchaseRequestPage />} />
           <Route path="/purchase" element={<PurchaseListPage />} />
           <Route path="/reports/dashboard" element={<DailyReportDashboard />} />

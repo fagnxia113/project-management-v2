@@ -73,7 +73,7 @@ export class ProcessFormIntegrationService {
         category: 'project',
         description: '项目立项、变更、结项审批流程',
         formTemplateKey: 'project-create-form',
-        workflowTemplateId: 'project_init',
+        workflowTemplateId: 'project-approval',
         businessType: 'Project',
         status: 'active',
         defaultVariables: {},
@@ -330,13 +330,24 @@ export class ProcessFormIntegrationService {
         };
       }
 
-      // 获取表单模板
+      // 获取表单模板（可选）
       const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
-      if (!formTemplate) {
-        return {
-          success: false,
-          message: '表单模板不存在'
-        };
+      
+      // 获取或创建流程定义
+      let definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
+      let formSchema = formTemplate?.fields || null;
+      
+      if (!formTemplate && definition?.form_schema) {
+        // 从流程定义获取表单schema
+        formSchema = definition.form_schema;
+      }
+      
+      if (!formTemplate && !formSchema) {
+        // 既没有表单模板也没有流程定义的form_schema，尝试从模板创建
+        const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
+        if (workflowTemplate?.formSchema) {
+          formSchema = workflowTemplate.formSchema;
+        }
       }
 
       // 自动生成编号
@@ -371,38 +382,42 @@ export class ProcessFormIntegrationService {
           break;
       }
 
-      // 处理业务数据联动
-      const businessLinkResult = await unifiedFormService.handleBusinessLink(formTemplate.id, enhancedFormData);
-      if (!businessLinkResult.success) {
-        return {
-          success: false,
-          message: '业务数据联动处理失败',
-          data: {
-            formValidation: {
-              isValid: false,
-              errors: businessLinkResult.messages.map(msg => ({ field: 'business', message: msg }))
+      // 处理业务数据联动和验证（仅在表单模板存在时）
+      let cleanedFormData = enhancedFormData;
+      let validationResult = { isValid: true, errors: [] as Array<{ field: string; message: string }> };
+      
+      if (formTemplate) {
+        // 处理业务数据联动
+        const businessLinkResult = await unifiedFormService.handleBusinessLink(formTemplate.id, enhancedFormData);
+        if (!businessLinkResult.success) {
+          return {
+            success: false,
+            message: '业务数据联动处理失败',
+            data: {
+              formValidation: {
+                isValid: false,
+                errors: businessLinkResult.messages.map(msg => ({ field: 'business', message: msg }))
+              }
             }
-          }
-        };
+          };
+        }
+
+        // 验证表单数据
+        validationResult = unifiedFormService.validateForm(formTemplate.id, businessLinkResult.data);
+        if (!validationResult.isValid) {
+          return {
+            success: false,
+            message: '表单数据验证失败',
+            data: {
+              formValidation: validationResult
+            }
+          };
+        }
+
+        // 清理表单数据（移除不可见字段的值）
+        cleanedFormData = unifiedFormService.cleanFormData(formTemplate.id, businessLinkResult.data);
       }
 
-      // 验证表单数据
-      const validationResult = unifiedFormService.validateForm(formTemplate.id, businessLinkResult.data);
-      if (!validationResult.isValid) {
-        return {
-          success: false,
-          message: '表单数据验证失败',
-          data: {
-            formValidation: validationResult
-          }
-        };
-      }
-
-      // 清理表单数据（移除不可见字段的值）
-      const cleanedFormData = unifiedFormService.cleanFormData(formTemplate.id, businessLinkResult.data);
-
-      // 获取或创建流程定义
-      let definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
       if (!definition) {
         // 从模板创建流程定义
         const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
@@ -455,32 +470,35 @@ export class ProcessFormIntegrationService {
       let businessId = params.businessId;
       
       if (preset.businessType === 'Project') {
-        // 创建项目
+        // 创建项目 - 使用新的字段结构
         const project = await projectService.createProject({
           code: cleanedFormData.code,
           name: cleanedFormData.name,
           type: cleanedFormData.type || 'domestic',
           manager_id: cleanedFormData.manager_id,
           technical_lead_id: cleanedFormData.technical_lead_id,
-          status: 'proposal',
+          status: cleanedFormData.status || 'proposal',
           start_date: cleanedFormData.start_date,
           end_date: cleanedFormData.end_date,
           country: cleanedFormData.country || '中国',
           address: cleanedFormData.address,
-          budget: cleanedFormData.budget || 0,
-          customer_id: cleanedFormData.customer_id,
-          end_customer: cleanedFormData.end_customer,
-          organization_id: cleanedFormData.organization_id,
+          attachments: cleanedFormData.attachments,
+          // 项目相关信息
           description: cleanedFormData.description,
           building_area: cleanedFormData.building_area,
           it_capacity: cleanedFormData.it_capacity,
           cabinet_count: cleanedFormData.cabinet_count,
           cabinet_power: cleanedFormData.cabinet_power,
+          // 技术架构
           power_architecture: cleanedFormData.power_architecture,
           hvac_architecture: cleanedFormData.hvac_architecture,
           fire_architecture: cleanedFormData.fire_architecture,
           weak_electric_architecture: cleanedFormData.weak_electric_architecture,
-          attachments: cleanedFormData.attachments
+          // 商务信息
+          customer_id: cleanedFormData.customer_id,
+          end_customer: cleanedFormData.end_customer,
+          budget: cleanedFormData.budget || 0,
+          organization_id: cleanedFormData.organization_id
         });
         
         businessId = project.id;
@@ -526,19 +544,27 @@ export class ProcessFormIntegrationService {
 
   /**
    * 获取流程表单的字段定义
+   * 从流程定义的 form_schema 获取，实现表单与流程强绑定
    */
-  getFormFields(presetId: string): any[] {
+  async getFormFields(presetId: string): Promise<any[]> {
     const preset = this.presets.get(presetId);
     if (!preset) {
       return [];
     }
 
-    const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
-    if (!formTemplate) {
-      return [];
+    // 从流程定义获取表单 schema
+    const definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
+    if (definition && definition.form_schema) {
+      return definition.form_schema;
     }
 
-    return formTemplate.fields;
+    // 降级：从表单模板获取（兼容旧数据）
+    const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
+    if (formTemplate) {
+      return formTemplate.fields;
+    }
+
+    return [];
   }
 
   /**
@@ -563,14 +589,31 @@ export class ProcessFormIntegrationService {
       if (definition) {
         // 更新流程定义中的表单schema
       await definitionService.updateDefinition(definition.id, {
-        form_schema: formTemplate.fields.map(field => ({
-          name: field.name,
-          label: field.label,
-          type: field.type === 'boolean' ? 'select' : field.type === 'lookup' ? 'text' : field.type,
-          required: field.required,
-          options: field.type === 'boolean' ? ['true', 'false'] : field.options,
-          defaultValue: field.defaultValue
-        }))
+        form_schema: formTemplate.fields.map(field => {
+          let options: string[] | undefined = undefined;
+          if (field.type === 'boolean') {
+            options = ['true', 'false'];
+          } else if (Array.isArray(field.options) && field.options.length > 0) {
+            const firstOption = field.options[0];
+            // 检查是否是字符串数组
+            if (typeof firstOption === 'string') {
+              options = field.options as unknown as string[];
+            }
+            // 如果是 { label, value } 格式，转换为字符串数组
+            else if (typeof firstOption === 'object' && firstOption !== null && 'label' in firstOption) {
+              options = (field.options as unknown as { label: string; value: any }[]).map(opt => opt.label);
+            }
+          }
+          
+          return {
+            name: field.name,
+            label: field.label,
+            type: field.type === 'boolean' ? 'select' : field.type === 'lookup' ? 'text' : field.type,
+            required: field.required,
+            options,
+            defaultValue: field.defaultValue
+          };
+        })
       });
       }
 

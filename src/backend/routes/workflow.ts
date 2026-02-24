@@ -173,8 +173,45 @@ router.get('/processes', async (req: Request, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       pageSize: pageSize ? parseInt(pageSize as string) : undefined
     });
+
+    // 为每个实例获取当前节点名称
+    const instancesWithCurrentNode = await Promise.all(
+      instances.map(async (instance) => {
+        // 如果实例已完成，根据结果确定节点名称
+        if (instance.status === 'completed') {
+          const resultLabels: Record<string, string> = {
+            'approved': '审批通过',
+            'rejected': '审批驳回',
+            'withdrawn': '已撤回',
+            'terminated': '已终止',
+            'skipped': '已跳过'
+          };
+          return {
+            ...instance,
+            current_node_name: resultLabels[instance.result || 'approved'] || '已完成'
+          };
+        }
+
+        // 获取当前活动的任务
+        const tasks = await taskService.getTasksByInstance(instance.id);
+        const activeTasks = tasks.filter(t => 
+          t.status === 'created' || t.status === 'assigned' || t.status === 'in_progress'
+        );
+
+        let currentNodeName = '未知';
+        if (activeTasks.length > 0) {
+          // 取第一个活动任务的节点名称
+          currentNodeName = activeTasks[0].name || '处理中';
+        }
+
+        return {
+          ...instance,
+          current_node_name: currentNodeName
+        };
+      })
+    );
     
-    res.json({ success: true, data: instances });
+    res.json({ success: true, data: instancesWithCurrentNode });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -576,7 +613,7 @@ router.get('/form-presets/:id/default-values', async (req: Request, res: Respons
 router.get('/form-presets/:id/form-fields', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const formFields = processFormIntegrationService.getFormFields(id);
+    const formFields = await processFormIntegrationService.getFormFields(id);
     
     res.json({ success: true, data: formFields });
   } catch (error: any) {

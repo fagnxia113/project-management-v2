@@ -36,6 +36,15 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 });
 
+router.delete('/:id', async (req: Request, res: Response) => {
+    try {
+        await projectService.deleteProject(req.params.id as string);
+        res.json({ success: true, message: '项目已删除' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // --- Tasks (WBS) ---
 router.get('/:id/structure', async (req: Request, res: Response) => {
     try {

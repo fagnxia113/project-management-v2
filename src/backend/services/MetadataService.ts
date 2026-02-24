@@ -93,9 +93,28 @@ export class MetadataService {
 
   /**
    * 获取单个实体
+   * 支持大小写不敏感查找
    */
   getEntity(entityName: string): EntityDefinition | undefined {
-    return this.entities[entityName];
+    // 先尝试精确匹配
+    if (this.entities[entityName]) {
+      return this.entities[entityName];
+    }
+    
+    // 尝试首字母大写匹配 (customers -> Customers)
+    const capitalized = entityName.charAt(0).toUpperCase() + entityName.slice(1);
+    if (this.entities[capitalized]) {
+      return this.entities[capitalized];
+    }
+    
+    // 尝试单数形式匹配 (customers -> customer -> Customer)
+    const singular = entityName.endsWith('s') ? entityName.slice(0, -1) : entityName;
+    const capitalizedSingular = singular.charAt(0).toUpperCase() + singular.slice(1);
+    if (this.entities[capitalizedSingular]) {
+      return this.entities[capitalizedSingular];
+    }
+    
+    return undefined;
   }
 
   /**

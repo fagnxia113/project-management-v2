@@ -452,6 +452,46 @@ app.post('/api/admin/clear-all-workflow-data', async (req, res) => {
   }
 });
 
+// 更新流程定义的form_schema（管理员专用）
+app.post('/api/admin/update-workflow-form-schema', async (req, res) => {
+  try {
+    const { confirm, templateId } = req.body;
+    
+    if (confirm !== 'UPDATE_FORM_SCHEMA') {
+      return res.status(400).json({
+        success: false,
+        error: '请提供正确的确认码'
+      });
+    }
+    
+    // 从模板获取更新后的form_schema
+    const template = WorkflowTemplatesService.getTemplateById(templateId);
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        error: '模板不存在'
+      });
+    }
+    
+    // 更新数据库中的流程定义
+    const result = await db.execute(
+      `UPDATE workflow_definitions 
+       SET form_schema = ?, updated_at = NOW() 
+       WHERE \`key\` = ?`,
+      [JSON.stringify(template.formSchema), templateId]
+    );
+    
+    res.json({ 
+      success: true, 
+      message: `流程定义 ${templateId} 的表单字段已更新`,
+      affectedRows: result.affectedRows,
+      formSchema: template.formSchema
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 执行数据库迁移（管理员专用）
 app.post('/api/admin/run-migration', async (req, res) => {
   try {

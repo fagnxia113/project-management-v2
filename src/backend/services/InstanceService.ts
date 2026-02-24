@@ -126,7 +126,21 @@ export class InstanceService {
       [...queryParams, pageSize, offset]
     );
 
-    return rows.map((row: any) => this.parseInstanceRow(row));
+    // 获取部门和职位名称映射
+    const departments = await db.query<any>('SELECT id, name FROM departments');
+    const positions = await db.query<any>('SELECT id, name FROM positions');
+    const deptMap = Object.fromEntries(departments.map((d: any) => [d.id, d.name]));
+    const posMap = Object.fromEntries(positions.map((p: any) => [p.id, p.name]));
+
+    return rows.map((row: any) => {
+      const instance = this.parseInstanceRow(row);
+      // 在表单数据中添加部门/职位名称映射
+      if (instance.variables?.formData) {
+        instance.variables.formData._deptMap = deptMap;
+        instance.variables.formData._posMap = posMap;
+      }
+      return instance;
+    });
   }
 
   async updateInstance(id: string, updates: Partial<WorkflowInstance>, operator?: { id: string; name: string }, reason?: string): Promise<boolean> {

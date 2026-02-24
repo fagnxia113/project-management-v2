@@ -58,16 +58,11 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
             {
               id: 'condition-1',
               name: '预算大于10万',
-              expression: '${formData.budget > 100000}',
+              expression: '${formData.budget != null && formData.budget > 100000}',
               targetNode: 'gm'
-            },
-            {
-              id: 'condition-2',
-              name: '预算小于等于10万',
-              expression: '${formData.budget <= 100000}',
-              targetNode: 'end-approved'
             }
-          ]
+          ],
+          defaultFlow: 'end-approved'
         }
       },
       {
@@ -129,94 +124,224 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
     ]
   },
   formSchema: [
+    // ========== 基本信息 ==========
+    {
+      name: 'name',
+      label: '项目名称',
+      type: 'text',
+      required: true,
+      placeholder: '请输入项目名称',
+      group: '基本信息'
+    },
     {
       name: 'code',
       label: '项目编号',
       type: 'text',
       required: false,
       placeholder: '系统自动生成',
-      disabled: true
-    },
-    {
-      name: 'name',
-      label: '项目名称',
-      type: 'text',
-      required: true,
-      placeholder: '请输入项目名称'
-    },
-    {
-      name: 'type',
-      label: '项目类型',
-      type: 'select',
-      required: true,
-      options: [
-        { label: '国内项目', value: 'domestic' },
-        { label: '海外项目', value: 'foreign' },
-        { label: '研发项目', value: 'rd' },
-        { label: '服务项目', value: 'service' }
-      ]
+      disabled: true,
+      group: '基本信息'
     },
     {
       name: 'manager_id',
       label: '项目经理',
       type: 'user',
       required: true,
-      placeholder: '请选择项目经理'
+      placeholder: '请选择项目经理',
+      group: '基本信息'
+    },
+    {
+      name: 'technical_lead_id',
+      label: '技术负责人',
+      type: 'user',
+      required: false,
+      placeholder: '请选择技术负责人',
+      group: '基本信息'
+    },
+    {
+      name: 'start_date',
+      label: '项目开始日期',
+      type: 'date',
+      required: true,
+      group: '基本信息'
+    },
+    {
+      name: 'end_date',
+      label: '项目结束日期',
+      type: 'date',
+      required: false,
+      group: '基本信息'
+    },
+    {
+      name: 'country',
+      label: '所属国家',
+      type: 'select',
+      required: false,
+      defaultValue: '中国',
+      options: [
+        { label: '中国', value: '中国' },
+        { label: '美国', value: '美国' },
+        { label: '新加坡', value: '新加坡' },
+        { label: '马来西亚', value: '马来西亚' },
+        { label: '印度尼西亚', value: '印度尼西亚' },
+        { label: '泰国', value: '泰国' },
+        { label: '越南', value: '越南' },
+        { label: '菲律宾', value: '菲律宾' },
+        { label: '日本', value: '日本' },
+        { label: '韩国', value: '韩国' },
+        { label: '阿联酋', value: '阿联酋' },
+        { label: '沙特阿拉伯', value: '沙特阿拉伯' },
+        { label: '德国', value: '德国' },
+        { label: '英国', value: '英国' },
+        { label: '其他', value: '其他' }
+      ],
+      group: '基本信息'
+    },
+    {
+      name: 'address',
+      label: '项目地址',
+      type: 'text',
+      required: false,
+      placeholder: '请输入项目地址',
+      group: '基本信息'
+    },
+    {
+      name: 'type',
+      label: '项目类型',
+      type: 'select',
+      required: false,
+      defaultValue: 'domestic',
+      options: [
+        { label: '国内项目', value: 'domestic' },
+        { label: '海外项目', value: 'foreign' },
+        { label: '研发项目', value: 'rd' },
+        { label: '服务项目', value: 'service' }
+      ],
+      group: '基本信息'
     },
     {
       name: 'status',
       label: '项目状态',
       type: 'select',
       required: true,
+      defaultValue: 'proposal',
       options: [
-        { label: '提案中', value: 'proposal' },
+        { label: '立项', value: 'proposal' },
         { label: '进行中', value: 'in_progress' },
         { label: '已完成', value: 'completed' },
-        { label: '已暂停', value: 'paused' },
-        { label: '已延期', value: 'delayed' }
-      ]
+        { label: '暂停', value: 'paused' }
+      ],
+      group: '基本信息'
     },
-    {
-      name: 'start_date',
-      label: '开始日期',
-      type: 'date',
-      required: true
-    },
-    {
-      name: 'end_date',
-      label: '预计结束日期',
-      type: 'date',
-      required: false
-    },
-    {
-      name: 'budget',
-      label: '项目预算(元)',
-      type: 'number',
-      required: false,
-      placeholder: '请输入项目预算',
-      min: 0
-    },
-    {
-      name: 'customer_id',
-      label: '客户',
-      type: 'lookup',
-      required: false,
-      placeholder: '请选择客户'
-    },
-    {
-      name: 'department_id',
-      label: '所属部门',
-      type: 'lookup',
-      required: false,
-      placeholder: '请选择所属部门'
-    },
+    // ========== 项目规模 ==========
     {
       name: 'description',
       label: '项目描述',
       type: 'textarea',
       required: false,
-      placeholder: '请输入项目描述',
-      rows: 4
+      placeholder: '请输入项目描述信息',
+      rows: 3,
+      group: '项目规模'
+    },
+    {
+      name: 'building_area',
+      label: '建筑面积(m²)',
+      type: 'number',
+      required: false,
+      min: 0,
+      group: '项目规模'
+    },
+    {
+      name: 'it_capacity',
+      label: 'IT容量(MW)',
+      type: 'number',
+      required: false,
+      min: 0,
+      group: '项目规模'
+    },
+    {
+      name: 'cabinet_count',
+      label: '机柜数量',
+      type: 'number',
+      required: false,
+      min: 0,
+      group: '项目规模'
+    },
+    {
+      name: 'cabinet_power',
+      label: '单机柜功率(KW)',
+      type: 'number',
+      required: false,
+      min: 0,
+      group: '项目规模'
+    },
+    // ========== 技术架构 ==========
+    {
+      name: 'power_architecture',
+      label: '供电架构',
+      type: 'textarea',
+      required: false,
+      placeholder: '供电系统架构描述',
+      rows: 2,
+      group: '技术架构'
+    },
+    {
+      name: 'hvac_architecture',
+      label: '暖通架构',
+      type: 'textarea',
+      required: false,
+      placeholder: '暖通系统架构描述',
+      rows: 2,
+      group: '技术架构'
+    },
+    {
+      name: 'fire_architecture',
+      label: '消防架构',
+      type: 'textarea',
+      required: false,
+      placeholder: '消防系统架构描述',
+      rows: 2,
+      group: '技术架构'
+    },
+    {
+      name: 'weak_electric_architecture',
+      label: '弱电架构',
+      type: 'textarea',
+      required: false,
+      placeholder: '弱电系统架构描述',
+      rows: 2,
+      group: '技术架构'
+    },
+    // ========== 商务信息 ==========
+    {
+      name: 'customer_id',
+      label: '客户',
+      type: 'lookup',
+      required: false,
+      placeholder: '请选择客户',
+      businessConfig: {
+        entityType: 'Customer',
+        lookupField: 'id',
+        displayField: 'name'
+      },
+      group: '商务信息'
+    },
+    {
+      name: 'end_customer',
+      label: '最终客户',
+      type: 'text',
+      required: false,
+      placeholder: '请输入最终客户名称',
+      group: '商务信息'
+    },
+    {
+      name: 'budget',
+      label: '预算金额(万元)',
+      type: 'number',
+      required: false,
+      placeholder: '请输入预算金额',
+      min: 0,
+      group: '商务信息'
     }
   ]
 };

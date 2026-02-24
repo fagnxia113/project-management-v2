@@ -245,9 +245,9 @@ router.get('/presets/:id/default-values', (req, res) => {
  * 获取流程表单的字段定义
  * GET /api/process-forms/presets/:id/form-fields
  */
-router.get('/presets/:id/form-fields', (req, res) => {
+router.get('/presets/:id/form-fields', async (req, res) => {
   try {
-    const formFields = processFormIntegrationService.getFormFields(req.params.id);
+    const formFields = await processFormIntegrationService.getFormFields(req.params.id);
     res.json({
       success: true,
       data: formFields

@@ -6,28 +6,33 @@ export interface Project {
     code: string;
     name: string;
     type: 'domestic' | 'foreign' | 'rd' | 'service';
+    // 基本信息
     manager_id?: string;
     technical_lead_id?: string;
-    status: 'proposal' | 'in_progress' | 'completed' | 'paused' | 'delayed';
-    progress: number;
     start_date: string;
-    end_date?: string;
     country?: string;
     address?: string;
-    budget: number;
-    customer_id?: string;
-    end_customer?: string;
-    organization_id?: string;
+    end_date?: string;
+    attachments?: string;
+    // 项目阶段
+    status: 'proposal' | 'in_progress' | 'completed' | 'paused' | 'delayed';
+    progress: number;
+    // 项目相关信息
     description?: string;
-    building_area?: number;
-    it_capacity?: number;
-    cabinet_count?: number;
-    cabinet_power?: number;
+    building_area?: number;  // 建筑面积
+    it_capacity?: number;    // IT容量
+    cabinet_count?: number;   // 机柜数量
+    cabinet_power?: number;   // 机柜功率
+    // 技术架构
     power_architecture?: string;
     hvac_architecture?: string;
     fire_architecture?: string;
     weak_electric_architecture?: string;
-    attachments?: string;
+    // 商务信息
+    customer_id?: string;
+    end_customer?: string;
+    budget: number;
+    organization_id?: string;
 }
 
 export interface Task {
@@ -54,24 +59,58 @@ export class ProjectService {
 
     async createProject(data: Omit<Project, 'id' | 'progress'>): Promise<Project> {
         const id = uuidv4();
+        // 生成项目编号
+        const code = data.code || `PRJ-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+        
         await db.execute(
             `INSERT INTO projects (
-                id, code, name, type, manager_id, technical_lead_id, status, country, address,
-                progress, start_date, end_date, budget, customer_id, end_customer, attachments,
-                organization_id, description, building_area, it_capacity, cabinet_count,
-                cabinet_power, power_architecture, hvac_architecture, fire_architecture, weak_electric_architecture
+                id, code, name, type, 
+                manager_id, technical_lead_id,
+                status, country, address, attachments,
+                progress, start_date, end_date,
+                description, building_area, it_capacity, cabinet_count, cabinet_power,
+                power_architecture, hvac_architecture, fire_architecture, weak_electric_architecture,
+                budget, customer_id, end_customer, organization_id
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                id, data.code, data.name, data.type, data.manager_id || null, data.technical_lead_id || null,
-                data.status || 'proposal', data.country || '中国', data.address || null, 0,
-                data.start_date, data.end_date || null, data.budget || 0, data.customer_id || null,
-                data.end_customer || null, data.attachments || null, data.organization_id || null,
-                data.description || null, data.building_area || null, data.it_capacity || null,
-                data.cabinet_count || null, data.cabinet_power || null, data.power_architecture || null,
-                data.hvac_architecture || null, data.fire_architecture || null, data.weak_electric_architecture || null
+                id, code, data.name, data.type || 'domestic',
+                data.manager_id || null, data.technical_lead_id || null,
+                data.status || 'proposal', data.country || '中国', data.address || null, data.attachments || null,
+                0, data.start_date, data.end_date || null,
+                data.description || null, data.building_area || null, data.it_capacity || null, 
+                data.cabinet_count || null, data.cabinet_power || null,
+                data.power_architecture || null, data.hvac_architecture || null, data.fire_architecture || null, data.weak_electric_architecture || null,
+                data.budget || 0, data.customer_id || null, data.end_customer || null, data.organization_id || null
             ]
         );
-        return { id, progress: 0, ...data };
+        return { 
+            id, 
+            code, 
+            progress: 0, 
+            name: data.name,
+            type: data.type || 'domestic',
+            manager_id: data.manager_id,
+            technical_lead_id: data.technical_lead_id,
+            status: data.status || 'proposal',
+            start_date: data.start_date,
+            end_date: data.end_date,
+            country: data.country || '中国',
+            address: data.address,
+            attachments: data.attachments,
+            description: data.description,
+            building_area: data.building_area,
+            it_capacity: data.it_capacity,
+            cabinet_count: data.cabinet_count,
+            cabinet_power: data.cabinet_power,
+            power_architecture: data.power_architecture,
+            hvac_architecture: data.hvac_architecture,
+            fire_architecture: data.fire_architecture,
+            weak_electric_architecture: data.weak_electric_architecture,
+            customer_id: data.customer_id,
+            end_customer: data.end_customer,
+            budget: data.budget || 0,
+            organization_id: data.organization_id
+        };
     }
 
     async getProjects(filters: { search?: string; page: number; pageSize: number }): Promise<{ data: Project[]; total: number; totalPages: number }> {
@@ -103,6 +142,13 @@ export class ProjectService {
     async getProjectById(id: string): Promise<Project | undefined> {
         const res = await db.queryOne<Project>('SELECT * FROM projects WHERE id = ?', [id]);
         return res || undefined;
+    }
+
+    async deleteProject(id: string): Promise<void> {
+        // 先删除项目下的所有任务
+        await db.execute('DELETE FROM tasks WHERE project_id = ?', [id]);
+        // 再删除项目
+        await db.execute('DELETE FROM projects WHERE id = ?', [id]);
     }
 
     // --- WBS/Task Methods ---

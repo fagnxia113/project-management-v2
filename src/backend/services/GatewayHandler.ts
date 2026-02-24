@@ -12,9 +12,14 @@ export class GatewayHandler {
 
     const { conditions, defaultFlow } = gateway.gatewayConfig;
     
+    console.log('🔍 网关处理 - conditions:', conditions?.length, 'defaultFlow:', defaultFlow);
+    console.log('🔍 上下文 formData:', JSON.stringify(context.formData));
+    
     // 评估每个条件
     for (const condition of conditions) {
+      console.log('🔍 评估条件:', condition.expression, 'targetNode:', condition.targetNode);
       const result = await this.evaluateExpression(condition.expression, context);
+      console.log('🔍 条件结果:', result);
       if (result) {
         return [condition.targetNode];
       }
@@ -22,6 +27,7 @@ export class GatewayHandler {
 
     // 如果没有匹配的条件，使用默认流程
     if (defaultFlow) {
+      console.log('🔍 使用默认流程:', defaultFlow);
       return [defaultFlow];
     }
 

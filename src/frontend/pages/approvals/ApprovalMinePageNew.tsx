@@ -39,6 +39,46 @@ interface ApprovalOrder {
   initiator_name?: string
 }
 
+// 表单字段中文标签映射
+const FORM_FIELD_LABELS: Record<string, string> = {
+  'employee_name': '员工姓名',
+  'employee_id': '员工编号',
+  'department_id': '部门',
+  'position_id': '职位',
+  'phone': '联系电话',
+  'gender': '性别',
+  'start_date': '入职日期',
+  'employee_type': '员工类型',
+  'email': '邮箱',
+  'id_card': '身份证号',
+  'address': '地址',
+  'emergency_contact': '紧急联系人',
+  'emergency_phone': '紧急联系电话',
+  'education': '学历',
+  'major': '专业',
+  'graduation_school': '毕业院校',
+  'graduation_date': '毕业日期',
+  'bank_account': '银行卡号',
+  'bank_name': '开户银行',
+  'remark': '备注'
+}
+
+// 性别映射
+const GENDER_LABELS: Record<string, string> = {
+  'male': '男',
+  'female': '女',
+  'other': '其他'
+}
+
+// 员工类型映射
+const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
+  'regular': '正式员工',
+  'probation': '试用期',
+  'intern': '实习生',
+  'contract': '合同工',
+  'part_time': '兼职'
+}
+
 const ORDER_TYPE_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   'person_onboard': { label: '人员入职', color: 'blue', icon: User },
   'personnel_onboard': { label: '人员入职', color: 'blue', icon: User },
@@ -69,7 +109,7 @@ export default function ApprovalMinePageNew() {
   const navigate = useNavigate()
   const [orders, setOrders] = useState<ApprovalOrder[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('table')
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<ApprovalOrder | null>(null)
@@ -434,14 +474,38 @@ export default function ApprovalMinePageNew() {
               <div className="bg-gray-50 rounded-lg p-4">
                 {Object.entries(selectedOrder.form_data).length > 0 ? (
                   <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(selectedOrder.form_data).map(([key, value]) => (
-                      <div key={key} className="flex flex-col">
-                        <span className="text-xs text-gray-500 mb-1">{key}</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                        </span>
-                      </div>
-                    ))}
+                    {(() => {
+                      // 获取部门/职位名称映射
+                      const deptMap = selectedOrder.form_data._deptMap || {}
+                      const posMap = selectedOrder.form_data._posMap || {}
+                      
+                      return Object.entries(selectedOrder.form_data)
+                        .filter(([key]) => !key.startsWith('_')) // 过滤内部字段
+                        .map(([key, value]) => {
+                          // 格式化显示值
+                          let displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
+                          if (key === 'gender' && GENDER_LABELS[String(value)]) {
+                            displayValue = GENDER_LABELS[String(value)]
+                          } else if (key === 'employee_type' && EMPLOYEE_TYPE_LABELS[String(value)]) {
+                            displayValue = EMPLOYEE_TYPE_LABELS[String(value)]
+                          } else if (key === 'department_id' && deptMap[String(value)]) {
+                            displayValue = deptMap[String(value)]
+                          } else if (key === 'position_id' && posMap[String(value)]) {
+                            displayValue = posMap[String(value)]
+                          }
+                          
+                          return (
+                            <div key={key} className="flex flex-col">
+                              <span className="text-xs text-gray-500 mb-1">
+                                {FORM_FIELD_LABELS[key] || key}
+                              </span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {displayValue}
+                              </span>
+                            </div>
+                          )
+                        })
+                    })()}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-sm">暂无表单数据</p>

@@ -82,10 +82,25 @@ router.get('/:entity', async (req: Request, res: Response) => {
     }
 
     // 查询数据
-    const data = await db.query(
-      `SELECT * FROM \`${tableName}\` WHERE ${whereClause} ${orderClause} LIMIT ${pageSizeNum} OFFSET ${offset}`,
-      params
-    );
+    let data: any[];
+    
+    // 特殊处理：Employee 实体关联 Position 表获取岗位名称
+    if (entity === 'Employee') {
+      data = await db.query(
+        `SELECT e.*, p.name as position_name, d.name as department_name 
+         FROM \`${tableName}\` e 
+         LEFT JOIN positions p ON e.position = p.id 
+         LEFT JOIN departments d ON e.department_id = d.id 
+         WHERE ${whereClause.replace(/`position`/g, 'e.`position`').replace(/`department_id`/g, 'e.`department_id`')} 
+         ${orderClause} LIMIT ${pageSizeNum} OFFSET ${offset}`,
+        params
+      );
+    } else {
+      data = await db.query(
+        `SELECT * FROM \`${tableName}\` WHERE ${whereClause} ${orderClause} LIMIT ${pageSizeNum} OFFSET ${offset}`,
+        params
+      );
+    }
 
     res.json({
       data,

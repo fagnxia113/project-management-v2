@@ -115,26 +115,16 @@ export class UnifiedFormService {
         name: '项目创建表单',
         module: 'project',
         category: 'project',
-        description: '项目创建表单，基于现有ProjectForm组件',
+        description: '项目立项审批表单',
         businessEntityType: 'Project',
+        workflowTemplateId: 'project-approval',
         version: 1,
         status: 'active',
         createdBy: 'system',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         fields: [
-          {
-            id: 'field-project-code',
-            name: 'code',
-            label: '项目编号',
-            type: 'text',
-            required: false,
-            placeholder: '系统自动生成',
-            minLength: 1,
-            maxLength: 50,
-            disabled: true,
-            readonly: true
-          },
+          // ========== 基本信息 ==========
           {
             id: 'field-project-name',
             name: 'name',
@@ -143,76 +133,45 @@ export class UnifiedFormService {
             required: true,
             placeholder: '请输入项目名称',
             minLength: 2,
-            maxLength: 200
+            maxLength: 100
           },
           {
-            id: 'field-project-type',
-            name: 'type',
-            label: '项目类型',
-            type: 'select',
-            required: true,
-            defaultValue: 'domestic',
-            options: [
-              { label: '国内项目', value: 'domestic' },
-              { label: '海外项目', value: 'foreign' },
-              { label: '研发项目', value: 'rd' },
-              { label: '服务项目', value: 'service' }
-            ]
+            id: 'field-project-code',
+            name: 'code',
+            label: '项目编号',
+            type: 'text',
+            required: false,
+            placeholder: '系统自动生成',
+            disabled: true,
+            readonly: true
           },
           {
             id: 'field-project-manager',
             name: 'manager_id',
             label: '项目经理',
-            type: 'lookup',
+            type: 'user',
             required: true,
-            placeholder: '请选择项目经理',
-            businessConfig: {
-              module: 'personnel',
-              entityType: 'Employee',
-              lookupField: 'id',
-              displayField: 'name'
-            }
+            placeholder: '请选择项目经理'
           },
           {
             id: 'field-project-technical-lead',
             name: 'technical_lead_id',
             label: '技术负责人',
-            type: 'lookup',
+            type: 'user',
             required: false,
-            placeholder: '请选择技术负责人',
-            businessConfig: {
-              module: 'personnel',
-              entityType: 'Employee',
-              lookupField: 'id',
-              displayField: 'name'
-            }
-          },
-          {
-            id: 'field-project-status',
-            name: 'status',
-            label: '项目状态',
-            type: 'select',
-            required: true,
-            defaultValue: 'proposal',
-            options: [
-              { label: '提案中', value: 'proposal' },
-              { label: '进行中', value: 'in_progress' },
-              { label: '已完成', value: 'completed' },
-              { label: '已暂停', value: 'paused' },
-              { label: '已延期', value: 'delayed' }
-            ]
+            placeholder: '请选择技术负责人'
           },
           {
             id: 'field-project-start-date',
             name: 'start_date',
-            label: '开始日期',
+            label: '项目开始日期',
             type: 'date',
             required: true
           },
           {
             id: 'field-project-end-date',
             name: 'end_date',
-            label: '预计结束日期',
+            label: '项目结束日期',
             type: 'date',
             required: false
           },
@@ -221,14 +180,23 @@ export class UnifiedFormService {
             name: 'country',
             label: '所属国家',
             type: 'select',
-            required: true,
+            required: false,
             defaultValue: '中国',
             options: [
               { label: '中国', value: '中国' },
               { label: '美国', value: '美国' },
               { label: '新加坡', value: '新加坡' },
               { label: '马来西亚', value: '马来西亚' },
-              { label: '印尼', value: '印尼' },
+              { label: '印度尼西亚', value: '印度尼西亚' },
+              { label: '泰国', value: '泰国' },
+              { label: '越南', value: '越南' },
+              { label: '菲律宾', value: '菲律宾' },
+              { label: '日本', value: '日本' },
+              { label: '韩国', value: '韩国' },
+              { label: '阿联酋', value: '阿联酋' },
+              { label: '沙特阿拉伯', value: '沙特阿拉伯' },
+              { label: '德国', value: '德国' },
+              { label: '英国', value: '英国' },
               { label: '其他', value: '其他' }
             ]
           },
@@ -238,18 +206,116 @@ export class UnifiedFormService {
             label: '项目地址',
             type: 'text',
             required: false,
-            placeholder: '请输入项目实施地点',
-            maxLength: 500
+            placeholder: '请输入项目地址'
           },
           {
-            id: 'field-project-budget',
-            name: 'budget',
-            label: '项目预算(元)',
+            id: 'field-project-type',
+            name: 'type',
+            label: '项目类型',
+            type: 'select',
+            required: false,
+            defaultValue: 'domestic',
+            options: [
+              { label: '国内项目', value: 'domestic' },
+              { label: '海外项目', value: 'foreign' },
+              { label: '研发项目', value: 'rd' },
+              { label: '服务项目', value: 'service' }
+            ]
+          },
+          {
+            id: 'field-project-status',
+            name: 'status',
+            label: '项目状态',
+            type: 'select',
+            required: true,
+            defaultValue: 'proposal',
+            options: [
+              { label: '立项', value: 'proposal' },
+              { label: '进行中', value: 'in_progress' },
+              { label: '已完成', value: 'completed' },
+              { label: '暂停', value: 'paused' }
+            ]
+          },
+          // ========== 项目规模 ==========
+          {
+            id: 'field-project-description',
+            name: 'description',
+            label: '项目描述',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入项目描述信息',
+            rows: 3
+          },
+          {
+            id: 'field-project-building-area',
+            name: 'building_area',
+            label: '建筑面积(m²)',
             type: 'number',
             required: false,
-            placeholder: '请输入项目预算',
             min: 0
           },
+          {
+            id: 'field-project-it-capacity',
+            name: 'it_capacity',
+            label: 'IT容量(MW)',
+            type: 'number',
+            required: false,
+            min: 0
+          },
+          {
+            id: 'field-project-cabinet-count',
+            name: 'cabinet_count',
+            label: '机柜数量',
+            type: 'number',
+            required: false,
+            min: 0
+          },
+          {
+            id: 'field-project-cabinet-power',
+            name: 'cabinet_power',
+            label: '单机柜功率(KW)',
+            type: 'number',
+            required: false,
+            min: 0
+          },
+          // ========== 技术架构 ==========
+          {
+            id: 'field-project-power-architecture',
+            name: 'power_architecture',
+            label: '供电架构',
+            type: 'textarea',
+            required: false,
+            placeholder: '供电系统架构描述',
+            rows: 2
+          },
+          {
+            id: 'field-project-hvac-architecture',
+            name: 'hvac_architecture',
+            label: '暖通架构',
+            type: 'textarea',
+            required: false,
+            placeholder: '暖通系统架构描述',
+            rows: 2
+          },
+          {
+            id: 'field-project-fire-architecture',
+            name: 'fire_architecture',
+            label: '消防架构',
+            type: 'textarea',
+            required: false,
+            placeholder: '消防系统架构描述',
+            rows: 2
+          },
+          {
+            id: 'field-project-weak-electric-architecture',
+            name: 'weak_electric_architecture',
+            label: '弱电架构',
+            type: 'textarea',
+            required: false,
+            placeholder: '弱电系统架构描述',
+            rows: 2
+          },
+          // ========== 商务信息 ==========
           {
             id: 'field-project-customer',
             name: 'customer_id',
@@ -261,112 +327,26 @@ export class UnifiedFormService {
               module: 'customer',
               entityType: 'Customer',
               lookupField: 'id',
-              displayField: 'name'
+              displayField: 'name',
+              autoFill: true
             }
           },
           {
             id: 'field-project-end-customer',
             name: 'end_customer',
-            label: '终端客户',
+            label: '最终客户',
             type: 'text',
             required: false,
-            placeholder: '请输入终端客户',
-            maxLength: 200
+            placeholder: '请输入最终客户名称'
           },
           {
-            id: 'field-project-department',
-            name: 'department_id',
-            label: '所属部门',
-            type: 'lookup',
-            required: false,
-            placeholder: '请选择所属部门',
-            businessConfig: {
-              module: 'organization',
-              entityType: 'Department',
-              lookupField: 'id',
-              displayField: 'name'
-            }
-          },
-          {
-            id: 'field-project-building-area',
-            name: 'building_area',
-            label: '建筑面积(平方米)',
+            id: 'field-project-budget',
+            name: 'budget',
+            label: '预算金额(万元)',
             type: 'number',
             required: false,
-            placeholder: '请输入建筑面积',
+            placeholder: '请输入预算金额',
             min: 0
-          },
-          {
-            id: 'field-project-it-capacity',
-            name: 'it_capacity',
-            label: 'IT容量(MW)',
-            type: 'number',
-            required: false,
-            placeholder: '请输入IT容量',
-            min: 0
-          },
-          {
-            id: 'field-project-cabinet-count',
-            name: 'cabinet_count',
-            label: '机柜数量(个)',
-            type: 'number',
-            required: false,
-            placeholder: '请输入机柜数量',
-            min: 0
-          },
-          {
-            id: 'field-project-cabinet-power',
-            name: 'cabinet_power',
-            label: '单机柜功率(KW)',
-            type: 'number',
-            required: false,
-            placeholder: '请输入单机柜功率',
-            min: 0
-          },
-          {
-            id: 'field-project-power-architecture',
-            name: 'power_architecture',
-            label: '电力架构',
-            type: 'textarea',
-            required: false,
-            placeholder: '请输入电力系统架构描述',
-            rows: 3
-          },
-          {
-            id: 'field-project-hvac-architecture',
-            name: 'hvac_architecture',
-            label: '暖通架构',
-            type: 'textarea',
-            required: false,
-            placeholder: '请输入暖通系统架构描述',
-            rows: 3
-          },
-          {
-            id: 'field-project-fire-architecture',
-            name: 'fire_architecture',
-            label: '消防架构',
-            type: 'textarea',
-            required: false,
-            placeholder: '请输入消防系统架构描述',
-            rows: 3
-          },
-          {
-            id: 'field-project-weak-electric-architecture',
-            name: 'weak_electric_architecture',
-            label: '弱电架构',
-            type: 'textarea',
-            required: false,
-            placeholder: '请输入弱电系统架构描述',
-            rows: 3
-          },
-          {
-            id: 'field-project-description',
-            name: 'description',
-            label: '项目描述',
-            type: 'textarea',
-            required: false,
-            placeholder: '请输入项目描述信息',
-            rows: 4
           }
         ]
       },

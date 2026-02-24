@@ -13,6 +13,7 @@ interface WorkflowDefinition {
   status: string
   node_config: any
   variables?: WorkflowVariable[]
+  form_schema?: any[]
 }
 
 export default function WorkflowDesignerNewPage() {
@@ -91,6 +92,7 @@ export default function WorkflowDesignerNewPage() {
         nodes: workflowData.nodes,
         edges: workflowData.edges,
         variables: workflowData.variables,
+        form_schema: workflowData.formSchema,
         created_by: 'admin'
       }
 
@@ -158,6 +160,7 @@ export default function WorkflowDesignerNewPage() {
   })) || []
 
   const initialVariables = definition?.variables || []
+  const initialFormSchema = definition?.form_schema || []
 
   if (loading) {
     return (
@@ -182,7 +185,7 @@ export default function WorkflowDesignerNewPage() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => navigate('/workflow/presets')}
+              onClick={() => navigate('/workflow/definitions')}
               className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
               返回列表
@@ -197,6 +200,7 @@ export default function WorkflowDesignerNewPage() {
           initialNodes={initialNodes}
           initialEdges={initialEdges}
           initialVariables={initialVariables}
+          initialFormSchema={initialFormSchema}
           onSave={handleSave}
           onExport={handleExport}
         />
