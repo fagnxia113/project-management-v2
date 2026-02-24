@@ -109,20 +109,96 @@ export class TaskService {
   }
 
   async getTasksByAssignee(assigneeId: string, status?: string[]): Promise<WorkflowTask[]> {
-    let whereClause = 'assignee_id = ?';
-    const params = [assigneeId];
+    // 查询用户关联的员工ID
+    const employees = await db.query<any>(
+      'SELECT id FROM employees WHERE user_id = ?',
+      [assigneeId]
+    );
+    const employeeIds = employees.map((e: any) => e.id);
+    
+    // 构建查询条件：assignee_id 等于用户ID 或 员工ID
+    let whereClause = '(t.assignee_id = ?';
+    const params: any[] = [assigneeId];
+    
+    if (employeeIds.length > 0) {
+      whereClause += ` OR t.assignee_id IN (${employeeIds.map(() => '?').join(', ')})`;
+      params.push(...employeeIds);
+    }
+    whereClause += ')';
 
     if (status && status.length > 0) {
-      whereClause += ` AND status IN (${status.map(() => '?').join(', ')})`;
+      whereClause += ` AND t.status IN (${status.map(() => '?').join(', ')})`;
       params.push(...status);
     }
 
+    // 获取部门和职位名称映射
+    const departments = await db.query<any>('SELECT id, name FROM departments');
+    const positions = await db.query<any>('SELECT id, name FROM positions');
+    const deptMap = Object.fromEntries(departments.map((d: any) => [d.id, d.name]));
+    const posMap = Object.fromEntries(positions.map((p: any) => [p.id, p.name]));
+
     const rows = await db.query<any>(
-      `SELECT * FROM workflow_tasks WHERE ${whereClause} ORDER BY created_at DESC`,
+      `SELECT t.*, i.title as process_title, i.definition_key, i.initiator_id, i.initiator_name, 
+              i.variables as instance_variables, d.node_config as definition_node_config
+       FROM workflow_tasks t
+       JOIN workflow_instances i ON t.instance_id = i.id
+       JOIN workflow_definitions d ON i.definition_id = d.id
+       WHERE ${whereClause} 
+       ORDER BY t.created_at DESC`,
       params
     );
 
-    return rows.map((row: any) => this.parseTaskRow(row));
+    return rows.map((row: any) => {
+      const task = this.parseTaskRow(row);
+      // 合并流程实例的表单数据到任务变量中
+      let instanceVars = {};
+      if (row.instance_variables) {
+        try {
+          instanceVars = typeof row.instance_variables === 'string' 
+            ? JSON.parse(row.instance_variables) 
+            : row.instance_variables;
+        } catch {
+          instanceVars = {};
+        }
+      }
+      
+      // 解析节点配置，获取字段权限
+      let fieldPermissions = null;
+      if (row.definition_node_config) {
+        try {
+          const nodeConfig = typeof row.definition_node_config === 'string'
+            ? JSON.parse(row.definition_node_config)
+            : row.definition_node_config;
+          const currentNode = nodeConfig.nodes?.find((n: any) => n.id === task.node_id);
+          if (currentNode?.config?.approvalConfig?.formConfig?.fieldPermissions) {
+            fieldPermissions = currentNode.config.approvalConfig.formConfig.fieldPermissions;
+          }
+        } catch {
+          fieldPermissions = null;
+        }
+      }
+      
+      // 获取表单数据并转换ID为名称
+      const formData = instanceVars.formData || task.variables?.formData || {};
+      const enrichedFormData = {
+        ...formData,
+        _deptMap: deptMap,
+        _posMap: posMap
+      };
+      
+      return {
+        ...task,
+        process_title: row.process_title,
+        definition_key: row.definition_key,
+        initiator_id: row.initiator_id,
+        initiator_name: row.initiator_name,
+        field_permissions: fieldPermissions,
+        variables: {
+          ...task.variables,
+          formData: enrichedFormData
+        }
+      };
+    });
   }
 
   async completeTask(taskId: string, params: CompleteTaskParams): Promise<void> {

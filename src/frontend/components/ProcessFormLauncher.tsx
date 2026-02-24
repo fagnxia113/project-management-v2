@@ -360,10 +360,12 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
     try {
       setSubmitting(true)
 
-      // 获取当前用户信息（这里简化处理，实际应该从认证服务获取）
+      // 获取当前用户信息
+      const token = localStorage.getItem('token')
+      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
       const userInfo = {
-        id: 'current-user-id', // 实际应该从认证状态获取
-        name: '当前用户' // 实际应该从认证状态获取
+        id: payload.userId || payload.id,
+        name: payload.name || payload.username || '当前用户'
       }
 
       // 启动流程

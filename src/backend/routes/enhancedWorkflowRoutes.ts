@@ -234,7 +234,11 @@ router.post('/task/:taskId/transfer', async (req, res) => {
 router.get('/tasks/assignee/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const tasks = await enhancedWorkflowEngine.getTasksByAssignee(userId);
+    const { status } = req.query;
+    
+    // 解析状态参数
+    const statusArray = status ? (status as string).split(',') : undefined;
+    const tasks = await enhancedWorkflowEngine.getTasksByAssignee(userId, statusArray);
 
     res.json({
       success: true,

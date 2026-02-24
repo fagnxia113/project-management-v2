@@ -225,8 +225,13 @@ export class EnhancedWorkflowEngine {
           timestamp: new Date()
         });
         
-        const definition = await this.getCachedDefinitionById(instance.definition_id);
-        await this.continueExecution(instance, definition, task.node_id, executionId);
+        // 如果驳回，结束流程；如果通过，继续执行
+        if (params.action === 'rejected') {
+          await this.endInstance(instance.id, 'rejected');
+        } else {
+          const definition = await this.getCachedDefinitionById(instance.definition_id);
+          await this.continueExecution(instance, definition, task.node_id, executionId);
+        }
       }
 
       // 记录性能指标

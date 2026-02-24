@@ -83,7 +83,8 @@ export default function ApprovalMinePageNew() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const userId = JSON.parse(atob(token?.split('.')[1] || '{}')).id
+      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
+      const userId = payload.userId || payload.id
       
       const res = await fetch(`${API_URL.BASE}/api/workflow/processes?initiatorId=${userId}`, {
         headers: {

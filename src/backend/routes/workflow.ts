@@ -167,9 +167,9 @@ router.get('/processes', async (req: Request, res: Response) => {
     const { definitionKey, status, initiatorId, page, pageSize } = req.query;
     
     const instances = await instanceService.getInstances({
-      definition_key: definitionKey as string,
+      definitionKey: definitionKey as string,
       status: status as string,
-      initiator_id: initiatorId as string,
+      initiatorId: initiatorId as string,
       page: page ? parseInt(page as string) : undefined,
       pageSize: pageSize ? parseInt(pageSize as string) : undefined
     });

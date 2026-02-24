@@ -25,6 +25,14 @@ import {
   ArrowRight
 } from 'lucide-react'
 
+interface FieldPermission {
+  fieldName: string
+  visible: boolean
+  editable: boolean
+  required?: boolean
+  roles?: string[]
+}
+
 interface ApprovalTask {
   id: string
   task_id: string
@@ -36,6 +44,9 @@ interface ApprovalTask {
   created_at: string
   priority: 'high' | 'normal' | 'low'
   form_data: Record<string, any>
+  field_permissions?: FieldPermission[]
+  dept_map?: Record<string, string>
+  pos_map?: Record<string, string>
   timeout?: number
 }
 
@@ -61,6 +72,48 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; bgColor: s
   'low': { label: '低优', color: 'text-gray-700', bgColor: 'bg-gray-50' }
 }
 
+// 表单字段中文标签映射
+const FORM_FIELD_LABELS: Record<string, string> = {
+  'employee_name': '员工姓名',
+  'employee_id': '员工编号',
+  'department_id': '部门',
+  'position_id': '职位',
+  'phone': '联系电话',
+  'gender': '性别',
+  'start_date': '入职日期',
+  'employee_type': '员工类型',
+  'email': '邮箱',
+  'address': '地址',
+  'id_card': '身份证号',
+  'emergency_contact': '紧急联系人',
+  'emergency_phone': '紧急联系电话',
+  'education': '学历',
+  'major': '专业',
+  'school': '毕业院校',
+  'work_experience': '工作经验',
+  'salary': '薪资',
+  'probation_period': '试用期',
+  'report_to': '汇报对象',
+  'office_location': '办公地点',
+  'computer_type': '电脑类型',
+  'system_access': '系统权限'
+}
+
+// 性别映射
+const GENDER_LABELS: Record<string, string> = {
+  'male': '男',
+  'female': '女'
+}
+
+// 员工类型映射
+const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
+  'regular': '正式员工',
+  'probation': '试用期',
+  'intern': '实习生',
+  'contractor': '外包',
+  'part_time': '兼职'
+}
+
 export default function ApprovalPendingPageNew() {
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<ApprovalTask[]>([])
@@ -72,6 +125,7 @@ export default function ApprovalPendingPageNew() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [approvalComment, setApprovalComment] = useState('')
+  const [approvalFormData, setApprovalFormData] = useState<Record<string, any>>({})
   const [processing, setProcessing] = useState(false)
 
   useEffect(() => { loadTasks() }, [])
@@ -80,8 +134,9 @@ export default function ApprovalPendingPageNew() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const userId = JSON.parse(atob(token?.split('.')[1] || '{}')).id
-      const res = await fetch(`${API_URL.BASE}/api/workflow/tasks?assigneeId=${userId}`, {
+      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
+      const userId = payload.userId || payload.id
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/tasks/assignee/${userId}?status=assigned,in_progress`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -89,19 +144,31 @@ export default function ApprovalPendingPageNew() {
       if (res.ok) {
         const data = await res.json()
         if (data.success && data.data) {
-          const mappedTasks = data.data.map((item: any) => ({
-            id: item.id,
-            task_id: item.id,
-            process_id: item.process_id,
-            process_title: item.process_title || item.title || '未命名流程',
-            process_type: item.process_type || item.definition_key || 'unknown',
-            node_name: item.node_name || '审批节点',
-            initiator_name: item.initiator_name || '未知',
-            created_at: item.created_at,
-            priority: item.priority || 'normal',
-            form_data: item.variables?.formData || {},
-            timeout: item.timeout
-          }))
+          const mappedTasks = data.data.map((item: any) => {
+            const formData = item.variables?.formData || {}
+            const deptMap = formData._deptMap || {}
+            const posMap = formData._posMap || {}
+            
+            // 移除映射数据，只保留原始表单数据
+            const { _deptMap, _posMap, ...cleanFormData } = formData
+            
+            return {
+              id: item.id,
+              task_id: item.id,
+              process_id: item.instance_id,
+              process_title: item.process_title || '未命名流程',
+              process_type: item.definition_key || 'unknown',
+              node_name: item.name || '审批节点',
+              initiator_name: item.initiator_name || '未知',
+              created_at: item.created_at,
+              priority: item.priority || 'normal',
+              form_data: cleanFormData,
+              field_permissions: item.field_permissions,
+              dept_map: deptMap,
+              pos_map: posMap,
+              timeout: item.timeout
+            }
+          })
           setTasks(mappedTasks)
         } else {
           setTasks([])
@@ -141,27 +208,35 @@ export default function ApprovalPendingPageNew() {
     setProcessing(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL.BASE}/api/workflow/tasks/${taskId}/complete`, {
+      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
+      const userId = payload.userId || payload.id
+      const userName = payload.name || payload.username
+      
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${taskId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          action: 'approve',
-          comment: approvalComment
+          action: 'approved',
+          comment: approvalComment,
+          formData: approvalFormData,
+          operator: { id: userId, name: userName }
         })
       })
       if (res.ok) {
         alert('审批通过')
         setSelectedTask(null)
         setApprovalComment('')
+        setApprovalFormData({})
         loadTasks()
       }
     } catch (e) {
       alert('审批成功（模拟）')
       setSelectedTask(null)
       setApprovalComment('')
+      setApprovalFormData({})
       loadTasks()
     } finally {
       setProcessing(false)
@@ -169,6 +244,10 @@ export default function ApprovalPendingPageNew() {
   }
 
   const handleReject = async (taskId: string) => {
+    if (!taskId) {
+      alert('任务ID无效')
+      return
+    }
     if (!approvalComment.trim()) {
       alert('请填写驳回原因')
       return
@@ -177,28 +256,39 @@ export default function ApprovalPendingPageNew() {
     setProcessing(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL.BASE}/api/workflow/tasks/${taskId}/complete`, {
+      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
+      const userId = payload.userId || payload.id
+      const userName = payload.name || payload.username
+      
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${taskId}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          action: 'reject',
-          comment: approvalComment
+          action: 'rejected',
+          comment: approvalComment,
+          formData: approvalFormData,
+          operator: { id: userId, name: userName }
         })
       })
       if (res.ok) {
         alert('已驳回')
         setSelectedTask(null)
         setApprovalComment('')
-        loadTasks()
+        setApprovalFormData({})
+        // 强制清空任务列表并重新加载
+        setTasks([])
+        setTimeout(() => loadTasks(), 100)
       }
     } catch (e) {
       alert('驳回成功（模拟）')
       setSelectedTask(null)
       setApprovalComment('')
-      loadTasks()
+      setApprovalFormData({})
+      setTasks([])
+      setTimeout(() => loadTasks(), 100)
     } finally {
       setProcessing(false)
     }
@@ -419,7 +509,7 @@ export default function ApprovalPendingPageNew() {
               <h3 className="text-xl font-semibold text-gray-900">{selectedTask.process_title}</h3>
             </div>
             <button 
-              onClick={() => { setSelectedTask(null); setApprovalComment('') }} 
+              onClick={() => { setSelectedTask(null); setApprovalComment(''); setApprovalFormData({}) }} 
               className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
             >
               <XCircle className="w-5 h-5 text-gray-500" />
@@ -462,14 +552,62 @@ export default function ApprovalPendingPageNew() {
               <div className="bg-gray-50 rounded-lg p-4">
                 {Object.entries(selectedTask.form_data).length > 0 ? (
                   <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(selectedTask.form_data).map(([key, value]) => (
-                      <div key={key} className="flex flex-col">
-                        <span className="text-xs text-gray-500 mb-1">{key}</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                        </span>
-                      </div>
-                    ))}
+                    {Object.entries(selectedTask.form_data)
+                      .filter(([key]) => {
+                        // 如果没有权限配置，显示所有字段
+                        if (!selectedTask.field_permissions) return true
+                        // 查找字段权限
+                        const permission = selectedTask.field_permissions.find(p => p.fieldName === key)
+                        // 如果没有找到权限配置，默认显示；否则根据visible决定
+                        return !permission || permission.visible !== false
+                      })
+                      .map(([key, value]) => {
+                        const permission = selectedTask.field_permissions?.find(p => p.fieldName === key)
+                        const isEditable = permission?.editable !== false // 默认可编辑
+                        
+                        // 获取字段中文标签
+                        const label = FORM_FIELD_LABELS[key] || key
+                        
+                        // 转换值为中文显示
+                        let displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
+                        if (key === 'gender' && GENDER_LABELS[value as string]) {
+                          displayValue = GENDER_LABELS[value as string]
+                        } else if (key === 'employee_type' && EMPLOYEE_TYPE_LABELS[value as string]) {
+                          displayValue = EMPLOYEE_TYPE_LABELS[value as string]
+                        } else if (key === 'department_id' && selectedTask.dept_map?.[value as string]) {
+                          displayValue = selectedTask.dept_map[value as string]
+                        } else if (key === 'position_id' && selectedTask.pos_map?.[value as string]) {
+                          displayValue = selectedTask.pos_map[value as string]
+                        }
+                        
+                        return (
+                          <div key={key} className="flex flex-col">
+                            <span className="text-xs text-gray-500 mb-1">
+                              {label}
+                              {permission && !isEditable && (
+                                <span className="ml-1 text-xs text-orange-500">(只读)</span>
+                              )}
+                            </span>
+                            {isEditable ? (
+                              <input
+                                type="text"
+                                defaultValue={displayValue}
+                                className="text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                onChange={(e) => {
+                                  setApprovalFormData(prev => ({
+                                    ...prev,
+                                    [key]: e.target.value
+                                  }))
+                                }}
+                              />
+                            ) : (
+                              <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                                {displayValue}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-sm">暂无表单数据</p>

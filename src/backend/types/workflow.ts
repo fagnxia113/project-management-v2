@@ -27,6 +27,22 @@ export interface ApprovalConfig {
     collection?: string;
     completionCondition?: string;
   };
+  formConfig?: TaskFormConfig;
+}
+
+export interface TaskFormConfig {
+  formKey?: string;
+  fields?: FormField[];
+  required?: boolean;
+  fieldPermissions?: FieldPermission[];
+}
+
+export interface FieldPermission {
+  fieldName: string;
+  visible: boolean;
+  editable: boolean;
+  required?: boolean;
+  roles?: string[];
 }
 
 export interface ApproverSource {
@@ -211,6 +227,7 @@ export interface StartProcessParams {
 export interface CompleteTaskParams {
   action: 'approve' | 'reject';
   comment?: string;
+  formData?: Record<string, any>;
   variables?: Record<string, any>;
   operator: { id: string; name: string };
 }
