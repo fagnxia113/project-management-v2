@@ -897,13 +897,11 @@
         },
         "contact": {
           "type": "string",
-          "label": "联系人",
-          "required": true
+          "label": "联系人"
         },
         "phone": {
           "type": "string",
-          "label": "联系电话",
-          "required": true
+          "label": "联系电话"
         },
         "address": {
           "type": "text",

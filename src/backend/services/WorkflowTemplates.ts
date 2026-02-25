@@ -662,13 +662,13 @@ export const PURCHASE_APPROVAL_TEMPLATE: WorkflowTemplate = {
                 id: 'condition-1',
                 name: '金额大于5万',
                 expression: '${formData.amount > 50000}',
-                target: 'gm'
+                targetNode: 'gm'
               },
               {
                 id: 'condition-2',
                 name: '金额小于等于5万',
                 expression: '${formData.amount <= 50000}',
-                target: 'finance'
+                targetNode: 'finance'
               }
             ]
           }
@@ -831,9 +831,10 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
-              type: 'fixed',
-              value: 'dept_manager'
-            }
+              type: 'expression',
+              value: '${formData.department_id}'
+            },
+            skipCondition: 'no_department_manager'
           }
         }
       },
@@ -845,7 +846,7 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
-              type: 'fixed',
+              type: 'role',
               value: 'admin'
             }
           }
@@ -912,53 +913,115 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
   },
   formSchema: [
     {
-      name: 'employee_name',
-      label: '员工姓名',
-      type: 'text',
-      required: true,
-      placeholder: '请输入员工姓名'
-    },
-    {
       name: 'employee_id',
       label: '员工编号',
       type: 'text',
-      required: true,
-      placeholder: '请输入员工编号'
+      required: false,
+      placeholder: '系统自动生成',
+      disabled: true,
+      readonly: true
     },
     {
-      name: 'department',
-      label: '所属部门',
-      type: 'select',
-      required: true,
-      placeholder: '请选择所属部门'
-    },
-    {
-      name: 'department_manager',
-      label: '部门经理',
-      type: 'user',
-      required: true,
-      placeholder: '请选择部门经理'
-    },
-    {
-      name: 'position',
-      label: '职位',
+      name: 'employee_name',
+      label: '姓名',
       type: 'text',
       required: true,
-      placeholder: '请输入职位'
+      placeholder: '请输入姓名',
+      minLength: 2,
+      maxLength: 50
     },
     {
-      name: 'salary',
-      label: '薪资(元)',
-      type: 'number',
+      name: 'gender',
+      label: '性别',
+      type: 'select',
       required: true,
-      placeholder: '请输入薪资',
-      min: 0
+      placeholder: '请选择性别',
+      options: [
+        { label: '男', value: 'male' },
+        { label: '女', value: 'female' }
+      ]
+    },
+    {
+      name: 'phone',
+      label: '手机号',
+      type: 'text',
+      required: true,
+      placeholder: '请输入手机号',
+      pattern: '^1[3-9]\\d{9}$',
+      validation: {
+        message: '手机号格式不正确'
+      }
+    },
+    {
+      name: 'email',
+      label: '邮箱',
+      type: 'text',
+      required: false,
+      placeholder: '请输入邮箱',
+      pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$',
+      validation: {
+        message: '邮箱格式不正确'
+      }
+    },
+    {
+      name: 'id_card',
+      label: '身份证号',
+      type: 'text',
+      required: false,
+      placeholder: '请输入身份证号',
+      pattern: '^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$',
+      validation: {
+        message: '身份证号格式不正确'
+      }
+    },
+    {
+      name: 'department_id',
+      label: '入职部门',
+      type: 'select',
+      required: true,
+      placeholder: '请选择入职部门',
+      dynamicOptions: 'department',
+      dynamicOptionsConfig: {
+        source: '/api/organization/departments',
+        labelField: 'name',
+        valueField: 'id'
+      }
+    },
+    {
+      name: 'position_id',
+      label: '入职岗位',
+      type: 'select',
+      required: true,
+      placeholder: '请选择入职岗位',
+      dynamicOptions: 'position',
+      dynamicOptionsConfig: {
+        source: '/api/organization/positions',
+        labelField: 'name',
+        valueField: 'id'
+      },
+      cascadeFrom: 'department_id',
+      cascadeField: 'department_id',
+      refEntity: 'positions',
+      refLabel: 'name',
+      refValue: 'id'
     },
     {
       name: 'start_date',
       label: '入职日期',
       type: 'date',
       required: true
+    },
+    {
+      name: 'employee_type',
+      label: '员工性质',
+      type: 'select',
+      required: true,
+      placeholder: '请选择员工性质',
+      options: [
+        { label: '正式', value: 'regular' },
+        { label: '实习', value: 'intern' },
+        { label: '外包', value: 'outsourced' }
+      ]
     },
     {
       name: 'notes',

@@ -33,7 +33,7 @@ export default function CustomerListPage() {
   const loadCustomers = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_URL.DATA}/customers`)
+      const response = await fetch(API_URL.DATA('customers'))
       const result = await response.json()
       setCustomers(result.data || result.items || [])
     } catch (error) {
@@ -45,17 +45,17 @@ export default function CustomerListPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-if (!formData.name || !formData.contact || !formData.phone) {
-      alert('请填写所有必填字段（名称、联系人、电话）')
+    if (!formData.name) {
+      alert('请填写客户名称')
       return
     }
     setSubmitting(true)
     try {
       const customerNo = `KH-${String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0')}`
-      const response = await fetch(`${API_URL.DATA}/customers`, {
+      const response = await fetch(API_URL.DATA('customers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
+        body: JSON.stringify({
           id: uuidv4(),
           customer_no: customerNo,
           name: formData.name,
@@ -87,7 +87,7 @@ if (response.ok) {
   const handleDelete = async (id: string) => {
     if (!confirm('确定要删除此客户吗？')) return
     try {
-      const response = await fetch(`${API_URL.DATA}/customers/${id}`, { method: 'DELETE' })
+      const response = await fetch(`${API_URL.DATA('customers')}/${id}`, { method: 'DELETE' })
       if (response.ok) loadCustomers()
     } catch (error) {
       console.error('删除失败:', error)
@@ -176,13 +176,13 @@ if (response.ok) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">联系人 <span className="text-red-500">*</span></label>
-                <input type="text" required value={formData.contact} onChange={(e) => setFormData({...formData, contact: e.target.value})}
+                <label className="block text-sm font-medium text-gray-700 mb-1">联系人</label>
+                <input type="text" value={formData.contact} onChange={(e) => setFormData({...formData, contact: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">联系电话 <span className="text-red-500">*</span></label>
-                <input type="text" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                <label className="block text-sm font-medium text-gray-700 mb-1">联系电话</label>
+                <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" />
               </div>
 <div>

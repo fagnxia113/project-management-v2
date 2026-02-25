@@ -123,8 +123,18 @@ export default function ApprovalMinePageNew() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
-      const userId = payload.userId || payload.id
+      let userId = 'current-user'
+      if (token) {
+        try {
+          const base64Payload = token.split('.')[1]
+          if (base64Payload) {
+            const payload = JSON.parse(atob(base64Payload))
+            userId = payload.userId || payload.id || 'current-user'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
       
       const res = await fetch(`${API_URL.BASE}/api/workflow/processes?initiatorId=${userId}`, {
         headers: {

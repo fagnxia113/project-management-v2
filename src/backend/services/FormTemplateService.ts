@@ -407,7 +407,7 @@ export class FormTemplateService {
             name: 'id_card',
             label: '身份证号',
             type: 'text',
-            required: true,
+            required: false,
             placeholder: '请输入身份证号',
             pattern: '^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$',
             validation: {

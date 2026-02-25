@@ -715,12 +715,6 @@ export class EnhancedWorkflowEngine {
       );
       console.log(`[EnhancedWorkflowEngine] 用户账号创建成功: ${username} (${userId})`);
       
-      // 3. 更新员工记录关联的用户ID
-      await db.execute(
-        `UPDATE employees SET user_id = ? WHERE id = ?`,
-        [userId, employeeId]
-      );
-      
       // 记录执行日志
       if (this.config.enableExecutionLog) {
         await executionLogger.log({

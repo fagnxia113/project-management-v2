@@ -386,8 +386,21 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
     try {
       setSubmitting(true)
       const token = localStorage.getItem('token')
-      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
-      const userInfo = { id: payload.userId || payload.id, name: payload.name || payload.username || '当前用户' }
+      let userInfo = { id: 'current-user', name: '当前用户' }
+      if (token) {
+        try {
+          const base64Payload = token.split('.')[1]
+          if (base64Payload) {
+            const payload = JSON.parse(atob(base64Payload))
+            userInfo = { 
+              id: payload.userId || payload.id || 'current-user', 
+              name: payload.name || payload.username || payload.sub || '当前用户' 
+            }
+          }
+        } catch (e) {
+          console.warn('Token解析失败，使用默认用户信息')
+        }
+      }
 
       const response = await fetch(API_URL.WORKFLOW.FORM_PRESET_START(presetId), {
         method: 'POST',

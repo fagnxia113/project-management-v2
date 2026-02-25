@@ -116,6 +116,44 @@ export class ApproverResolver {
       return [];
     }
 
+    // 如果level是"department"，获取用户所在部门的经理
+    if (level === 'department') {
+      // 从departments表获取部门经理
+      const dept = await db.queryOne<any>(
+        `SELECT manager_id, manager_name FROM departments WHERE id = ?`,
+        [user.department]
+      );
+      
+      if (dept && dept.manager_id) {
+        return [{
+          id: dept.manager_id,
+          name: dept.manager_name,
+          department: user.department,
+          position: 'department_manager'
+        }];
+      }
+      
+      // 如果部门没有配置经理，尝试查找该部门有管理角色的员工
+      const managers = await db.query<any>(
+        `SELECT id, name, department_id, position FROM employees 
+         WHERE department_id = ? AND status = 'active' 
+         AND (role = 'department_manager' OR position LIKE '%经理%' OR position LIKE '%总监%')
+         LIMIT 1`,
+        [user.department]
+      );
+      
+      if (managers && managers.length > 0) {
+        return managers.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          department: row.department_id,
+          position: row.position
+        }));
+      }
+      
+      return [];
+    }
+
     // 假设我们有一个employee_hierarchy表存储层级关系
     const rows = await db.query<any>(
       `SELECT id, name, department_id, position FROM employees WHERE department_id = ? AND position IN ('manager', 'director')`,
@@ -152,7 +190,7 @@ export class ApproverResolver {
       // 支持简单表达式，如 "${formData.managerId}" 或 "${variables.departmentHead}"
       const expression = value.replace(/\$\{(.*?)\}/g, (_, expr) => {
         const parts = expr.split('.');
-        let current = {
+        let current: any = {
           formData: context.formData,
           variables: context.variables,
           initiator: context.initiator
@@ -171,18 +209,85 @@ export class ApproverResolver {
 
       // 表达式可能返回单个ID或ID数组
       if (expression) {
+        // 检查是否是部门ID（以dept-开头或者是部门ID格式）
+        if (value.includes('department_id') || this.isDepartmentId(expression)) {
+          // 根据部门ID获取部门经理
+          return this.resolveDepartmentManager(expression);
+        }
+        
         if (expression.includes(',')) {
           const userIds = expression.split(',').map((id: string) => id.trim());
           return this.resolveFixed(userIds);
         } else {
+          // 先尝试作为用户ID查找
           const user = await this.getUserInfo(expression);
-          return user ? [user] : [];
+          if (user) {
+            return [user];
+          }
+          // 如果不是用户ID，尝试作为部门ID获取部门经理
+          return this.resolveDepartmentManager(expression);
         }
       }
 
       return [];
     } catch (error) {
       console.error('解析表达式失败:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 检查是否是部门ID
+   */
+  private isDepartmentId(id: string): boolean {
+    return id.startsWith('dept-') || id.startsWith('department-');
+  }
+
+  /**
+   * 根据部门ID获取部门经理
+   */
+  private async resolveDepartmentManager(departmentId: string): Promise<Approver[]> {
+    if (!departmentId) {
+      return [];
+    }
+
+    try {
+      // 从departments表获取部门经理
+      const dept = await db.queryOne<any>(
+        `SELECT manager_id, manager_name FROM departments WHERE id = ? AND status = 'active'`,
+        [departmentId]
+      );
+      
+      if (dept && dept.manager_id) {
+        return [{
+          id: dept.manager_id,
+          name: dept.manager_name,
+          department: departmentId,
+          position: 'department_manager'
+        }];
+      }
+      
+      // 如果部门没有配置经理，尝试查找该部门有管理角色的员工
+      const managers = await db.query<any>(
+        `SELECT id, name, department_id, position FROM employees 
+         WHERE department_id = ? AND status = 'active' 
+         AND (role = 'department_manager' OR position LIKE '%经理%' OR position LIKE '%总监%')
+         LIMIT 1`,
+        [departmentId]
+      );
+      
+      if (managers && managers.length > 0) {
+        return managers.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          department: row.department_id,
+          position: row.position
+        }));
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('获取部门经理失败:', error);
       return [];
     }
   }

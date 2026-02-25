@@ -45,9 +45,9 @@ export class TaskService {
       `INSERT INTO workflow_tasks (
         id, instance_id, execution_id, node_id, task_def_key, 
         name, description, assignee_id, assignee_name, 
-        candidate_users, candidate_groups, priority, due_date, 
+        candidate_users, candidate_groups, priority, due_date, claim_time,
         variables, status, approval_mode, vote_threshold, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         task.id,
         task.instance_id,
@@ -58,14 +58,15 @@ export class TaskService {
         task.description ?? null,
         task.assignee_id ?? null,
         task.assignee_name ?? null,
-        JSON.stringify(task.candidate_users ?? []),
-        JSON.stringify(task.candidate_groups ?? []),
+        task.candidate_users ?? [],
+        task.candidate_groups ?? [],
         task.priority,
         task.due_date ?? null,
-        JSON.stringify(task.variables),
+        null,
+        task.variables ?? {},
         task.status,
-        params.approvalMode || 'or_sign',
-        params.voteThreshold || 1,
+        'or_sign',
+        1,
         task.created_at
       ]
     );
@@ -466,22 +467,21 @@ export class TaskService {
     
     await db.insert(
       `INSERT INTO workflow_task_history (
-        id, task_id, instance_id, node_id, action, operator_id, operator_name, 
-        assignee_id, assignee_name, result, comment, form_data, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        id, task_id, instance_id, node_id, task_name, action, operator_id, operator_name,
+        target_id, target_name, comment
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         uuidv4(),
         taskId,
         instanceId ?? null,
         nodeId ?? null,
+        task?.name || null,
         params.action,
         params.operator.id,
         params.operator.name,
-        task?.assignee_id || null,
-        task?.assignee_name || null,
-        params.result || task?.result || null,
-        params.comment || null,
-        params.formData ? JSON.stringify(params.formData) : null
+        params.targetUser?.id || task?.assignee_id || null,
+        params.targetUser?.name || task?.assignee_name || null,
+        params.comment || null
       ]
     );
   }

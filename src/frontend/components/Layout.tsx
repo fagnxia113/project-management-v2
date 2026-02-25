@@ -155,8 +155,16 @@ export default function Layout({ children }: { children: ReactNode }) {
       const token = localStorage.getItem('token')
       if (!token) return
       
-      const payload = JSON.parse(atob(token.split('.')[1] || '{}'))
-      const userId = payload.userId || payload.id
+      let userId = 'current-user'
+      try {
+        const base64Payload = token.split('.')[1]
+        if (base64Payload) {
+          const payload = JSON.parse(atob(base64Payload))
+          userId = payload.userId || payload.id || 'current-user'
+        }
+      } catch (e) {
+        console.warn('Token解析失败')
+      }
       const response = await fetch(`${API_URL.BASE}/api/workflow/tasks?assigneeId=${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })

@@ -1,5 +1,6 @@
 // API配置
-export const API_BASE_URL = 'http://localhost:8081'
+// 使用空字符串让请求走相对路径，通过Vite代理转发到后端
+export const API_BASE_URL = ''
 
 // 通用API路径
 export const API_PATHS = {

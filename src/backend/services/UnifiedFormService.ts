@@ -32,6 +32,7 @@ export interface UnifiedFormField {
   disabled?: boolean;
   readonly?: boolean;
   hidden?: boolean;
+  step?: number;
   dependencies?: {
     field: string;
     value: any;
@@ -41,9 +42,23 @@ export interface UnifiedFormField {
     message?: string;
     custom?: string;
   };
+  // 动态选项配置
+  dynamicOptions?: 'department' | 'position' | 'user' | 'project' | 'customer' | 'equipment' | string;
+  dynamicOptionsConfig?: {
+    source: string;
+    labelField: string;
+    valueField: string;
+    filter?: Record<string, any>;
+  };
+  // 级联配置
+  cascadeFrom?: string;
+  cascadeField?: string;
+  refEntity?: string;
+  refLabel?: string;
+  refValue?: string;
   // 业务数据联动配置
   businessConfig?: {
-    module?: BusinessModule;
+    module?: BusinessModule | string;
     entityType?: string;
     lookupField?: string;
     displayField?: string;
@@ -734,6 +749,12 @@ export class UnifiedFormService {
             type: 'select',
             required: true,
             placeholder: '请选择入职部门',
+            dynamicOptions: 'department',
+            dynamicOptionsConfig: {
+              source: '/api/organization/departments',
+              labelField: 'name',
+              valueField: 'id'
+            },
             businessConfig: {
               module: 'personnel',
               entityType: 'Department',
@@ -749,6 +770,14 @@ export class UnifiedFormService {
             type: 'select',
             required: true,
             placeholder: '请选择入职岗位',
+            dynamicOptions: 'position',
+            dynamicOptionsConfig: {
+              source: '/api/organization/positions',
+              labelField: 'name',
+              valueField: 'id'
+            },
+            cascadeFrom: 'department_id',
+            cascadeField: 'department_id',
             businessConfig: {
               module: 'personnel',
               entityType: 'Position',

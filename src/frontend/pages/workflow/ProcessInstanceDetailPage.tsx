@@ -180,8 +180,18 @@ export default function ProcessInstanceDetailPage() {
         setTasks(tasksData.data || [])
         
         // 检查当前用户是否有待处理的任务
-        const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
-        const userId = payload.userId || payload.id
+        let userId = 'current-user'
+        if (token) {
+          try {
+            const base64Payload = token.split('.')[1]
+            if (base64Payload) {
+              const payload = JSON.parse(atob(base64Payload))
+              userId = payload.userId || payload.id || 'current-user'
+            }
+          } catch (e) {
+            console.warn('Token解析失败')
+          }
+        }
         const pendingTask = (tasksData.data || []).find(
           (t: Task) => t.assignee_id === userId && ['assigned', 'in_progress'].includes(t.status)
         )

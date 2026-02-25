@@ -11,14 +11,14 @@ export default defineConfig({
     strictPort: false,
     cors: true,
     // 允许所有主机访问（用于内网穿透）
-    allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', 'localhost'],
+    allowedHosts: ['.trycloudflare.com', '.ngrok-free.app', 'localhost', '.sealosbja.site'],
     hmr: {
       host: 'localhost',
       port: 5173
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8081',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       }
     }

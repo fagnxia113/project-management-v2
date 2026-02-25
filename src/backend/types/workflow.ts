@@ -8,6 +8,7 @@ export interface WorkflowNode {
     gatewayConfig?: GatewayConfig;
     serviceConfig?: ServiceConfig;
     timeoutConfig?: TimeoutConfig;
+    serviceType?: string;
   };
   approvalConfig?: ApprovalConfig;
   gatewayConfig?: GatewayConfig;
@@ -46,7 +47,7 @@ export interface FieldPermission {
 }
 
 export interface ApproverSource {
-  type: 'fixed' | 'role' | 'department' | 'superior' | 'form_field' | 'expression' | 'previous_handler' | 'initiator';
+  type: 'fixed' | 'user' | 'role' | 'department' | 'superior' | 'department_manager' | 'project_manager' | 'form_field' | 'expression' | 'previous_handler' | 'initiator';
   value: string | string[];
   fallback?: ApproverSource;
 }
@@ -61,13 +62,17 @@ export interface GatewayCondition {
   name: string;
   expression: string;
   targetNode: string;
+  target?: string;  // Alternative to targetNode for flexibility
 }
 
 export interface ServiceConfig {
-  type: 'script' | 'http' | 'message' | 'custom';
-  expression: string;
+  type?: 'script' | 'http' | 'message' | 'custom';
+  expression?: string;
   inputVariables?: string[];
   outputVariable?: string;
+  entityType?: string;
+  serviceType?: string;
+  dataMapping?: Record<string, any>;
 }
 
 export interface TimeoutConfig {
@@ -82,6 +87,7 @@ export interface WorkflowEdge {
   target: string;
   condition?: string;
   name?: string;
+  type?: string;  // sequenceFlow, etc.
 }
 
 export interface WorkflowDefinition {

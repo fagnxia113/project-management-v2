@@ -544,7 +544,7 @@ export class ProcessFormIntegrationService {
 
   /**
    * 获取流程表单的字段定义
-   * 从流程定义的 form_schema 获取，实现表单与流程强绑定
+   * 优先从 WorkflowTemplates 获取完整的字段配置（包括动态选项）
    */
   async getFormFields(presetId: string): Promise<any[]> {
     const preset = this.presets.get(presetId);
@@ -552,16 +552,22 @@ export class ProcessFormIntegrationService {
       return [];
     }
 
-    // 从流程定义获取表单 schema
-    const definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
-    if (definition && definition.form_schema) {
-      return definition.form_schema;
+    // 优先从 WorkflowTemplates 获取完整字段配置
+    const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
+    if (workflowTemplate && workflowTemplate.formSchema) {
+      return workflowTemplate.formSchema;
     }
 
-    // 降级：从表单模板获取（兼容旧数据）
+    // 降级：从表单模板获取
     const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
     if (formTemplate) {
       return formTemplate.fields;
+    }
+
+    // 最后降级：从流程定义获取
+    const definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
+    if (definition && definition.form_schema) {
+      return definition.form_schema;
     }
 
     return [];

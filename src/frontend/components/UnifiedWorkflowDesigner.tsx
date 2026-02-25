@@ -1259,7 +1259,19 @@ const EmployeeSelectorModal: React.FC<EmployeeSelectorModalProps> = ({
             />
           </div>
           <div className="mt-2 text-sm text-gray-500">
-            已选择 {selectedIds.length} 人
+            {selectedIds.length > 0 ? (
+              <div className="space-y-1">
+                <div>已选择 {selectedIds.length} 人</div>
+                <div className="text-xs text-blue-600">
+                  {selectedIds.map(id => {
+                    const emp = employees.find(e => e.id === id)
+                    return emp?.name || id
+                  }).join('、')}
+                </div>
+              </div>
+            ) : (
+              <div>已选择 0 人</div>
+            )}
           </div>
         </div>
 
@@ -1326,6 +1338,37 @@ const EmployeeSelectorModal: React.FC<EmployeeSelectorModalProps> = ({
 const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, onUpdate, onDelete, readOnly }) => {
   const [activeSection, setActiveSection] = useState<'basic' | 'approval' | 'gateway' | 'service'>('basic')
   const [showEmployeeSelector, setShowEmployeeSelector] = useState(false)
+  const [employees, setEmployees] = useState<Employee[]>([])
+
+  useEffect(() => {
+    loadEmployees()
+  }, [])
+
+  const loadEmployees = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.DATA('Employee')}?page=1&pageSize=1000`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+      const result = await response.json()
+      setEmployees(result.data || [])
+    } catch (error) {
+      console.error('加载员工列表失败:', error)
+    }
+  }
+
+  const getSelectedEmployeeNames = (employeeIds: string): string => {
+    if (!employeeIds) return ''
+    const ids = employeeIds.split(',').filter(Boolean)
+    const names = ids.map(id => {
+      const emp = employees.find(e => e.id === id)
+      return emp?.name || id
+    })
+    return names.join('、')
+  }
 
   const renderBasicConfig = () => (
     <div className="space-y-4">
@@ -1479,7 +1522,7 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, onUpdate, onDel
               >
                 <span className={config.approverSource?.value ? 'text-gray-800' : 'text-gray-400'}>
                   {config.approverSource?.value
-                    ? `已选择 ${config.approverSource.value.split(',').filter(Boolean).length} 人`
+                    ? getSelectedEmployeeNames(config.approverSource.value) || `已选择 ${config.approverSource.value.split(',').filter(Boolean).length} 人`
                     : '点击选择员工'}
                 </span>
                 <Users className="w-4 h-4 text-gray-400" />

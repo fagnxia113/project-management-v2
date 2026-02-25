@@ -23,7 +23,6 @@ export class InstanceService {
       definition_id: params.definitionId,
       definition_key: definition.key,
       definition_version: definition.version,
-      category: definition.category,
       business_key: params.businessKey,
       business_id: params.businessId,
       title: params.title || definition.name,
@@ -38,16 +37,15 @@ export class InstanceService {
 
     await db.insert(
       `INSERT INTO workflow_instances (
-        id, definition_id, definition_key, definition_version, category,
+        id, definition_id, definition_key, definition_version,
         business_key, business_id, title, initiator_id, initiator_name, 
         variables, status, start_time, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         instance.id,
         instance.definition_id,
         instance.definition_key,
         instance.definition_version,
-        instance.category ?? null,
         instance.business_key ?? null,
         instance.business_id ?? null,
         instance.title,
@@ -399,7 +397,6 @@ export class InstanceService {
   async getAllInstances(params?: {
     status?: string;
     processKey?: string;
-    category?: string;
     startTime?: Date;
     endTime?: Date;
     page?: number;
@@ -416,11 +413,6 @@ export class InstanceService {
     if (params?.processKey) {
       whereClause += ' AND definition_key = ?';
       queryParams.push(params.processKey);
-    }
-
-    if (params?.category) {
-      whereClause += ' AND category = ?';
-      queryParams.push(params.category);
     }
 
     if (params?.startTime) {
@@ -648,7 +640,6 @@ export class InstanceService {
       definition_id: row.definition_id,
       definition_key: row.definition_key,
       definition_version: row.definition_version,
-      category: row.category,
       business_key: row.business_key,
       business_id: row.business_id,
       title: row.title,

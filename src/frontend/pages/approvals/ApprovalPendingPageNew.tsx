@@ -134,8 +134,18 @@ export default function ApprovalPendingPageNew() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
-      const userId = payload.userId || payload.id
+      let userId = 'current-user'
+      if (token) {
+        try {
+          const base64Payload = token.split('.')[1]
+          if (base64Payload) {
+            const payload = JSON.parse(atob(base64Payload))
+            userId = payload.userId || payload.id || 'current-user'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
       const res = await fetch(`${API_URL.BASE}/api/workflow/v2/tasks/assignee/${userId}?status=assigned,in_progress`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -208,9 +218,20 @@ export default function ApprovalPendingPageNew() {
     setProcessing(true)
     try {
       const token = localStorage.getItem('token')
-      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
-      const userId = payload.userId || payload.id
-      const userName = payload.name || payload.username
+      let userId = 'current-user'
+      let userName = '当前用户'
+      if (token) {
+        try {
+          const base64Payload = token.split('.')[1]
+          if (base64Payload) {
+            const payload = JSON.parse(atob(base64Payload))
+            userId = payload.userId || payload.id || 'current-user'
+            userName = payload.name || payload.username || payload.sub || '当前用户'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
       
       const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${taskId}/complete`, {
         method: 'POST',
@@ -256,9 +277,20 @@ export default function ApprovalPendingPageNew() {
     setProcessing(true)
     try {
       const token = localStorage.getItem('token')
-      const payload = JSON.parse(atob(token?.split('.')[1] || '{}'))
-      const userId = payload.userId || payload.id
-      const userName = payload.name || payload.username
+      let userId = 'current-user'
+      let userName = '当前用户'
+      if (token) {
+        try {
+          const base64Payload = token.split('.')[1]
+          if (base64Payload) {
+            const payload = JSON.parse(atob(base64Payload))
+            userId = payload.userId || payload.id || 'current-user'
+            userName = payload.name || payload.username || payload.sub || '当前用户'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
       
       const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${taskId}/complete`, {
         method: 'POST',
