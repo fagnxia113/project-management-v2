@@ -5,6 +5,7 @@ import { instanceService } from '../services/InstanceService.js';
 import { taskService } from '../services/TaskService.js';
 import { processFormIntegrationService } from '../services/ProcessFormIntegrationService.js';
 import { unifiedFormService } from '../services/UnifiedFormService.js';
+import { db } from '../database/connection.js';
 
 const router = Router();
 

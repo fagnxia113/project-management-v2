@@ -476,27 +476,22 @@ export class ProcessFormIntegrationService {
           name: cleanedFormData.name,
           type: cleanedFormData.type || 'domestic',
           manager_id: cleanedFormData.manager_id,
-          technical_lead_id: cleanedFormData.technical_lead_id,
           status: cleanedFormData.status || 'proposal',
           start_date: cleanedFormData.start_date,
           end_date: cleanedFormData.end_date,
           country: cleanedFormData.country || '中国',
           address: cleanedFormData.address,
           attachments: cleanedFormData.attachments,
-          // 项目相关信息
           description: cleanedFormData.description,
           building_area: cleanedFormData.building_area,
           it_capacity: cleanedFormData.it_capacity,
           cabinet_count: cleanedFormData.cabinet_count,
           cabinet_power: cleanedFormData.cabinet_power,
-          // 技术架构
           power_architecture: cleanedFormData.power_architecture,
           hvac_architecture: cleanedFormData.hvac_architecture,
           fire_architecture: cleanedFormData.fire_architecture,
           weak_electric_architecture: cleanedFormData.weak_electric_architecture,
-          // 商务信息
           customer_id: cleanedFormData.customer_id,
-          end_customer: cleanedFormData.end_customer,
           budget: cleanedFormData.budget || 0,
           organization_id: cleanedFormData.organization_id
         });

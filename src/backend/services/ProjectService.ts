@@ -8,21 +8,20 @@ export interface Project {
     type: 'domestic' | 'foreign' | 'rd' | 'service';
     // 基本信息
     manager_id?: string;
-    technical_lead_id?: string;
     start_date: string;
+    end_date?: string;
     country?: string;
     address?: string;
-    end_date?: string;
     attachments?: string;
     // 项目阶段
     status: 'proposal' | 'in_progress' | 'completed' | 'paused' | 'delayed';
     progress: number;
     // 项目相关信息
     description?: string;
-    building_area?: number;  // 建筑面积
-    it_capacity?: number;    // IT容量
-    cabinet_count?: number;   // 机柜数量
-    cabinet_power?: number;   // 机柜功率
+    building_area?: number;
+    it_capacity?: number;
+    cabinet_count?: number;
+    cabinet_power?: number;
     // 技术架构
     power_architecture?: string;
     hvac_architecture?: string;
@@ -30,7 +29,6 @@ export interface Project {
     weak_electric_architecture?: string;
     // 商务信息
     customer_id?: string;
-    end_customer?: string;
     budget: number;
     organization_id?: string;
 }
@@ -65,22 +63,22 @@ export class ProjectService {
         await db.execute(
             `INSERT INTO projects (
                 id, code, name, type, 
-                manager_id, technical_lead_id,
-                status, country, address, attachments,
-                progress, start_date, end_date,
+                manager_id,
+                status, progress, start_date, end_date,
+                country, address, attachments,
                 description, building_area, it_capacity, cabinet_count, cabinet_power,
                 power_architecture, hvac_architecture, fire_architecture, weak_electric_architecture,
-                budget, customer_id, end_customer, organization_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                budget, customer_id, organization_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 id, code, data.name, data.type || 'domestic',
-                data.manager_id || null, data.technical_lead_id || null,
-                data.status || 'proposal', data.country || '中国', data.address || null, data.attachments || null,
-                0, data.start_date, data.end_date || null,
+                data.manager_id || null,
+                data.status || 'proposal', 0, data.start_date, data.end_date || null,
+                data.country || '中国', data.address || null, data.attachments || null,
                 data.description || null, data.building_area || null, data.it_capacity || null, 
                 data.cabinet_count || null, data.cabinet_power || null,
                 data.power_architecture || null, data.hvac_architecture || null, data.fire_architecture || null, data.weak_electric_architecture || null,
-                data.budget || 0, data.customer_id || null, data.end_customer || null, data.organization_id || null
+                data.budget || 0, data.customer_id || null, data.organization_id || null
             ]
         );
         return { 
@@ -90,7 +88,6 @@ export class ProjectService {
             name: data.name,
             type: data.type || 'domestic',
             manager_id: data.manager_id,
-            technical_lead_id: data.technical_lead_id,
             status: data.status || 'proposal',
             start_date: data.start_date,
             end_date: data.end_date,
@@ -107,7 +104,6 @@ export class ProjectService {
             fire_architecture: data.fire_architecture,
             weak_electric_architecture: data.weak_electric_architecture,
             customer_id: data.customer_id,
-            end_customer: data.end_customer,
             budget: data.budget || 0,
             organization_id: data.organization_id
         };

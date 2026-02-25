@@ -19,6 +19,7 @@ import permissionsRouter from './routes/permissions.js';
 import { schedulerService } from './services/SchedulerService.js';
 import { WorkflowTemplatesService } from './services/WorkflowTemplates.js';
 import { definitionService } from './services/DefinitionService.js';
+import { enhancedWorkflowEngine } from './services/EnhancedWorkflowEngine.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -609,6 +610,38 @@ async function startServer() {
 
     // 启动定时任务调度服务
     await schedulerService.start();
+
+    // 监听流程结束事件，更新项目状态
+    enhancedWorkflowEngine.getEventBus().on('process.ended', async (data: any) => {
+      try {
+        const { instanceId, result } = data;
+        
+        // 获取流程实例信息
+        const instance = await db.queryOne(
+          `SELECT i.id, i.definition_id, i.business_id, d.\`key\` as definition_key
+           FROM workflow_instances i
+           LEFT JOIN workflow_definitions d ON i.definition_id = d.id
+           WHERE i.id = ?`,
+          [instanceId]
+        );
+        
+        if (!instance || !instance.business_id) {
+          return;
+        }
+        
+        // 如果是项目审批流程，更新项目状态
+        if (instance.definition_key === 'project-approval') {
+          const newStatus = result === 'approved' ? 'in_progress' : 'proposal';
+          await db.execute(
+            `UPDATE projects SET status = ? WHERE id = ?`,
+            [newStatus, instance.business_id]
+          );
+          console.log(`[Server] 项目 ${instance.business_id} 状态已更新为: ${newStatus}`);
+        }
+      } catch (error) {
+        console.error('[Server] 处理流程结束事件失败:', error);
+      }
+    });
 
     // 启动监听
     app.listen(PORT, () => {

@@ -151,14 +151,6 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       group: '基本信息'
     },
     {
-      name: 'technical_lead_id',
-      label: '技术负责人',
-      type: 'user',
-      required: false,
-      placeholder: '请选择技术负责人',
-      group: '基本信息'
-    },
-    {
       name: 'start_date',
       label: '项目开始日期',
       type: 'date',
@@ -203,20 +195,6 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'text',
       required: false,
       placeholder: '请输入项目地址',
-      group: '基本信息'
-    },
-    {
-      name: 'type',
-      label: '项目类型',
-      type: 'select',
-      required: false,
-      defaultValue: 'domestic',
-      options: [
-        { label: '国内项目', value: 'domestic' },
-        { label: '海外项目', value: 'foreign' },
-        { label: '研发项目', value: 'rd' },
-        { label: '服务项目', value: 'service' }
-      ],
       group: '基本信息'
     },
     {
@@ -324,14 +302,6 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
         lookupField: 'id',
         displayField: 'name'
       },
-      group: '商务信息'
-    },
-    {
-      name: 'end_customer',
-      label: '最终客户',
-      type: 'text',
-      required: false,
-      placeholder: '请输入最终客户名称',
       group: '商务信息'
     },
     {

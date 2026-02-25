@@ -169,14 +169,6 @@ export class UnifiedFormService {
             placeholder: '请选择项目经理'
           },
           {
-            id: 'field-project-technical-lead',
-            name: 'technical_lead_id',
-            label: '技术负责人',
-            type: 'user',
-            required: false,
-            placeholder: '请选择技术负责人'
-          },
-          {
             id: 'field-project-start-date',
             name: 'start_date',
             label: '项目开始日期',
@@ -222,20 +214,6 @@ export class UnifiedFormService {
             type: 'text',
             required: false,
             placeholder: '请输入项目地址'
-          },
-          {
-            id: 'field-project-type',
-            name: 'type',
-            label: '项目类型',
-            type: 'select',
-            required: false,
-            defaultValue: 'domestic',
-            options: [
-              { label: '国内项目', value: 'domestic' },
-              { label: '海外项目', value: 'foreign' },
-              { label: '研发项目', value: 'rd' },
-              { label: '服务项目', value: 'service' }
-            ]
           },
           {
             id: 'field-project-status',
@@ -345,14 +323,6 @@ export class UnifiedFormService {
               displayField: 'name',
               autoFill: true
             }
-          },
-          {
-            id: 'field-project-end-customer',
-            name: 'end_customer',
-            label: '最终客户',
-            type: 'text',
-            required: false,
-            placeholder: '请输入最终客户名称'
           },
           {
             id: 'field-project-budget',

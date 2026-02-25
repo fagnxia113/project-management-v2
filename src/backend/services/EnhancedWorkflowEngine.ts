@@ -1002,6 +1002,10 @@ export class EnhancedWorkflowEngine {
     this.eventBus.once(event, listener);
   }
 
+  getEventBus(): EventEmitter {
+    return this.eventBus;
+  }
+
   // ==================== 管理员干预功能 ====================
 
   // 强制跳转到指定节点
