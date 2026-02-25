@@ -32,6 +32,7 @@ interface ApprovalOrder {
   title: string
   status: string
   current_node: string
+  current_assignee_name?: string
   form_data: Record<string, any>
   audit_logs: any[]
   created_at: string
@@ -163,6 +164,7 @@ export default function ApprovalMinePageNew() {
               title: item.title,
               status: displayStatus,
               current_node: item.current_node_name || '未知',
+              current_assignee_name: item.current_assignee_name || '',
               form_data: item.variables?.formData || {},
               audit_logs: [],
               created_at: item.created_at,
@@ -292,6 +294,12 @@ export default function ApprovalMinePageNew() {
                   <GitBranch className="w-4 h-4 text-gray-400" />
                   <span className="truncate">{order.current_node}</span>
                 </div>
+                {order.current_assignee_name && (
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <span className="truncate">{order.current_assignee_name}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
                   <span>{formatDate(order.created_at)}</span>
@@ -339,6 +347,7 @@ export default function ApprovalMinePageNew() {
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">申请信息</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">类型</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">当前节点</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">当前审批人</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">状态</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">提交时间</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">操作</th>
@@ -370,6 +379,9 @@ export default function ApprovalMinePageNew() {
                     <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700">{typeConfig.label}</span>
                   </td>
                   <td className="py-4 px-4 text-sm text-gray-600">{order.current_node}</td>
+                  <td className="py-4 px-4 text-sm text-gray-600">
+                    {order.current_assignee_name || '-'}
+                  </td>
                   <td className="py-4 px-4">{getStatusBadge(order.status)}</td>
                   <td className="py-4 px-4 text-sm text-gray-600">{formatDate(order.created_at)}</td>
                   <td className="py-4 px-4">
@@ -460,6 +472,13 @@ export default function ApprovalMinePageNew() {
                 </div>
               </div>
               <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">当前审批人</div>
+                <div className="font-medium text-gray-900 flex items-center gap-2">
+                  <User className="w-4 h-4 text-blue-500" />
+                  {selectedOrder.current_assignee_name || '-'}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-500 mb-1">申请类型</div>
                 <div className="font-medium text-gray-900">
                   {ORDER_TYPE_LABELS[selectedOrder.order_type]?.label || selectedOrder.order_type}
@@ -468,10 +487,6 @@ export default function ApprovalMinePageNew() {
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-500 mb-1">提交时间</div>
                 <div className="font-medium text-gray-900">{formatDate(selectedOrder.created_at)}</div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-500 mb-1">更新时间</div>
-                <div className="font-medium text-gray-900">{formatDate(selectedOrder.updated_at)}</div>
               </div>
             </div>
             

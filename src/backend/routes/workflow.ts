@@ -199,14 +199,17 @@ router.get('/processes', async (req: Request, res: Response) => {
         );
 
         let currentNodeName = '未知';
+        let currentAssigneeName = '';
         if (activeTasks.length > 0) {
-          // 取第一个活动任务的节点名称
+          // 取第一个活动任务的节点名称和审批人
           currentNodeName = activeTasks[0].name || '处理中';
+          currentAssigneeName = activeTasks[0].assignee_name || '';
         }
 
         return {
           ...instance,
-          current_node_name: currentNodeName
+          current_node_name: currentNodeName,
+          current_assignee_name: currentAssigneeName
         };
       })
     );

@@ -2,8 +2,7 @@
  * 登录页面 - 仅支持登录，不开放注册
  */
 import React, { useState } from 'react'
-
-const API_BASE = 'http://localhost:8081'
+import { API_URL } from '../../config/api'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -21,7 +20,7 @@ export default function LoginPage() {
     setError('')
     
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await fetch(`${API_URL.BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
