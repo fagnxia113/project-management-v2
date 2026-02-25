@@ -1174,13 +1174,17 @@ interface EmployeeSelectorModalProps {
   onClose: () => void
   onConfirm: (selectedIds: string[]) => void
   initialSelectedIds: string[]
+  positions?: Record<string, string>
+  departments?: Record<string, string>
 }
 
 const EmployeeSelectorModal: React.FC<EmployeeSelectorModalProps> = ({
   isOpen,
   onClose,
   onConfirm,
-  initialSelectedIds
+  initialSelectedIds,
+  positions = {},
+  departments = {}
 }) => {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds)
@@ -1265,7 +1269,20 @@ const EmployeeSelectorModal: React.FC<EmployeeSelectorModalProps> = ({
                 <div className="text-xs text-blue-600">
                   {selectedIds.map(id => {
                     const emp = employees.find(e => e.id === id)
-                    return emp?.name || id
+                    if (!emp) return id
+                    const name = emp.name || '未知'
+                    
+                    let position = emp.position || '无职位'
+                    if (position.includes('-') || position.length > 20) {
+                      position = positions[position] || '无职位'
+                    }
+                    
+                    let department = emp.department || emp.department_name || '无部门'
+                    if (department.includes('-') || department.length > 20) {
+                      department = departments[department] || '无部门'
+                    }
+                    
+                    return `${name} (${position} - ${department})`
                   }).join('、')}
                 </div>
               </div>
@@ -1304,10 +1321,21 @@ const EmployeeSelectorModal: React.FC<EmployeeSelectorModalProps> = ({
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-gray-800">{employee.name}</span>
-                      <span className="text-xs text-gray-500">({employee.employeeNo})</span>
                     </div>
                     <div className="text-sm text-gray-500">
-                      {employee.position || '无职位'} {employee.department ? `- ${employee.department}` : ''}
+                      {(() => {
+                        let pos = employee.position || '无职位'
+                        if (pos.includes('-') || pos.length > 20) {
+                          pos = positions[pos] || '无职位'
+                        }
+                        return pos
+                      })()} {(() => {
+                        let dept = employee.department || employee.department_name || '无部门'
+                        if (dept.includes('-') || dept.length > 20) {
+                          dept = departments[dept] || '无部门'
+                        }
+                        return dept ? `- ${dept}` : ''
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1339,9 +1367,13 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, onUpdate, onDel
   const [activeSection, setActiveSection] = useState<'basic' | 'approval' | 'gateway' | 'service'>('basic')
   const [showEmployeeSelector, setShowEmployeeSelector] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [positions, setPositions] = useState<Record<string, string>>({})
+  const [departments, setDepartments] = useState<Record<string, string>>({})
 
   useEffect(() => {
     loadEmployees()
+    loadPositions()
+    loadDepartments()
   }, [])
 
   const loadEmployees = async () => {
@@ -1360,14 +1392,84 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, onUpdate, onDel
     }
   }
 
+  const loadPositions = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.ORGANIZATION.POSITIONS}?page=1&pageSize=1000`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+      const result = await response.json()
+      const posMap: Record<string, string> = {}
+      if (result.data) {
+        result.data.forEach((pos: any) => {
+          posMap[pos.id] = pos.name
+        })
+      }
+      setPositions(posMap)
+    } catch (error) {
+      console.error('加载职位列表失败:', error)
+    }
+  }
+
+  const loadDepartments = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.ORGANIZATION.DEPARTMENTS}?page=1&pageSize=1000`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+      const result = await response.json()
+      const deptMap: Record<string, string> = {}
+      if (result.data) {
+        result.data.forEach((dept: any) => {
+          deptMap[dept.id] = dept.name
+        })
+      }
+      setDepartments(deptMap)
+    } catch (error) {
+      console.error('加载部门列表失败:', error)
+    }
+  }
+
   const getSelectedEmployeeNames = (employeeIds: string): string => {
     if (!employeeIds) return ''
     const ids = employeeIds.split(',').filter(Boolean)
-    const names = ids.map(id => {
+    
+    if (employees.length === 0) {
+      return `已选择 ${ids.length} 人`
+    }
+    
+    const details = ids.map(id => {
       const emp = employees.find(e => e.id === id)
-      return emp?.name || id
+      if (!emp) return id
+      
+      const name = emp.name || '未知'
+      
+      let position = emp.position || '无职位'
+      if (position.includes('-') || position.length > 20) {
+        position = positions[position] || '无职位'
+      }
+      
+      let department = emp.department || emp.department_name || '无部门'
+      if (department.includes('-') || department.length > 20) {
+        department = departments[department] || '无部门'
+      }
+      
+      return `${name} (${position} - ${department})`
     })
-    return names.join('、')
+    
+    const result = details.join('、')
+    
+    if (result.includes('${') || result.includes('formData.')) {
+      return `已选择 ${ids.length} 人`
+    }
+    
+    return result
   }
 
   const renderBasicConfig = () => (
@@ -1423,9 +1525,15 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, onUpdate, onDel
     }
 
     const updateApproverSource = (key: keyof ApproverSource, value: any) => {
+      const updates: Partial<ApproverSource> = { [key]: value }
+      
+      if (key === 'type') {
+        updates.value = ''
+      }
+      
       onUpdate('approvalConfig', {
         ...config,
-        approverSource: { ...config.approverSource, [key]: value }
+        approverSource: { ...config.approverSource, ...updates }
       })
     }
 
@@ -1522,22 +1630,19 @@ const NodeConfigPanel: React.FC<NodeConfigPanelProps> = ({ node, onUpdate, onDel
               >
                 <span className={config.approverSource?.value ? 'text-gray-800' : 'text-gray-400'}>
                   {config.approverSource?.value
-                    ? getSelectedEmployeeNames(config.approverSource.value) || `已选择 ${config.approverSource.value.split(',').filter(Boolean).length} 人`
+                    ? getSelectedEmployeeNames(config.approverSource.value)
                     : '点击选择员工'}
                 </span>
                 <Users className="w-4 h-4 text-gray-400" />
               </button>
-              {config.approverSource?.value && (
-                <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                  员工ID: {config.approverSource.value}
-                </div>
-              )}
             </div>
             <EmployeeSelectorModal
               isOpen={showEmployeeSelector}
               onClose={() => setShowEmployeeSelector(false)}
               onConfirm={(selectedIds) => updateApproverSource('value', selectedIds.join(','))}
               initialSelectedIds={config.approverSource?.value?.split(',').filter(Boolean) || []}
+              positions={positions}
+              departments={departments}
             />
           </div>
         )}
