@@ -319,7 +319,10 @@ export default function Layout({ children }: { children: ReactNode }) {
                 </svg>
               </button>
               <button
-                onClick={() => { localStorage.clear(); navigate('/login') }}
+                onClick={() => { 
+                  localStorage.clear(); 
+                  window.location.href = '/';
+                }}
                 className="p-2 text-slate-500 hover:text-red-400 transition-colors"
                 title="退出登录"
               >
