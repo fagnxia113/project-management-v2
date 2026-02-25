@@ -2,8 +2,8 @@
 
 ## 📋 文档说明
 
-**文档版本**: v2.2  
-**最后更新**: 2026-02-24  
+**文档版本**: v2.6  
+**最后更新**: 2026-02-25  
 **维护方式**: 所有系统变更必须先更新此文档，再进行代码修改
 
 **v2.0 更新内容：**
@@ -12,6 +12,37 @@
 - 明确双角色权限体系（系统管理员/普通员工）
 - 统一命名规范，提升可读性
 - 优化审批流程与数字化工厂的整合
+
+**v2.4 更新内容：**
+- 完善设备管理模块设计，新增仓库管理和库存管理
+- 细化设备管理规则，区分仪器类和负载/线缆类的管理方式
+- 新增调拨转移、归还入库、维修管理、报废管理、数据溯源等功能模块
+- 新增智能提醒功能（校准到期提醒、库存告警）
+- 新增分层权限体系（系统管理员、仓库管理员、项目负责人、普通员工）
+- 完善设备流转逻辑（库存查看、调拨转移、归还入库、入库出库、维修报废）
+- 新增数据溯源功能，支持设备全生命周期追踪
+
+**v2.5 更新内容：**
+- 补充操作日志表SQL设计，明确数据溯源底层结构
+- 明确库存统计实现方式（仪器单台管理，负载按规格汇总）
+- 简化设备状态设计，减少冗余状态
+- 补充智能提醒实现方案（定时任务 + 前端轮询）
+- 调整页面优先级，分阶段实施
+- 补充与现有数据库表结构的字段映射
+
+**v2.6 更新内容：**
+- 修复设备表命名不一致问题（equipment → equipment_instances）
+- 修正设备状态枚举矛盾（统一为简化版状态设计）
+- 补充equipment_instances表缺少的字段（purchase_date, purchase_price, notes）
+- 补充equipment_models表完整建表SQL
+- 补充warehouses表完整建表SQL
+- 补充equipment_operation_logs表建表SQL
+- 补充notifications表建表SQL
+- 在employees表增加user_id字段，明确与users表的关联关系
+- 新增设备管理模块API定义（7.2.6）
+- 新增人员管理模块API定义（7.2.7）
+- 新增通知模块API定义（7.2.8）
+- 修正流程引擎API重复冲突（统一为instances，明确用户视角和管理员视角）
 
 ---
 
@@ -79,11 +110,15 @@
 ├─────────────────────────────────────────────────────────────┤
 │  🔧 设备管理                                                │
 │     ├── 设备台账 /equipment                                 │
-│     ├── 入库登记 /equipment/inbound                         │
-│     ├── 出库领用 /equipment/outbound                        │
+│     ├── 仓库管理 /equipment/warehouses                     │
+│     ├── 库存管理 /equipment/inventory                       │
 │     ├── 调拨转移 /equipment/transfer                        │
 │     ├── 归还入库 /equipment/return                          │
-│     └── 维修报废 /equipment/repair                          │
+│     ├── 入库登记 /equipment/inbound                         │
+│     ├── 出库领用 /equipment/outbound                        │
+│     ├── 维修管理 /equipment/repair                           │
+│     ├── 报废管理 /equipment/scrap                            │
+│     └── 数据溯源 /equipment/history                           │
 ├─────────────────────────────────────────────────────────────┤
 │  🏢 组织架构                                                │
 │     ├── 部门管理 /organization/departments                  │
@@ -135,11 +170,15 @@
 | 人员管理 | 出差申请 | 提交出差申请 |
 | 人员管理 | 调岗申请 | 提交调岗申请 |
 | 设备管理 | 设备台账 | 设备资产总览 |
-| 设备管理 | 入库登记 | 登记设备入库 |
-| 设备管理 | 出库领用 | 设备出库领用 |
+| 设备管理 | 仓库管理 | 管理仓库信息 |
+| 设备管理 | 库存管理 | 查看设备库存 |
 | 设备管理 | 调拨转移 | 设备调拨操作 |
 | 设备管理 | 归还入库 | 设备归还操作 |
-| 设备管理 | 维修报废 | 维修和报废管理 |
+| 设备管理 | 入库登记 | 登记设备入库 |
+| 设备管理 | 出库领用 | 设备出库领用 |
+| 设备管理 | 维修管理 | 设备维修管理 |
+| 设备管理 | 报废管理 | 设备报废管理 |
+| 设备管理 | 数据溯源 | 查看操作记录 |
 | 组织架构 | 部门管理 | 管理部门信息 |
 | 组织架构 | 岗位管理 | 管理岗位信息 |
 | 组织架构 | 客户管理 | 管理客户信息 |
@@ -218,9 +257,14 @@
 | **人员管理** | 入职/离职办理 | ✅ | ❌ |
 | **人员管理** | 各类申请 | ✅ | ✅ |
 | **设备管理** | 设备台账 | ✅ 全部 | ✅ 查看 |
-| **设备管理** | 入库/出库 | ✅ | ✅ 申请 |
-| **设备管理** | 调拨/归还 | ✅ | ✅ 申请 |
-| **设备管理** | 维修/报废 | ✅ | ✅ 申请 |
+| **设备管理** | 仓库管理 | ✅ 全部 | ✅ 查看 |
+| **设备管理** | 库存管理 | ✅ 全部 | ✅ 查看 |
+| **设备管理** | 调拨转移 | ✅ 直接执行 | ✅ 申请 |
+| **设备管理** | 归还入库 | ✅ 直接执行 | ✅ 申请 |
+| **设备管理** | 入库/出库 | ✅ 直接执行 | ✅ 申请 |
+| **设备管理** | 维修管理 | ✅ 直接执行 | ✅ 申请 |
+| **设备管理** | 报废管理 | ✅ 直接执行 | ✅ 申请 |
+| **设备管理** | 数据溯源 | ✅ 全部 | ✅ 自己的 |
 | **组织架构** | 部门/岗位管理 | ✅ 编辑 | ✅ 查看 |
 | **组织架构** | 客户管理 | ✅ 编辑 | ✅ 查看 |
 | **系统管理** | 流程监控 | ✅ | ❌ |
@@ -312,8 +356,13 @@
 │   ├── 项目成员配置
 │   └── 项目计划设置
 ├── 项目详情 (/projects/:id)
-│   ├── 项目概览
-│   ├── 任务列表
+│   ├── 基本信息（项目名称、编号、类型、状态）
+│   ├── 项目信息（国家、地址、日期、预算）
+│   ├── 项目规模（建筑面积、IT容量、机柜数量等）
+│   ├── 技术架构（供电、暖通、消防、弱电架构）
+│   ├── 客户信息
+│   └── 系统信息（创建时间、更新时间）
+├── 任务列表
 │   ├── 成员管理
 │   ├── 进度跟踪
 │   └── 文档资料
@@ -387,6 +436,13 @@
 │   ├── 员工卡片/列表
 │   ├── 筛选搜索
 │   └── 导出功能
+├── 员工详情 (/personnel/:id)
+│   ├── 基本信息（姓名、工号、性别、头像）
+│   ├── 状态信息（在职状态、当前状态、角色）
+│   ├── 联系方式（手机、邮箱）
+│   ├── 组织信息（部门、岗位）
+│   ├── 技能信息
+│   └── 系统信息（员工ID、用户ID、创建时间）
 ├── 入职办理 (/personnel/onboard)
 │   ├── 入职申请
 │   ├── 资料录入
@@ -419,39 +475,449 @@
 ### 4.5 设备管理模块
 
 #### 4.5.1 功能定位
-设备资产全生命周期管理，从入库到报废的完整追踪
+实现仪器（单台唯一追踪）、负载/线缆（按规格批量管理）从入库、库存、调拨、领用、归还到维修/报废的全生命周期管理，核心支撑仓库↔项目、项目↔项目的设备资源调配，做到库存透明、流程简洁、数据可溯、智能提醒，适配工程项目设备使用的实际业务场景。
 
-#### 4.5.2 页面结构
+#### 4.5.2 核心设备管理规则
+
+##### 4.5.2.1 仪器类（如电能质量分析仪、检测仪表）
+- **单台唯一管理**: 每台分配专属管理编码 + 机身序列号，全程单独追踪
+- **校准强管控**: 每年校准一次，到期前自动提醒，超期设备禁止调拨/领用
+- **流转规则**: 单台流转，库存数量仅为 0/1，调拨/归还需核对配件完整性
+- **状态追踪**: 全程记录健康状态（正常/轻微损坏/严重损坏）、使用状态（闲置/在用/维修中）
+
+##### 4.5.2.2 负载/线缆类（如 8kW 假负载、工业电缆）
+- **按规格批量管理**: 同规格设备合并库存，无需单台编号，按"台/米/套"计量
+- **库存阈值管控**: 设置最低库存，低于阈值自动告警，避免项目缺料
+- **流转规则**: 批量调拨/领用/归还，无需配件核对，仅关注实际数量
+- **简化管理**: 无需校准，仅记录健康状态和使用状态，报废直接清零库存
+
+##### 4.5.2.3 统一设备状态设计（简化版）
+
+为减少冗余状态，统一设备状态定义如下：
+
+```
+位置状态（location_status）：
+  - warehouse（仓库）：设备在仓库中
+  - in_project（在项目）：设备在项目中
+  - repairing（维修中）：设备正在维修
+  - scrapped（已报废）：设备已报废，不参与流转
+
+使用状态（usage_status）：
+  - idle（闲置）：设备可用，未被使用
+  - in_use（使用中）：设备已被领用/调拨到项目
+
+健康状态（health_status）：
+  - normal（正常）：设备正常运行
+  - slightly_damaged（轻微损坏）：不影响使用的小问题
+  - severely_damaged（严重损坏）：需维修后才能使用
+  - scrapped（已报废）：已走报废流程，永久不可用
+
+校准状态（仅仪器类）：
+  - valid（有效）：校准在有效期内
+  - expiring_soon（即将到期）：30天内到期
+  - expired（已过期）：已超期，禁止流转
+```
+
+**状态变更规则**：
+- 设备归还入库时：location_status 从 in_project 变为 warehouse
+- 设备调拨出库时：location_status 从 warehouse 变为 in_project
+- 发起维修时：location_status 变为 repairing，usage_status 变为 idle
+- 维修完成时：location_status 恢复为原状态（warehouse/in_project）
+- 报废完成后：location_status 变为 scrapped，健康状态变为 scrapped
+
+#### 4.5.3 页面结构
 ```
 设备管理
 ├── 设备台账 (/equipment)
 │   ├── 设备列表
-│   ├── 设备详情
-│   ├── 筛选搜索
+│   ├── 筛选搜索（名称、编码、规格）
 │   └── 统计报表
+├── 设备详情 (/equipment/:id)
+│   ├── 设备信息（名称、型号、品牌、类别、序列号、管理编码）
+│   ├── 状态信息（健康状态、使用状态、位置状态）
+│   ├── 管理信息（保管人、当前位置、采购日期、采购价格）
+│   ├── 技术信息（单位、校准周期、校准到期日）
+│   ├── 备注
+│   └── 系统信息（设备ID、型号ID、创建时间）
+├── 仓库管理 (/equipment/warehouses)
+│   ├── 仓库列表
+│   ├── 仓库详情
+│   └── 仓库配置
+├── 库存管理 (/equipment/inventory)
+│   ├── 库存总览（按仓库/项目展示）
+│   ├── 库存查询（按设备类型、状态、存储节点、校准状态筛选）
+│   └── 库存告警
+├── 调拨转移 (/equipment/transfer)
+│   ├── 调拨申请
+│   ├── 调拨审批
+│   └── 调拨记录
+├── 归还入库 (/equipment/return)
+│   ├── 归还申请（单设备/项目批量）
+│   ├── 归还审批
+│   └── 归还记录
 ├── 入库登记 (/equipment/inbound)
 │   ├── 入库申请
 │   ├── 扫码入库
-│   └── 审批流程
+│   └── 入库记录
 ├── 出库领用 (/equipment/outbound)
 │   ├── 领用申请
-│   └── 审批流程
-├── 调拨转移 (/equipment/transfer)
-│   ├── 调拨申请
-│   └── 审批流程
-├── 归还入库 (/equipment/return)
-│   ├── 归还申请
-│   └── 审批流程
-└── 维修报废 (/equipment/repair)
-    ├── 维修申请
-    ├── 报废申请
-    └── 审批流程
+│   └── 出库记录
+├── 维修管理 (/equipment/repair)
+│   ├── 维修申请
+│   ├── 维修审批
+│   └── 维修记录
+├── 报废管理 (/equipment/scrap)
+│   ├── 报废申请
+│   ├── 报废审批
+│   └── 报废记录
+└── 数据溯源 (/equipment/history)
+    ├── 操作记录
+    └── 设备历史
 ```
 
-#### 4.5.3 权限说明
+#### 4.5.4 核心业务流转逻辑
+
+##### 4.5.4.1 库存查看逻辑（核心：找设备、看存量，一步到位）
+- **输入搜索**: 设备名称/编码/规格，系统自动分层展示存量
+- **优先展示**: 所有仓库的存量（按库存从高到低排序）
+- **次级展示**: 若仓库无存量，自动展示所有项目的存量（按项目结束时间从近到远排序）
+- **筛选功能**: 可按设备类型、状态、存储节点（仓库/项目）、仪器校准状态精准查找
+
+##### 4.5.4.2 调拨转移逻辑（核心：仓库↔项目、项目↔项目，灵活调配）
+- **适用场景**: 项目缺设备时，从仓库调拨/从其他项目调拨；仓库补库存时，从项目调拨回仓
+- **操作流程（3步完成，无冗余录入）**:
+  1. 选调入节点：确定设备要转到哪个仓库/项目
+  2. 选设备 + 调出节点：选完设备，系统自动展示所有有存量的仓库/项目，直接选择即可
+  3. 填数量 + 备注：仪器数量固定为 1（需核对配件），负载填批量数（系统自动校验：申请数量≤调出节点存量，不足无法提交）
+- **权限规则**:
+  - 管理员：可直接执行调拨，无需审批
+  - 普通员工/项目负责人：发起申请，对应审批人（仓库管理员/项目负责人）审批通过后，系统自动更新库存（调出节点 - 数量，调入节点 + 数量），全程无需人工改数
+
+##### 4.5.4.3 归还入库逻辑（核心：项目结束必归还，库存自动回仓）
+- **适用场景**: 项目完成/暂停后，将项目内设备归还至指定仓库，是项目收尾的核心操作
+- **操作流程（支持单台/批量归还，简化操作）**:
+  1. 选归还类型：单设备归还/项目批量归还（推荐，一键选择整项目设备）
+  2. 选设备 + 目标仓库：批量归还时，选择已完成/待结束项目，系统自动加载项目内所有未归还设备，直接勾选即可
+  3. 填数量 + 状态：系统校验数量≤项目存量，故障设备需备注详情，仪器需核对配件
+- **核心规则**:
+  - 仅已完成/待结束的项目可发起批量归还，避免项目中途设备被随意归还
+  - 审批通过后，系统自动更新：项目存量 - 数量，仓库存量 + 数量，设备标记为已归还
+  - 故障设备归还时，仓库管理员可驳回，要求先维修再归还，保证仓库设备可用性
+
+##### 4.5.4.4 入库/出库逻辑（基础流转，适配首次入库/项目直接领用）
+- **入库登记**:
+  - 适用：新设备采购首次入库、调拨/归还的二次入库
+  - 规则：仪器需先建档（录编码/序列号/校准信息）再入库，负载按规格批量入库，管理员可直接入库，员工需申请审批
+- **出库领用**:
+  - 适用：项目直接从仓库领用设备（本质是仓库→项目的简易调拨）
+  - 规则：流程与调拨一致，仅固定调入节点为"项目"，简化操作，避免重复流程
+
+##### 4.5.4.5 维修/报废逻辑（状态管控，避免无效流转）
+- **维修申请**:
+  - 故障设备（仓库/项目内）可发起维修，维修期间设备标记为维修中，禁止调拨/领用/归还
+  - 维修完成后，更新设备健康状态，恢复正常流转
+- **报废申请**:
+  - 无法维修/无使用价值的设备可发起报废，审批通过后：
+    - 仪器：标记为已报废，从可用列表隐藏（仅管理员可查）
+    - 负载/线缆：库存台账直接清零，不再参与流转
+  - 所有报废设备均保留记录，支持溯源
+
+#### 4.5.5 智能提醒逻辑（减少人工监控，避免遗漏）
+
+##### 4.5.5.1 仪器校准到期提醒
+- 系统每日自动扫描，校准到期前 30 天，向设备保管人/管理员发送提醒通知（系统内 + 邮件）
+- 若校准已超期，发送紧急告警（系统内 + 邮件 + 短信），并将仪器标记为校准超期，禁止所有流转操作，完成校准后自动恢复
+
+##### 4.5.5.2 负载/线缆库存告警
+- 系统实时监控库存，当某规格设备存量低于设置的最低阈值时，向仓库管理员/采购负责人发送库存告警通知
+- 设备台账中该规格标红展示"库存告警"，补货入库后自动清除告警
+
+##### 4.5.5.3 智能提醒实现方案
+
+**实现方式**：采用定时任务 + 前端轮询结合的方式
+
+```
+方案A：定时任务（推荐用于生产环境）
+- 使用 node-cron 或 node-schedule 库
+- 每天凌晨执行任务，扫描校准到期和库存告警
+- 生成系统通知记录，可通过消息推送发送
+
+方案B：前端轮询（简单实现，快速上线）
+- 用户进入页面时调用接口检查
+- 每次页面刷新时检查告警状态
+- 适用于功能初期或提醒不频繁的场景
+
+建议：
+- 第一阶段：先实现方案B，快速上线
+- 第二阶段：增加定时任务方案A，实现更及时的提醒
+```
+
+**校准提醒定时任务示例**：
+```javascript
+// 每天凌晨2点执行
+cron.schedule('0 2 * * *', async () => {
+  // 1. 扫描30天内即将到期的设备
+  const expiringEquipment = await db.query(`
+    SELECT ei.*, em.name as model_name, u.name as keeper_name
+    FROM equipment_instances ei
+    LEFT JOIN equipment_models em ON ei.model_id = em.id
+    LEFT JOIN users u ON ei.keeper_id = u.id
+    WHERE ei.calibration_expiry <= DATE_ADD(NOW(), INTERVAL 30 DAY)
+    AND ei.calibration_expiry >= NOW()
+    AND em.category = 'instrument'
+  `);
+  
+  // 2. 扫描已超期的设备
+  const expiredEquipment = await db.query(`
+    UPDATE equipment_instances ei
+    LEFT JOIN equipment_models em ON ei.model_id = em.id
+    SET ei.calibration_status = 'expired'
+    WHERE ei.calibration_expiry < NOW()
+    AND em.category = 'instrument'
+  `);
+  
+  // 3. 生成通知（通知逻辑省略）
+});
+```
+
+**库存告警检查（实时）**：
+```sql
+-- 查询低于库存阈值的设备型号
+SELECT 
+  em.id, em.name, em.min_stock_level,
+  COUNT(ei.id) as current_stock
+FROM equipment_models em
+LEFT JOIN equipment_instances ei ON em.id = ei.model_id 
+  AND ei.location_status = 'warehouse'
+  AND ei.health_status != 'scrapped'
+GROUP BY em.id
+HAVING COUNT(ei.id) < em.min_stock_level;
+```
+
+#### 4.5.6 权限管理逻辑（分层管控，避免越权操作）
+
+##### 4.5.6.1 系统管理员（最高权限）
+- **操作权限**: 新增/编辑/删除设备档案、直接执行所有入库/调拨/归还操作（无需审批）
+- **查看权限**: 所有设备/库存/操作记录，配置校准周期/库存阈值，查看统计分析
+- **核心职责**: 系统配置、数据管理、流程监控
+
+##### 4.5.6.2 仓库管理员
+- **操作权限**: 管辖仓库的入库/审批、调拨/归还的仓库端审批，查看管辖仓库的所有设备/库存
+- **核心职责**: 仓库设备管理、库存把控、设备归还验收、接收库存告警
+
+##### 4.5.6.3 项目负责人
+- **操作权限**: 发起负责项目的设备调拨/领用/归还申请，审批项目内相关操作，查看项目内所有设备/库存
+- **核心职责**: 项目设备统筹、项目结束设备归还、把控项目设备状态
+
+##### 4.5.6.4 普通员工
+- **操作权限**: 发起本人参与项目的设备申请（调拨/领用/归还），查看有权限的设备/库存，查看自己的操作记录
+- **核心职责**: 按项目需求申请设备，配合完成设备流转
+
+#### 4.5.7 数据溯源逻辑（全程留痕，可查可溯）
+- 设备的每一次操作（入库/调拨/归还/出库/维修/报废/编辑），系统均会自动生成操作记录，包含：
+  - 操作类型、操作人、操作时间、关联单据号
+  - 操作前后的存量、存储节点、设备状态
+  - 操作备注（配件核对、故障详情、调拨原因等）
+- 所有记录永久保存，可按设备、操作类型、时间精准查询，实现设备全生命周期溯源，便于问题排查和责任界定
+
+##### 4.5.7.1 操作日志表结构（数据库设计）
+
+```sql
+-- 设备操作日志表（用于数据溯源）
+CREATE TABLE IF NOT EXISTS equipment_operation_logs (
+  id VARCHAR(36) PRIMARY KEY,
+  equipment_id VARCHAR(36) NOT NULL COMMENT '设备ID',
+  equipment_name VARCHAR(200) COMMENT '设备名称（冗余）',
+  model_id VARCHAR(36) COMMENT '设备型号ID',
+  model_name VARCHAR(200) COMMENT '设备型号名称（冗余）',
+  operation_type ENUM(
+    'inbound',      -- 入库
+    'outbound',     -- 出库/领用
+    'transfer',     -- 调拨
+    'return',       -- 归还
+    'repair',       -- 维修
+    'scrap',        -- 报废
+    'edit',         -- 编辑
+    'calibration'   -- 校准
+  ) NOT NULL COMMENT '操作类型',
+  operator_id VARCHAR(36) NOT NULL COMMENT '操作人ID',
+  operator_name VARCHAR(100) COMMENT '操作人姓名',
+  from_location_type ENUM('warehouse', 'project', 'none') COMMENT '调出位置类型',
+  from_location_id VARCHAR(36) COMMENT '调出位置ID（仓库ID或项目ID）',
+  from_location_name VARCHAR(200) COMMENT '调出位置名称（冗余）',
+  to_location_type ENUM('warehouse', 'project', 'none') COMMENT '调入位置类型',
+  to_location_id VARCHAR(36) COMMENT '调入位置ID（仓库ID或项目ID）',
+  to_location_name VARCHAR(200) COMMENT '调入位置名称（冗余）',
+  quantity INT DEFAULT 1 COMMENT '操作数量（仪器始终为1，负载可为批量）',
+  equipment_status_before VARCHAR(50) COMMENT '操作前设备状态',
+  equipment_status_after VARCHAR(50) COMMENT '操作后设备状态',
+  health_status_before VARCHAR(50) COMMENT '操作前健康状态',
+  health_status_after VARCHAR(50) COMMENT '操作后健康状态',
+  workflow_instance_id VARCHAR(36) COMMENT '关联流程实例ID（如有审批）',
+  order_no VARCHAR(50) COMMENT '关联单据号',
+  notes TEXT COMMENT '备注说明',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_equipment_id (equipment_id),
+  INDEX idx_operation_type (operation_type),
+  INDEX idx_operator_id (operator_id),
+  INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+##### 4.5.7.2 库存统计实现方式
+
+由于仪器类和负载类的管理方式不同，库存统计采用不同策略：
+
+```
+仪器类（单台唯一管理）：
+- equipment_instances 表中每条记录代表1台设备
+- 库存统计：通过 COUNT(model_id) 按型号分组统计
+- 位置状态：通过 location_status + location_id 确定当前位置
+
+负载/线缆类（按规格批量管理）：
+- 同样使用 equipment_instances 表记录
+- 库存统计：按 model_id 汇总数量，location_status='warehouse' 时为仓库库存
+- 支持批量操作，一次调拨/归还可修改多条记录
+```
+
+**SQL统计示例**：
+```sql
+-- 查看某型号设备在各仓库的总库存
+SELECT 
+  w.name AS warehouse_name,
+  COUNT(ei.id) AS quantity
+FROM equipment_instances ei
+LEFT JOIN warehouses w ON ei.location_id = w.id AND ei.location_status = 'warehouse'
+WHERE ei.model_id = ? AND ei.health_status != 'scrapped'
+GROUP BY w.id;
+
+-- 查看某型号设备在各项目的库存
+SELECT 
+  p.name AS project_name,
+  COUNT(ei.id) AS quantity
+FROM equipment_instances ei
+LEFT JOIN projects p ON ei.location_id = p.id AND ei.location_status = 'in_project'
+WHERE ei.model_id = ? AND ei.health_status != 'scrapped'
+GROUP BY p.id;
+```
+
+#### 4.5.8 权限说明
 - **查看台账**: 所有员工可查看
+- **仓库管理**: 管理员可管理所有仓库，仓库管理员仅管理管辖仓库
 - **入库登记**: 管理员直接登记，员工需申请审批
-- **出库/调拨/归还**: 员工发起申请，管理员审批
+- **出库/调拨/归还**: 管理员直接执行，员工/项目负责人发起申请后审批
+- **维修/报废**: 管理员直接执行，员工发起申请后审批
+- **数据溯源**: 所有员工可查看自己的操作记录，管理员可查看全部记录
+
+#### 4.5.9 实施计划与优先级
+
+为确保系统能够分阶段交付，将设备管理模块分为以下阶段实施：
+
+```
+第一阶段：核心功能（MVP）
+├── 1. 设备台账
+│   ├── 设备列表展示（支持搜索、筛选）
+│   └── 设备详情页
+├── 2. 仓库管理
+│   ├── 仓库增删改查
+│   └── 仓库详情
+└── 3. 设备入库登记
+    └── 新建设备档案并入库
+
+第二阶段：流转功能
+├── 4. 设备调拨转移
+│   ├── 调拨申请/审批流程
+│   └── 调拨记录
+├── 5. 设备归还入库
+│   ├── 归还申请/审批流程
+│   └── 归还记录
+└── 6. 设备出库领用
+    └── 领用申请/出库记录
+
+第三阶段：维修报废
+├── 7. 设备维修管理
+│   ├── 维修申请/审批流程
+│   └── 维修记录
+├── 8. 设备报废管理
+│   ├── 报废申请/审批流程
+│   └── 报废记录
+└── 9. 数据溯源
+    └── 操作日志查询
+
+第四阶段：进阶功能
+├── 10. 智能提醒
+│   ├── 校准到期提醒
+│   └── 库存告警
+└── 11. 权限细分
+    └── 仓库管理员、项目负责人角色
+```
+
+**当前系统角色说明**：
+```
+考虑到系统当前实际情况，角色设计如下：
+
+第一阶段实施（简化版）：
+- admin（系统管理员）：拥有所有设备管理权限，直接执行操作
+- employee（普通员工）：只能发起申请，需审批
+
+第二阶段考虑扩展（预留）：
+- warehouse_keeper：仓库管理员
+- project_manager：项目经理
+```
+
+#### 4.5.10 与现有数据库表字段对照
+
+为确保开发时字段对齐，特整理现有表结构与设计文档的映射关系：
+
+```
+equipment_instances 表（设备实例）：
+| 数据库字段 | 设计文档对应字段 | 状态 |
+|-----------|-----------------|------|
+| id | 设备ID | ✅ 已有 |
+| model_id | 设备型号ID | ✅ 已有 |
+| serial_number | 机身序列号 | ✅ 已有 |
+| manage_code | 管理编码 | ✅ 已有 |
+| health_status | 健康状态 | ✅ 已有 |
+| usage_status | 使用状态 | ✅ 已有 |
+| location_status | 位置状态 | ✅ 已有 |
+| location_id | 当前位置ID | ✅ 已有 |
+| keeper_id | 保管人ID | ✅ 已有 |
+| purchase_date | 采购日期 | ✅ 已有 |
+| purchase_price | 采购价格 | ✅ 已有 |
+| calibration_expiry | 校准到期日 | ✅ 已有 |
+| notes | 备注 | ✅ 已有 |
+
+equipment_models 表（设备型号）：
+| 数据库字段 | 设计文档对应字段 | 状态 |
+|-----------|-----------------|------|
+| id | 型号ID | ✅ 已有 |
+| category | 设备类别 | ✅ 已有 |
+| name | 型号名称 | ✅ 已有 |
+| model_no | 型号编码 | ✅ 已有 |
+| brand | 品牌 | ✅ 已有 |
+| unit | 计量单位 | ✅ 已有 |
+| calibration_cycle | 校准周期 | ✅ 已有 |
+| min_stock_level | 最低库存阈值 | ❌ 需新增 |
+
+warehouses 表（仓库）：
+| 数据库字段 | 设计文档对应字段 | 状态 |
+|-----------|-----------------|------|
+| id | 仓库ID | ✅ 已有 |
+| warehouse_no | 仓库编码 | ✅ 已有 |
+| name | 仓库名称 | ✅ 已有 |
+| type | 仓库类型 | ✅ 已有 |
+| location | 位置 | ✅ 已有 |
+| address | 地址 | ✅ 已有 |
+| manager_id | 仓库管理员ID | ✅ 已有 |
+| status | 状态 | ✅ 已有 |
+
+需要新增的表：
+| 表名 | 用途 | 优先级 |
+|-----|------|--------|
+| equipment_operation_logs | 操作日志/数据溯源 | 高 |
+| equipment_calibration_records | 校准记录 | 中 |
+| notifications | 通知记录 | 中 |
+```
 
 ---
 
@@ -754,26 +1220,115 @@ CREATE TABLE employees (
   status ENUM('active', 'resigned', 'probation') DEFAULT 'probation',
   hire_date DATE,
   leave_date DATE,
+  user_id VARCHAR(36) COMMENT '关联用户账号ID',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- 设备表
-CREATE TABLE equipment (
+-- 设备型号表
+CREATE TABLE equipment_models (
   id VARCHAR(36) PRIMARY KEY,
-  model_id VARCHAR(36),
+  category ENUM('instrument', 'fake_load') NOT NULL COMMENT '设备类别',
+  name VARCHAR(200) NOT NULL COMMENT '型号名称',
+  model_no VARCHAR(100) COMMENT '型号编码',
+  brand VARCHAR(100) COMMENT '品牌',
+  unit VARCHAR(20) DEFAULT '台' COMMENT '计量单位',
+  calibration_cycle INT COMMENT '校准周期(月)',
+  min_stock_level INT DEFAULT 0 COMMENT '最低库存阈值',
+  description TEXT COMMENT '描述',
+  status ENUM('active', 'inactive') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 仓库表
+CREATE TABLE warehouses (
+  id VARCHAR(36) PRIMARY KEY,
+  warehouse_no VARCHAR(50) UNIQUE NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  type ENUM('main', 'branch', 'project') DEFAULT 'main',
+  location VARCHAR(200) NOT NULL,
+  address TEXT,
+  manager_id VARCHAR(36),
+  status ENUM('active', 'inactive') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 设备实例表（一物一码）
+CREATE TABLE equipment_instances (
+  id VARCHAR(36) PRIMARY KEY,
+  model_id VARCHAR(36) NOT NULL,
   serial_number VARCHAR(100),
   manage_code VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(200),
-  category ENUM('instrument', 'fake_load'),
   health_status ENUM('normal', 'slightly_damaged', 'severely_damaged', 'scrapped') DEFAULT 'normal',
-  usage_status ENUM('idle', 'in_use', 'repairing', 'scrapped') DEFAULT 'idle',
-  location_status ENUM('warehouse', 'in_project', 'repair_shop') DEFAULT 'warehouse',
+  usage_status ENUM('idle', 'in_use') DEFAULT 'idle',
+  location_status ENUM('warehouse', 'in_project', 'repairing', 'scrapped') DEFAULT 'warehouse',
   location_id VARCHAR(36),
   keeper_id VARCHAR(36),
+  purchase_date DATE,
+  purchase_price DECIMAL(12, 2),
   calibration_expiry DATE,
+  notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_model (model_id)
+);
+
+-- 设备操作日志表（用于数据溯源）
+CREATE TABLE IF NOT EXISTS equipment_operation_logs (
+  id VARCHAR(36) PRIMARY KEY,
+  equipment_id VARCHAR(36) NOT NULL COMMENT '设备ID',
+  equipment_name VARCHAR(200) COMMENT '设备名称（冗余）',
+  model_id VARCHAR(36) COMMENT '设备型号ID',
+  model_name VARCHAR(200) COMMENT '设备型号名称（冗余）',
+  operation_type ENUM(
+    'inbound',
+    'outbound',
+    'transfer',
+    'return',
+    'repair',
+    'scrap',
+    'edit',
+    'calibration'
+  ) NOT NULL COMMENT '操作类型',
+  operator_id VARCHAR(36) NOT NULL COMMENT '操作人ID',
+  operator_name VARCHAR(100) COMMENT '操作人姓名',
+  from_location_type ENUM('warehouse', 'project', 'none') COMMENT '调出位置类型',
+  from_location_id VARCHAR(36) COMMENT '调出位置ID（仓库ID或项目ID）',
+  from_location_name VARCHAR(200) COMMENT '调出位置名称（冗余）',
+  to_location_type ENUM('warehouse', 'project', 'none') COMMENT '调入位置类型',
+  to_location_id VARCHAR(36) COMMENT '调入位置ID（仓库ID或项目ID）',
+  to_location_name VARCHAR(200) COMMENT '调入位置名称（冗余）',
+  quantity INT DEFAULT 1 COMMENT '操作数量（仪器始终为1，负载可为批量）',
+  equipment_status_before VARCHAR(50) COMMENT '操作前设备状态',
+  equipment_status_after VARCHAR(50) COMMENT '操作后设备状态',
+  health_status_before VARCHAR(50) COMMENT '操作前健康状态',
+  health_status_after VARCHAR(50) COMMENT '操作后健康状态',
+  workflow_instance_id VARCHAR(36) COMMENT '关联流程实例ID（如有审批）',
+  order_no VARCHAR(50) COMMENT '关联单据号',
+  notes TEXT COMMENT '备注说明',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_equipment_id (equipment_id),
+  INDEX idx_operation_type (operation_type),
+  INDEX idx_operator_id (operator_id),
+  INDEX idx_created_at (created_at)
+);
+
+-- 通知表
+CREATE TABLE notifications (
+  id VARCHAR(36) PRIMARY KEY,
+  user_id VARCHAR(36) NOT NULL COMMENT '接收人',
+  type ENUM('system', 'approval', 'calibration', 'stock_alert', 'task') NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  content TEXT,
+  is_read TINYINT(1) DEFAULT 0,
+  related_type VARCHAR(50) COMMENT '关联对象类型',
+  related_id VARCHAR(36) COMMENT '关联对象ID',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_id (user_id),
+  INDEX idx_is_read (is_read)
 );
 ```
 
@@ -840,32 +1395,34 @@ GET    /api/projects/:id/tasks          # 获取项目任务
 POST   /api/projects/:id/tasks          # 创建任务
 ```
 
-#### 7.2.3 审批中心接口（已迁移至工作流引擎）
+#### 7.2.3 审批中心接口（面向普通用户）
 
-> **注意**: 旧版 `/api/approvals` 接口已废弃，统一使用工作流引擎API
+> **注意**: 审批中心接口面向普通用户，用于发起流程、查看待办、处理任务
 
 ```
-# 流程实例管理（替代旧版审批接口）
-GET    /api/workflow/processes?initiatorId=${userId}    # 获取我的申请（已发起）
-POST   /api/workflow/processes                          # 发起新流程
-GET    /api/workflow/processes/:id                      # 获取流程详情
-POST   /api/workflow/processes/:id/terminate            # 终止流程
+# 流程实例管理（我发起的流程）
+GET    /api/workflow/processes/mine             # 我发起的流程
+POST   /api/workflow/processes                 # 发起新流程
+GET    /api/workflow/processes/:id              # 流程详情
+POST   /api/workflow/processes/:id/terminate    # 终止/撤回流程
 
-# 任务管理（待办审批）
-GET    /api/workflow/tasks?assigneeId=${userId}         # 获取待我处理的任务
-GET    /api/workflow/tasks/:id                          # 获取任务详情
-POST   /api/workflow/tasks/:id/complete                 # 完成任务（通过/拒绝）
-POST   /api/workflow/tasks/:id/claim                    # 认领任务
-POST   /api/workflow/tasks/:id/delegate                 # 委托任务
-POST   /api/workflow/tasks/:id/transfer                 # 转办任务
+# 任务管理（待我处理的任务）
+GET    /api/workflow/tasks?assigneeId=${userId}  # 获取待我处理的任务
+GET    /api/workflow/tasks/:id                  # 获取任务详情
+POST   /api/workflow/tasks/:id/complete         # 完成任务（通过/拒绝）
+POST   /api/workflow/tasks/:id/claim            # 认领任务
+POST   /api/workflow/tasks/:id/delegate         # 委托任务
+POST   /api/workflow/tasks/:id/transfer         # 转办任务
 
 # 表单预设（快速发起流程）
-GET    /api/workflow/form-presets                       # 获取表单预设列表
-GET    /api/workflow/form-presets/:id                   # 获取表单预设详情
-POST   /api/workflow/form-presets/:id/start             # 通过预设启动流程
+GET    /api/workflow/form-presets               # 获取表单预设列表
+GET    /api/workflow/form-presets/:id           # 获取表单预设详情
+POST   /api/workflow/form-presets/:id/start     # 通过预设启动流程
 ```
 
-#### 7.2.4 流程引擎接口
+#### 7.2.4 流程引擎接口（面向管理员）
+
+> **注意**: 流程引擎接口面向管理员，用于流程定义、流程监控、管理员干预
 
 ```
 # 流程定义
@@ -875,14 +1432,13 @@ GET    /api/workflow/definitions/:id    # 获取流程定义详情
 PUT    /api/workflow/definitions/:id    # 更新流程定义
 DELETE /api/workflow/definitions/:id    # 删除流程定义
 
-# 流程实例
-POST   /api/workflow/process/start      # 启动流程
-GET    /api/workflow/instances          # 获取流程实例列表
-GET    /api/workflow/instances/:id      # 获取流程实例详情
-POST   /api/workflow/instances/:id/terminate  # 终止流程
+# 流程实例管理（管理员视角）
+GET    /api/workflow/processes          # 获取所有流程实例
+GET    /api/workflow/processes/:id      # 获取流程实例详情
+POST   /api/workflow/processes/:id/terminate  # 终止流程
 
-# 任务管理
-GET    /api/workflow/tasks              # 获取任务列表
+# 任务管理（管理员视角）
+GET    /api/workflow/tasks              # 获取所有任务
 GET    /api/workflow/tasks/:id          # 获取任务详情
 POST   /api/workflow/tasks/:id/complete # 完成任务
 POST   /api/workflow/tasks/:id/claim    # 认领任务
@@ -894,13 +1450,12 @@ POST   /api/workflow/tasks/:id/claim    # 认领任务
 # 流程监控（管理员）
 GET    /api/admin/workflow/monitoring   # 获取实时监控数据
 GET    /api/admin/workflow/statistics   # 获取流程统计
-GET    /api/admin/workflow/instances    # 获取所有流程实例
 
 # 管理员干预
-POST   /api/admin/workflow/instances/:id/jump      # 跳转到节点
-POST   /api/admin/workflow/instances/:id/rollback  # 回退节点
+POST   /api/admin/workflow/processes/:id/jump      # 跳转到节点
+POST   /api/admin/workflow/processes/:id/rollback  # 回退节点
 POST   /api/admin/workflow/tasks/:id/force-complete # 强制完成
-POST   /api/admin/workflow/instances/:id/force-close # 强制关闭
+POST   /api/admin/workflow/processes/:id/force-close # 强制关闭
 POST   /api/admin/workflow/tasks/:id/reassign      # 重新分配
 
 # 用户管理（管理员）
@@ -909,6 +1464,96 @@ POST   /api/admin/users                 # 创建用户
 PUT    /api/admin/users/:id             # 更新用户
 DELETE /api/admin/users/:id             # 删除用户
 POST   /api/admin/users/:id/reset-password  # 重置密码
+```
+
+#### 7.2.6 设备管理接口
+
+```
+# 设备台账
+GET    /api/equipment                          # 设备列表
+POST   /api/equipment                          # 新增设备
+GET    /api/equipment/:id                      # 设备详情
+PUT    /api/equipment/:id                      # 更新设备
+DELETE /api/equipment/:id                      # 删除设备
+
+# 设备型号
+GET    /api/equipment/models                   # 型号列表
+POST   /api/equipment/models                   # 新增型号
+GET    /api/equipment/models/:id               # 型号详情
+PUT    /api/equipment/models/:id               # 更新型号
+DELETE /api/equipment/models/:id               # 删除型号
+
+# 仓库管理
+GET    /api/warehouses                         # 仓库列表
+POST   /api/warehouses                         # 新增仓库
+GET    /api/warehouses/:id                     # 仓库详情
+PUT    /api/warehouses/:id                     # 更新仓库
+DELETE /api/warehouses/:id                     # 删除仓库
+
+# 库存管理
+GET    /api/equipment/inventory                # 库存总览
+GET    /api/equipment/inventory/alerts         # 库存告警
+
+# 调拨转移
+POST   /api/equipment/transfer                 # 发起调拨
+GET    /api/equipment/transfer                 # 调拨记录
+GET    /api/equipment/transfer/:id             # 调拨详情
+
+# 归还入库
+POST   /api/equipment/return                   # 发起归还
+GET    /api/equipment/return                   # 归还记录
+GET    /api/equipment/return/:id               # 归还详情
+
+# 入库/出库
+POST   /api/equipment/inbound                  # 入库登记
+GET    /api/equipment/inbound                  # 入库记录
+GET    /api/equipment/inbound/:id              # 入库详情
+POST   /api/equipment/outbound                 # 出库领用
+GET    /api/equipment/outbound                 # 出库记录
+
+# 维修/报废
+POST   /api/equipment/repair                   # 维修申请
+GET    /api/equipment/repair                   # 维修记录
+GET    /api/equipment/repair/:id               # 维修详情
+POST   /api/equipment/scrap                    # 报废申请
+GET    /api/equipment/scrap                    # 报废记录
+GET    /api/equipment/scrap/:id                # 报废详情
+
+# 数据溯源
+GET    /api/equipment/:id/history              # 单设备操作历史
+GET    /api/equipment/operation-logs           # 全部操作日志
+
+# 智能提醒
+GET    /api/equipment/alerts/calibration       # 校准到期提醒
+GET    /api/equipment/alerts/stock             # 库存告警
+```
+
+#### 7.2.7 人员管理接口
+
+```
+# 员工管理
+GET    /api/employees                          # 员工列表
+POST   /api/employees                          # 新增员工
+GET    /api/employees/:id                      # 员工详情
+PUT    /api/employees/:id                      # 更新员工
+DELETE /api/employees/:id                      # 删除员工
+
+# 员工相关业务
+POST   /api/employees/:id/transfer             # 调岗申请
+POST   /api/employees/:id/leave                # 离职申请
+POST   /api/employees/:id/regular             # 转正申请
+```
+
+#### 7.2.8 通知接口
+
+```
+# 通知管理
+GET    /api/notifications                      # 通知列表
+GET    /api/notifications/:id                # 通知详情
+PUT    /api/notifications/:id/read            # 标记已读
+PUT    /api/notifications/read-all            # 全部标记已读
+DELETE /api/notifications/:id                # 删除通知
+GET    /api/notifications/unread-count        # 未读数量
 ```
 
 ---
@@ -1016,3 +1661,10 @@ POST   /api/admin/users/:id/reset-password  # 重置密码
 | v2.2 | 2026-02-24 | 修复网关节点执行时不更新 current_node_id 的问题 |
 | v2.2 | 2026-02-24 | 修复服务任务创建员工记录功能 |
 | v2.2 | 2026-02-24 | 修复人员管理页面显示 ID 而不是名称的问题 |
+| v2.3 | 2026-02-25 | 新增项目详情页面，展示完整项目信息 |
+| v2.3 | 2026-02-25 | 新增员工详情页面，展示完整员工信息 |
+| v2.3 | 2026-02-25 | 新增设备详情页面，展示完整设备信息 |
+| v2.3 | 2026-02-25 | 项目列表、员工列表、设备列表支持点击名称进入详情页 |
+| v2.3 | 2026-02-25 | 修复项目审批流程排他网关配置缺失问题 |
+| v2.3 | 2026-02-25 | 新增流程结束后自动更新项目状态功能 |
+| v2.3 | 2026-02-25 | 优化项目审批表单，移除不需要的字段 |

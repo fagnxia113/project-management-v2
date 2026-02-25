@@ -162,7 +162,12 @@ export default function EquipmentListPage() {
       header: '设备名称',
       render: (value: string, row: Equipment) => (
         <div>
-          <div className="font-medium text-gray-900">{value}</div>
+          <button
+            onClick={() => window.location.href = `/equipment/${row.id}`}
+            className="font-medium text-blue-600 hover:text-blue-800 text-left"
+          >
+            {value}
+          </button>
           <div className="text-xs text-gray-500">{row.code}</div>
         </div>
       )

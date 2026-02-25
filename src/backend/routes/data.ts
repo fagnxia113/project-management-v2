@@ -125,25 +125,38 @@ router.get('/:entity/:id', async (req: Request, res: Response) => {
 
     const entityDef = metadataService.getEntity(entity);
     if (!entityDef) {
-      return res.status(404).json({ error: `实体 ${entity} 不存在` });
+      return res.status(404).json({ success: false, error: `实体 ${entity} 不存在` });
     }
 
     const tableName = metadataService.getTableName(entity);
     const pkField = metadataService.getPrimaryKey(entity);
 
-    const data = await db.queryOne(
-      `SELECT * FROM ${tableName} WHERE \`${pkField}\` = ?`,
-      [id]
-    );
+    let data: any;
 
-    if (!data) {
-      return res.status(404).json({ error: '记录不存在' });
+    if (entity === 'Employee') {
+      data = await db.queryOne(
+        `SELECT e.*, p.name as position_name, d.name as department_name 
+         FROM \`${tableName}\` e 
+         LEFT JOIN positions p ON e.position = p.id 
+         LEFT JOIN departments d ON e.department_id = d.id 
+         WHERE e.\`${pkField}\` = ?`,
+        [id]
+      );
+    } else {
+      data = await db.queryOne(
+        `SELECT * FROM ${tableName} WHERE \`${pkField}\` = ?`,
+        [id]
+      );
     }
 
-    res.json(data);
+    if (!data) {
+      return res.status(404).json({ success: false, error: '记录不存在' });
+    }
+
+    res.json({ success: true, data });
   } catch (error) {
     console.error('查询详情失败:', error);
-    res.status(500).json({ error: '查询详情失败', message: error });
+    res.status(500).json({ success: false, error: '查询详情失败', message: error });
   }
 });
 

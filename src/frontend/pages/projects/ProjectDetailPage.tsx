@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { API_URL } from '../../config/api'
 
 interface Project {
@@ -58,6 +58,11 @@ interface ProjectPersonnel {
   notes: string
 }
 
+interface User {
+  id: string
+  role: string
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   proposal: { label: '立项', color: 'gray' },
   in_progress: { label: '进行中', color: 'blue' },
@@ -80,12 +85,23 @@ const WARNING_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [project, setProject] = useState<Project | null>(null)
   const [phases, setPhases] = useState<Phase[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [personnel, setPersonnel] = useState<ProjectPersonnel[]>([])
   const [activeTab, setActiveTab] = useState<'overview' | 'phases' | 'tasks' | 'team'>('overview')
   const [loading, setLoading] = useState(true)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<Project>>({})
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr))
+    }
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -95,21 +111,32 @@ export default function ProjectDetailPage() {
 
   const loadProjectData = async () => {
     try {
-      // 加载项目信息
-      const projectRes = await fetch(API_URL.PROJECTS.DETAIL(id!))
+      setLoading(true)
+      const token = localStorage.getItem('token')
+
+      const projectRes = await fetch(API_URL.PROJECTS.DETAIL(id!), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
       if (projectRes.ok) {
         const projectResult = await projectRes.json()
         setProject(projectResult.data)
+        setEditForm(projectResult.data)
       }
 
-      // 加载 WBS 结构 (包含里程碑和任务)
-      const structureRes = await fetch(API_URL.PROJECTS.STRUCTURE(id!))
+      const structureRes = await fetch(API_URL.PROJECTS.STRUCTURE(id!), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
       if (structureRes.ok) {
         const structureResult = await structureRes.json()
         const allTasks: Task[] = structureResult.data || []
         setTasks(allTasks)
 
-        // 从结构中提取里程碑作为阶段
         const milestones = allTasks.filter(t => t.task_type === 'milestone').map(m => ({
           id: m.id,
           phase_name: m.name,
@@ -119,14 +146,18 @@ export default function ProjectDetailPage() {
           actual_start_date: '',
           actual_end_date: '',
           progress: m.progress,
-          warning_level: 'normal', // Derived logic can be added later
+          warning_level: 'normal',
           manager: m.assignee || '无'
         }))
         setPhases(milestones)
       }
 
-      // 加载项目人员
-      const personnelRes = await fetch(`${API_URL.DATA('project_personnel')}?project_id=${id}`)
+      const personnelRes = await fetch(`${API_URL.DATA('project_personnel')}?project_id=${id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
       if (personnelRes.ok) {
         const personnelData = await personnelRes.json()
         setPersonnel(personnelData.data || personnelData.items || personnelData || [])
@@ -138,7 +169,70 @@ export default function ProjectDetailPage() {
     }
   }
 
-  // 简单甘特图渲染
+  const handleEdit = () => {
+    setIsEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setEditForm(project || {})
+  }
+
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(API_URL.PROJECTS.DETAIL(id!), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: JSON.stringify(editForm)
+      })
+
+      if (!response.ok) {
+        throw new Error('保存失败')
+      }
+
+      const result = await response.json()
+      if (result.success && result.data) {
+        setProject(result.data)
+        setIsEditing(false)
+        alert('保存成功')
+      } else {
+        throw new Error('保存失败')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '保存失败')
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm(`确定要删除项目 "${project?.name}" 吗？此操作不可恢复！`)) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(API_URL.PROJECTS.DETAIL(id!), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('删除失败')
+      }
+
+      alert('删除成功')
+      navigate('/projects')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '删除失败')
+    }
+  }
+
   const renderGanttChart = () => {
     if (phases.length === 0) {
       return <div className="text-gray-500 text-center py-8">暂无阶段数据</div>
@@ -153,7 +247,6 @@ export default function ProjectDetailPage() {
     return (
       <div className="overflow-x-auto">
         <div className="min-w-[800px]">
-          {/* 时间轴 */}
           <div className="flex border-b border-gray-200 pb-2 mb-4">
             <div className="w-48 flex-shrink-0 font-medium text-gray-600">阶段名称</div>
             <div className="flex-1 relative h-6">
@@ -174,7 +267,6 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          {/* 阶段条 */}
           {phases.map(phase => {
             const start = new Date(phase.planned_start_date)
             const end = new Date(phase.planned_end_date)
@@ -209,7 +301,6 @@ export default function ProjectDetailPage() {
                       style={{ width: `${phase.progress}%` }}
                     />
                   </div>
-                  {/* 今日标记 */}
                   {today >= start && today <= end && (
                     <div
                       className="absolute top-0 bottom-0 w-0.5 bg-red-500"
@@ -225,6 +316,8 @@ export default function ProjectDetailPage() {
     )
   }
 
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'root'
+
   if (loading) {
     return <div className="flex justify-center items-center h-64">加载中...</div>
   }
@@ -237,7 +330,6 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* 项目头部 */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex justify-between items-start">
           <div>
@@ -250,13 +342,32 @@ export default function ProjectDetailPage() {
             <p className="text-gray-500 mt-1">项目编号: {project.code}</p>
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-              编辑项目
-            </button>
+            {isAdmin && (
+              <>
+                {!isEditing ? (
+                  <>
+                    <button onClick={handleEdit} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                      编辑
+                    </button>
+                    <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                      删除
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={handleSave} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                      保存
+                    </button>
+                    <button onClick={handleCancelEdit} className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                      取消
+                    </button>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
 
-        {/* 项目进度条 */}
         <div className="mt-6">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
             <span>整体进度</span>
@@ -270,30 +381,72 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
-        {/* 基本信息 */}
         <div className="mt-6 grid grid-cols-4 gap-4">
           <div>
             <p className="text-sm text-gray-500">项目经理</p>
-            <p className="font-medium">{project.manager || '-'}</p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editForm.manager || ''}
+                onChange={(e) => setEditForm({ ...editForm, manager: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+              />
+            ) : (
+              <p className="font-medium">{project.manager || '-'}</p>
+            )}
           </div>
           <div>
             <p className="text-sm text-gray-500">技术负责人</p>
-            <p className="font-medium">{project.tech_manager || '-'}</p>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editForm.tech_manager || ''}
+                onChange={(e) => setEditForm({ ...editForm, tech_manager: e.target.value })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+              />
+            ) : (
+              <p className="font-medium">{project.tech_manager || '-'}</p>
+            )}
           </div>
           <div>
             <p className="text-sm text-gray-500">计划周期</p>
-            <p className="font-medium">
-              {project.start_date} ~ {project.end_date || '未定'}
-            </p>
+            {isEditing ? (
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={editForm.start_date?.split('T')[0] || ''}
+                  onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                />
+                <input
+                  type="date"
+                  value={editForm.end_date?.split('T')[0] || ''}
+                  onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                />
+              </div>
+            ) : (
+              <p className="font-medium">
+                {project.start_date} ~ {project.end_date || '未定'}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-sm text-gray-500">预算金额</p>
-            <p className="font-medium">{project.budget ? `¥${project.budget}万` : '-'}</p>
+            {isEditing ? (
+              <input
+                type="number"
+                value={editForm.budget || 0}
+                onChange={(e) => setEditForm({ ...editForm, budget: parseFloat(e.target.value) || 0 })}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+              />
+            ) : (
+              <p className="font-medium">{project.budget ? `¥${project.budget}万` : '-'}</p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 标签页 */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="border-b border-gray-200">
           <nav className="flex">
@@ -321,7 +474,16 @@ export default function ProjectDetailPage() {
           {activeTab === 'overview' && (
             <div>
               <h3 className="text-lg font-semibold mb-4">项目描述</h3>
-              <p className="text-gray-600 whitespace-pre-wrap">{project.description || '暂无描述'}</p>
+              {isEditing ? (
+                <textarea
+                  value={editForm.description || ''}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={6}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                />
+              ) : (
+                <p className="text-gray-600 whitespace-pre-wrap">{project.description || '暂无描述'}</p>
+              )}
 
               <h3 className="text-lg font-semibold mt-6 mb-4">阶段统计</h3>
               <div className="grid grid-cols-4 gap-4">
@@ -395,9 +557,6 @@ export default function ProjectDetailPage() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">项目团队</h3>
-                <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                  添加人员
-                </button>
               </div>
 
               {personnel.length === 0 ? (

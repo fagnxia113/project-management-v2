@@ -216,6 +216,12 @@ if (response.ok) {
     return currentUser?.role === 'admin' || currentUser?.role === 'root'
   }
 
+  const canViewEmployeeDetail = (employee: Employee) => {
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'root'
+    if (isAdmin) return true
+    return employee.id === currentUser?.employee_id
+  }
+
   const handleDelete = async (employee: Employee) => {
     if (!confirm(`确定要删除员工 "${employee.name}" 吗？此操作不可恢复！`)) return
 
@@ -327,7 +333,20 @@ if (response.ok) {
     },
     {
       key: 'name' as keyof Employee,
-      header: '姓名'
+      header: '姓名',
+      render: (value: string, row: Employee) => {
+        if (canViewEmployeeDetail(row)) {
+          return (
+            <button
+              onClick={() => window.location.href = `/personnel/${row.id}`}
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
+              {value}
+            </button>
+          )
+        }
+        return <span className="text-gray-700 font-medium">{value}</span>
+      }
     },
     {
       key: 'position' as keyof Employee,

@@ -832,11 +832,13 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
             entityType: 'Employee',
             dataMapping: {
               name: '${formData.employee_name}',
+              gender: '${formData.gender}',
               employee_no: '${formData.employee_id}',
               department_id: '${formData.department_id}',
-              position_id: '${formData.position_id}',
+              position: '${formData.position_id}',
+              phone: '${formData.phone}',
+              email: '${formData.email}',
               hire_date: '${formData.start_date}',
-              employee_type: '${formData.employee_type}',
               status: 'active'
             }
           }

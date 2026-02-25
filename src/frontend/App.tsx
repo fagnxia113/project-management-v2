@@ -11,12 +11,14 @@ const ProjectDetailPage = lazy(() => import('./pages/projects/ProjectDetailPage'
 const ProjectCompletionPage = lazy(() => import('./pages/projects/ProjectCompletionPage'))
 const TaskBoardPage = lazy(() => import('./pages/tasks/TaskBoardPage'))
 const EquipmentListPage = lazy(() => import('./pages/equipment/EquipmentListPage'))
+const EquipmentDetailPage = lazy(() => import('./pages/equipment/EquipmentDetailPage'))
 const EquipmentTransferPage = lazy(() => import('./pages/equipment/EquipmentTransferPage'))
 const EquipmentInboundPage = lazy(() => import('./pages/equipment/EquipmentInboundPage'))
 const EquipmentOutboundPage = lazy(() => import('./pages/equipment/EquipmentOutboundPage'))
 const EquipmentRepairPage = lazy(() => import('./pages/equipment/EquipmentRepairPage'))
 const EquipmentScrapPage = lazy(() => import('./pages/equipment/EquipmentScrapPage'))
 const PersonnelListPage = lazy(() => import('./pages/personnel/PersonnelListPage'))
+const EmployeeDetailPage = lazy(() => import('./pages/personnel/EmployeeDetailPage'))
 const PersonnelTransferPage = lazy(() => import('./pages/personnel/PersonnelTransferPage'))
 const PersonnelOnboardPage = lazy(() => import('./pages/personnel/PersonnelOnboardPage'))
 const PersonnelOffboardPage = lazy(() => import('./pages/personnel/PersonnelOffboardPage'))
@@ -125,6 +127,7 @@ function App() {
           <Route path="/projects/completion" element={<ProjectCompletionPage />} />
           <Route path="/tasks/board" element={<TaskBoardPage />} />
           <Route path="/equipment" element={<EquipmentListPage />} />
+          <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
           <Route path="/equipment/inbound" element={<EquipmentInboundPage />} />
           <Route path="/equipment/outbound" element={<EquipmentOutboundPage />} />
           <Route path="/equipment/transfer" element={<EquipmentTransferPage />} />
@@ -132,6 +135,7 @@ function App() {
           <Route path="/equipment/scrap" element={<EquipmentScrapPage />} />
           <Route path="/equipment/return" element={<EquipmentReturnPage />} />
           <Route path="/personnel" element={<PersonnelListPage />} />
+          <Route path="/personnel/:id" element={<EmployeeDetailPage />} />
           <Route path="/personnel/onboard" element={<PersonnelOnboardPage />} />
           <Route path="/personnel/offboard" element={<PersonnelOffboardPage />} />
           <Route path="/personnel/regular" element={<PersonnelRegularPage />} />

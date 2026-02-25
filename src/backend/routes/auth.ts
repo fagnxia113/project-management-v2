@@ -61,7 +61,11 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: '该账号已被禁用' })
     }
 
-    // 生成JWT Token
+    const employee = await db.queryOne<{ id: string }>(
+      'SELECT id FROM employees WHERE user_id = ?',
+      [user.id]
+    )
+
     const token = jwt.sign(
       { userId: user.id, username: user.username, role: user.role },
       JWT_SECRET,
@@ -71,7 +75,7 @@ router.post('/login', async (req: Request, res: Response) => {
     res.json({
       success: true,
       token,
-      user: { id: user.id, username: user.username, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, username: user.username, name: user.name, email: user.email, role: user.role, employee_id: employee?.id || null },
       message: '登录成功'
     })
   } catch (error) {
@@ -105,7 +109,12 @@ router.get('/verify', async (req: Request, res: Response) => {
       return res.status(401).json({ error: '该账号已被禁用' })
     }
 
-    res.json({ success: true, user })
+    const employee = await db.queryOne<{ id: string }>(
+      'SELECT id FROM employees WHERE user_id = ?',
+      [user.id]
+    )
+
+    res.json({ success: true, user: { ...user, employee_id: employee?.id || null } })
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ error: '令牌已过期，请重新登录' })

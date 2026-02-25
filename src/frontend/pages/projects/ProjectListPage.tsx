@@ -190,7 +190,12 @@ export default function ProjectListPage() {
                 {projects.map((project) => (
                   <tr key={project.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">{project.name}</div>
+                      <button
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-800 text-left"
+                      >
+                        {project.name}
+                      </button>
                       <div className="text-xs text-gray-500">{project.id}</div>
                     </td>
                     <td className="px-6 py-4">
