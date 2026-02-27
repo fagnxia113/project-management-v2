@@ -2,8 +2,8 @@
 
 ## 📋 文档说明
 
-**文档版本**: v2.6  
-**最后更新**: 2026-02-25  
+**文档版本**: v2.7  
+**最后更新**: 2026-02-26  
 **维护方式**: 所有系统变更必须先更新此文档，再进行代码修改
 
 **v2.0 更新内容：**
@@ -43,6 +43,19 @@
 - 新增人员管理模块API定义（7.2.7）
 - 新增通知模块API定义（7.2.8）
 - 修正流程引擎API重复冲突（统一为instances，明确用户视角和管理员视角）
+
+**v2.7 更新内容：**
+- 重新设计维修流程为完整闭环流程（申请→发货→收货→闭单）
+- 从入库单移除维修归还类型，维修流程独立处理
+- 维修流程状态变更规则明确（发货时变更为维修中，收货时恢复原状态）
+- 更新维修管理API定义，支持发货、收货、闭单操作
+
+**v2.8 更新内容：**
+- 修复调拨单创建失败问题（INSERT语句字段数量和参数数量不匹配）
+- 修复调拨单创建失败时没有抛出异常的问题（确保流程实例不会在调拨单创建失败时被创建）
+- 修复设备调拨到项目时使用状态设置逻辑（目标位置为项目时设置为"in_use"，目标位置为仓库时设置为"idle"）
+- 完善设备收货逻辑，确保仪器类和线缆类设备的使用状态正确设置
+- 修复工作流实例business_id未设置的问题（确保调拨单创建成功后正确设置business_id）
 
 ---
 
@@ -564,7 +577,8 @@
 │   └── 出库记录
 ├── 维修管理 (/equipment/repair)
 │   ├── 维修申请
-│   ├── 维修审批
+│   ├── 维修发货
+│   ├── 维修收货
 │   └── 维修记录
 ├── 报废管理 (/equipment/scrap)
 │   ├── 报废申请
@@ -613,9 +627,14 @@
   - 规则：流程与调拨一致，仅固定调入节点为"项目"，简化操作，避免重复流程
 
 ##### 4.5.4.5 维修/报废逻辑（状态管控，避免无效流转）
-- **维修申请**:
-  - 故障设备（仓库/项目内）可发起维修，维修期间设备标记为维修中，禁止调拨/领用/归还
-  - 维修完成后，更新设备健康状态，恢复正常流转
+- **维修流程（完整闭环）**:
+  - **申请维修**: 故障设备（仓库/项目内）可发起维修申请，填写故障描述、维修厂家、预计费用等信息
+  - **发货维修**: 审批通过后，设备发货给维修厂家，设备状态变更为"维修中"（repairing），禁止调拨/领用/归还
+  - **收货确认**: 维修完成后，设备从厂家收货，确认维修结果（正常/部分修复/无法修复）
+  - **闭单完成**: 确认收货后，维修单闭单，设备状态恢复为"正常"（normal），恢复正常流转
+  - **状态变更规则**:
+    - 发货时：location_status 变为 repairing，usage_status 变为 idle
+    - 收货时：location_status 恢复为原状态（warehouse/in_project），health_status 根据维修结果更新
 - **报废申请**:
   - 无法维修/无使用价值的设备可发起报废，审批通过后：
     - 仪器：标记为已报废，从可用列表隐藏（仅管理员可查）
@@ -807,6 +826,8 @@ GROUP BY p.id;
 - **入库登记**: 管理员直接登记，员工需申请审批
 - **出库/调拨/归还**: 管理员直接执行，员工/项目负责人发起申请后审批
 - **维修/报废**: 管理员直接执行，员工发起申请后审批
+  - 维修流程：申请→发货→收货→闭单（完整闭环）
+  - 报废流程：申请→审批→执行
 - **数据溯源**: 所有员工可查看自己的操作记录，管理员可查看全部记录
 
 #### 4.5.9 实施计划与优先级
@@ -1330,6 +1351,43 @@ CREATE TABLE notifications (
   INDEX idx_user_id (user_id),
   INDEX idx_is_read (is_read)
 );
+
+-- 维修单表（完整闭环流程）
+CREATE TABLE equipment_repairs (
+  id VARCHAR(36) PRIMARY KEY COMMENT '维修单ID',
+  repair_no VARCHAR(50) UNIQUE NOT NULL COMMENT '维修单号：WX-20260226-001',
+  equipment_id VARCHAR(36) NOT NULL COMMENT '设备ID',
+  equipment_name VARCHAR(200) COMMENT '设备名称（冗余）',
+  model_id VARCHAR(36) COMMENT '设备型号ID',
+  model_no VARCHAR(100) COMMENT '设备型号（冗余）',
+  fault_description TEXT COMMENT '故障描述',
+  repair_vendor VARCHAR(200) COMMENT '维修厂家',
+  estimated_cost DECIMAL(10, 2) COMMENT '预计费用',
+  actual_cost DECIMAL(10, 2) COMMENT '实际费用',
+  repair_status ENUM('pending', 'shipped', 'received', 'completed', 'cancelled') DEFAULT 'pending' COMMENT '维修状态',
+  repair_result ENUM('normal', 'partial', 'failed') COMMENT '维修结果',
+  health_status_before VARCHAR(50) COMMENT '维修前健康状态',
+  health_status_after VARCHAR(50) COMMENT '维修后健康状态',
+  location_status_before VARCHAR(50) COMMENT '维修前位置状态',
+  location_status_after VARCHAR(50) COMMENT '维修后位置状态',
+  ship_date DATE COMMENT '发货日期',
+  receive_date DATE COMMENT '收货日期',
+  complete_date DATE COMMENT '完成日期',
+  applicant_id VARCHAR(36) NOT NULL COMMENT '申请人ID',
+  applicant_name VARCHAR(100) COMMENT '申请人姓名',
+  shipper_id VARCHAR(36) COMMENT '发货人ID',
+  shipper_name VARCHAR(100) COMMENT '发货人姓名',
+  receiver_id VARCHAR(36) COMMENT '收货人ID',
+  receiver_name VARCHAR(100) COMMENT '收货人姓名',
+  workflow_instance_id VARCHAR(36) COMMENT '关联流程实例ID',
+  notes TEXT COMMENT '备注',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_equipment_id (equipment_id),
+  INDEX idx_repair_no (repair_no),
+  INDEX idx_repair_status (repair_status),
+  INDEX idx_applicant_id (applicant_id)
+);
 ```
 
 ---
@@ -1511,8 +1569,11 @@ GET    /api/equipment/inbound/:id              # 入库详情
 POST   /api/equipment/outbound                 # 出库领用
 GET    /api/equipment/outbound                 # 出库记录
 
-# 维修/报废
-POST   /api/equipment/repair                   # 维修申请
+# 维修管理（完整闭环流程）
+POST   /api/equipment/repair                   # 申请维修
+PUT    /api/equipment/repair/:id/ship          # 维修发货
+PUT    /api/equipment/repair/:id/receive       # 维修收货
+PUT    /api/equipment/repair/:id/close         # 闭单完成
 GET    /api/equipment/repair                   # 维修记录
 GET    /api/equipment/repair/:id               # 维修详情
 POST   /api/equipment/scrap                    # 报废申请
