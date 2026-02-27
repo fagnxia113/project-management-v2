@@ -239,7 +239,7 @@ router.get('/tasks/assignee/:userId', async (req, res) => {
     
     // 解析状态参数
     const statusArray = status ? (status as string).split(',') : undefined;
-    const tasks = await enhancedWorkflowEngine.getTasksByAssignee(userId);
+    const tasks = await taskService.getTasksByAssignee(userId, statusArray);
 
     res.json({
       success: true,

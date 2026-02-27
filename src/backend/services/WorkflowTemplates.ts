@@ -324,8 +324,8 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
   name: '设备调拨流程',
   category: 'equipment',
   entityType: 'EquipmentTransfer',
-  description: '设备跨项目调拨审批流程',
-  version: '1.0.0',
+  description: '设备调拨审批流程',
+  version: '2.0.0',
   definition: {
     nodes: [
       {
@@ -337,45 +337,36 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
         }
       },
       {
-        id: 'current-project-manager',
+        id: 'from-location-manager',
         type: 'userTask',
-        name: '当前项目负责人审批',
+        name: '调出位置负责人审批',
         config: {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
               type: 'expression',
-              value: '${formData.currentProjectManager}'
+              value: '${formData.fromManagerId}'
             }
-          }
+          },
+          formKey: 'equipment-transfer-shipping-form'
         }
       },
       {
-        id: 'target-project-manager',
+        id: 'to-location-manager',
         type: 'userTask',
-        name: '目标项目负责人审批',
+        name: '调入位置负责人审批',
         config: {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
               type: 'expression',
-              value: '${formData.targetProjectManager}'
-            }
-          }
-        }
-      },
-      {
-        id: 'equipment-manager',
-        type: 'userTask',
-        name: '设备管理员审批',
-        config: {
-          approvalConfig: {
-            approvalType: 'single',
-            approverSource: {
-              type: 'role',
-              value: 'equipment_manager'
-            }
-          }
+              value: '${formData.toManagerId}'
+            },
+            allowReject: false,
+            allowReturn: true,
+            returnTarget: 'from-location-manager'
+          },
+          formKey: 'equipment-transfer-receiving-form'
         }
       },
       {
@@ -393,24 +384,18 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       {
         id: 'edge-1',
         source: 'start',
-        target: 'current-project-manager',
+        target: 'from-location-manager',
         type: 'sequenceFlow'
       },
       {
         id: 'edge-2',
-        source: 'current-project-manager',
-        target: 'target-project-manager',
+        source: 'from-location-manager',
+        target: 'to-location-manager',
         type: 'sequenceFlow'
       },
       {
         id: 'edge-3',
-        source: 'target-project-manager',
-        target: 'equipment-manager',
-        type: 'sequenceFlow'
-      },
-      {
-        id: 'edge-4',
-        source: 'equipment-manager',
+        source: 'to-location-manager',
         target: 'end-approved',
         type: 'sequenceFlow'
       }
@@ -418,54 +403,61 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
   },
   formSchema: [
     {
-      name: 'equipment_id',
-      label: '设备编号',
-      type: 'text',
-      required: true,
-      placeholder: '请输入设备编号'
-    },
-    {
-      name: 'equipment_name',
-      label: '设备名称',
-      type: 'text',
-      required: true,
-      placeholder: '请输入设备名称'
-    },
-    {
-      name: 'current_project',
-      label: '当前项目',
+      name: 'fromLocationType',
+      label: '调出位置类型',
       type: 'select',
       required: true,
-      placeholder: '请选择当前项目'
+      placeholder: '请选择调出位置类型'
     },
     {
-      name: 'current_project_manager',
-      label: '当前项目负责人',
-      type: 'user',
-      required: true,
-      placeholder: '请选择当前项目负责人'
-    },
-    {
-      name: 'target_project',
-      label: '目标项目',
+      name: 'fromLocationId',
+      label: '调出位置',
       type: 'select',
       required: true,
-      placeholder: '请选择目标项目'
+      placeholder: '请选择调出位置'
     },
     {
-      name: 'target_project_manager',
-      label: '目标项目负责人',
+      name: 'fromManagerId',
+      label: '调出位置负责人',
       type: 'user',
       required: true,
-      placeholder: '请选择目标项目负责人'
+      placeholder: '请选择调出位置负责人'
     },
     {
-      name: 'transfer_reason',
+      name: 'toLocationType',
+      label: '调入位置类型',
+      type: 'select',
+      required: true,
+      placeholder: '请选择调入位置类型'
+    },
+    {
+      name: 'toLocationId',
+      label: '调入位置',
+      type: 'select',
+      required: true,
+      placeholder: '请选择调入位置'
+    },
+    {
+      name: 'toManagerId',
+      label: '调入位置负责人',
+      type: 'user',
+      required: true,
+      placeholder: '请选择调入位置负责人'
+    },
+    {
+      name: 'transferReason',
       label: '调拨原因',
       type: 'textarea',
       required: true,
       placeholder: '请输入调拨原因',
       rows: 3
+    },
+    {
+      name: 'estimatedArrivalDate',
+      label: '期望到达时间',
+      type: 'date',
+      required: true,
+      placeholder: '请选择期望到达时间'
     }
   ]
 };
@@ -760,6 +752,197 @@ export const PURCHASE_APPROVAL_TEMPLATE: WorkflowTemplate = {
 };
 
 /**
+ * 设备入库流程模板
+ */
+export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
+  id: 'equipment-inbound',
+  name: '设备入库流程',
+  category: 'equipment',
+  entityType: 'EquipmentInbound',
+  description: '设备入库审批流程',
+  version: '1.0.0',
+  definition: {
+    nodes: [
+      {
+        id: 'start',
+        type: 'startEvent',
+        name: '提交入库申请',
+        config: {
+          formKey: 'equipment-inbound-form'
+        }
+      },
+      {
+        id: 'warehouse-manager',
+        type: 'userTask',
+        name: '仓库管理员审批',
+        config: {
+          approvalConfig: {
+            approvalType: 'single',
+            approverSource: {
+              type: 'role',
+              value: 'warehouse_manager'
+            }
+          }
+        }
+      },
+      {
+        id: 'equipment-manager',
+        type: 'userTask',
+        name: '设备管理员审批',
+        config: {
+          approvalConfig: {
+            approvalType: 'single',
+            approverSource: {
+              type: 'role',
+              value: 'equipment_manager'
+            }
+          }
+        }
+      },
+      {
+        id: 'end-approved',
+        type: 'endEvent',
+        name: '审批通过'
+      },
+      {
+        id: 'end-rejected',
+        type: 'endEvent',
+        name: '审批驳回'
+      }
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        source: 'start',
+        target: 'warehouse-manager',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-2',
+        source: 'warehouse-manager',
+        target: 'equipment-manager',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-3',
+        source: 'equipment-manager',
+        target: 'end-approved',
+        type: 'sequenceFlow'
+      }
+    ]
+  },
+  formSchema: [
+    {
+      name: 'order_no',
+      label: '入库单号',
+      type: 'text',
+      required: false,
+      placeholder: '系统自动生成',
+      disabled: true,
+      readonly: true
+    },
+    {
+      name: 'warehouse_id',
+      label: '仓库',
+      type: 'select',
+      required: true,
+      placeholder: '请选择仓库',
+      dynamicOptions: 'warehouse',
+      dynamicOptionsConfig: {
+        source: '/api/warehouses',
+        labelField: 'name',
+        valueField: 'id'
+      }
+    },
+    {
+      name: 'supplier',
+      label: '供应商',
+      type: 'text',
+      required: false,
+      placeholder: '请输入供应商名称'
+    },
+    {
+      name: 'purchase_date',
+      label: '采购日期',
+      type: 'date',
+      required: false
+    },
+    {
+      name: 'total_price',
+      label: '总金额',
+      type: 'number',
+      required: false,
+      placeholder: '请输入总金额'
+    },
+    {
+      name: 'items',
+      label: '设备明细',
+      type: 'array',
+      required: true,
+      arrayConfig: {
+        fields: [
+          {
+            name: 'equipment_name',
+            label: '设备名称',
+            type: 'text',
+            required: true,
+            placeholder: '请输入设备名称'
+          },
+          {
+            name: 'model_no',
+            label: '设备型号',
+            type: 'text',
+            required: true,
+            placeholder: '请输入设备型号'
+          },
+          {
+            name: 'category',
+            label: '设备类型',
+            type: 'select',
+            required: true,
+            placeholder: '请选择设备类型',
+            options: [
+              { label: '仪器', value: 'instrument' },
+              { label: '假负载', value: 'fake_load' },
+              { label: '线材', value: 'cable' }
+            ]
+          },
+          {
+            name: 'quantity',
+            label: '数量',
+            type: 'number',
+            required: true,
+            placeholder: '请输入数量'
+          },
+          {
+            name: 'purchase_price',
+            label: '单价',
+            type: 'number',
+            required: false,
+            placeholder: '请输入单价'
+          },
+          {
+            name: 'total_price',
+            label: '小计',
+            type: 'number',
+            required: false,
+            placeholder: '请输入小计'
+          }
+        ]
+      }
+    },
+    {
+      name: 'notes',
+      label: '备注',
+      type: 'textarea',
+      required: false,
+      placeholder: '请输入备注信息',
+      rows: 2
+    }
+  ]
+};
+
+/**
  * 人员入职流程模板
  */
 export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
@@ -1013,6 +1196,7 @@ export class WorkflowTemplatesService {
   private static templates: WorkflowTemplate[] = [
     PROJECT_APPROVAL_TEMPLATE,
     EQUIPMENT_TRANSFER_TEMPLATE,
+    EQUIPMENT_INBOUND_TEMPLATE,
     TASK_APPROVAL_TEMPLATE,
     PURCHASE_APPROVAL_TEMPLATE,
     EMPLOYEE_ONBOARD_TEMPLATE

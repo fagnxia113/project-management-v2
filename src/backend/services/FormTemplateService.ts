@@ -24,6 +24,8 @@ interface FormField {
   disabled?: boolean;
   readonly?: boolean;
   hidden?: boolean;
+  visible?: boolean;
+  visibleOn?: string;
   dependencies?: {
     field: string;
     value: any;
@@ -212,6 +214,57 @@ export class FormTemplateService {
             placeholder: '请输入调拨原因',
             rows: 3,
             minLength: 10
+          },
+          {
+            name: 'shipping_date',
+            label: '发货时间',
+            type: 'date',
+            required: false,
+            placeholder: '请选择发货时间',
+            visible: false,
+            visibleOn: 'node_id.includes("from")'
+          },
+          {
+            name: 'shipping_no',
+            label: '物流单号',
+            type: 'text',
+            required: false,
+            placeholder: '请输入物流单号',
+            visible: false,
+            visibleOn: 'node_id.includes("from")'
+          },
+          {
+            name: 'shipping_notes',
+            label: '发货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入发货备注',
+            rows: 2,
+            visible: false,
+            visibleOn: 'node_id.includes("from")'
+          },
+          {
+            name: 'receive_status',
+            label: '收货状态',
+            type: 'select',
+            required: false,
+            placeholder: '请选择收货状态',
+            options: [
+              { label: '正常收货', value: 'normal' },
+              { label: '异常收货', value: 'exception' }
+            ],
+            visible: false,
+            visibleOn: 'node_id.includes("to")'
+          },
+          {
+            name: 'receive_comment',
+            label: '收货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入收货备注',
+            rows: 2,
+            visible: false,
+            visibleOn: 'node_id.includes("to")'
           }
         ]
       },

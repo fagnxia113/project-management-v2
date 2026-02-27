@@ -12,28 +12,25 @@ const ProjectCompletionPage = lazy(() => import('./pages/projects/ProjectComplet
 const TaskBoardPage = lazy(() => import('./pages/tasks/TaskBoardPage'))
 const EquipmentListPage = lazy(() => import('./pages/equipment/EquipmentListPage'))
 const EquipmentDetailPage = lazy(() => import('./pages/equipment/EquipmentDetailPage'))
-const EquipmentTransferPage = lazy(() => import('./pages/equipment/EquipmentTransferPage'))
-const EquipmentInboundPage = lazy(() => import('./pages/equipment/EquipmentInboundPage'))
-const EquipmentOutboundPage = lazy(() => import('./pages/equipment/EquipmentOutboundPage'))
-const EquipmentRepairPage = lazy(() => import('./pages/equipment/EquipmentRepairPage'))
-const EquipmentScrapPage = lazy(() => import('./pages/equipment/EquipmentScrapPage'))
+const EquipmentStatisticsPage = lazy(() => import('./pages/equipment/EquipmentStatisticsPage'))
+const TransferCreatePage = lazy(() => import('./pages/equipment/TransferCreatePage'))
+const TransferDetailPage = lazy(() => import('./pages/equipment/TransferDetailPage'))
+const InboundCreatePage = lazy(() => import('./pages/equipment/InboundCreatePage'))
+const BorrowingCreatePage = lazy(() => import('./pages/equipment/BorrowingCreatePage'))
+const BorrowingReturnPage = lazy(() => import('./pages/equipment/BorrowingReturnPage'))
 const PersonnelListPage = lazy(() => import('./pages/personnel/PersonnelListPage'))
 const EmployeeDetailPage = lazy(() => import('./pages/personnel/EmployeeDetailPage'))
 const PersonnelTransferPage = lazy(() => import('./pages/personnel/PersonnelTransferPage'))
 const PersonnelOnboardPage = lazy(() => import('./pages/personnel/PersonnelOnboardPage'))
-const PersonnelOffboardPage = lazy(() => import('./pages/personnel/PersonnelOffboardPage'))
-const PersonnelRegularPage = lazy(() => import('./pages/personnel/PersonnelRegularPage'))
-const PersonnelLeavePage = lazy(() => import('./pages/personnel/PersonnelLeavePage'))
-const PersonnelTripPage = lazy(() => import('./pages/personnel/PersonnelTripPage'))
-const EquipmentReturnPage = lazy(() => import('./pages/equipment/EquipmentReturnPage'))
+const PersonnelOnboardDetailPage = lazy(() => import('./pages/personnel/PersonnelOnboardDetailPage'))
 const PurchaseRequestPage = lazy(() => import('./pages/purchase/PurchaseRequestPage'))
-const PurchaseListPage = lazy(() => import('./pages/purchase/PurchaseListPage'))
 const NotificationCenterPage = lazy(() => import('./pages/notifications/NotificationCenterPage'))
 const AlertManagementPage = lazy(() => import('./pages/notifications/AlertManagementPage'))
 const SystemSettingsPage = lazy(() => import('./pages/settings/SystemSettingsPage'))
 const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage'))
 const CustomerListPage = lazy(() => import('./pages/customers/CustomerListPage'))
 const WarehouseListPage = lazy(() => import('./pages/warehouses/WarehouseListPage'))
+const WarehouseDetailPage = lazy(() => import('./pages/warehouses/WarehouseDetailPage'))
 const ApprovalPendingPage = lazy(() => import('./pages/approvals/ApprovalPendingPageNew'))
 const ApprovalMinePage = lazy(() => import('./pages/approvals/ApprovalMinePageNew'))
 const NewProcessPage = lazy(() => import('./pages/approvals/NewProcessPage'))
@@ -42,6 +39,7 @@ const MetadataConfigPage = lazy(() => import('./pages/settings/MetadataConfigPag
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
 const AdminDataPage = lazy(() => import('./pages/admin/AdminDataPage'))
 const WorkflowVisualizationPage = lazy(() => import('./pages/workflow/WorkflowVisualizationPage'))
+const WorkflowDetailPage = lazy(() => import('./pages/workflow/WorkflowDetailPage'))
 const WorkflowDesignerNewPage = lazy(() => import('./pages/workflow/WorkflowDesignerNewPage'))
 const WorkflowDefinitionListPage = lazy(() => import('./pages/workflow/WorkflowDefinitionListPage'))
 const ProcessInstanceDetailPage = lazy(() => import('./pages/workflow/ProcessInstanceDetailPage'))
@@ -127,23 +125,21 @@ function App() {
           <Route path="/projects/completion" element={<ProjectCompletionPage />} />
           <Route path="/tasks/board" element={<TaskBoardPage />} />
           <Route path="/equipment" element={<EquipmentListPage />} />
+          <Route path="/equipment/statistics" element={<EquipmentStatisticsPage />} />
           <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
-          <Route path="/equipment/inbound" element={<EquipmentInboundPage />} />
-          <Route path="/equipment/outbound" element={<EquipmentOutboundPage />} />
-          <Route path="/equipment/transfer" element={<EquipmentTransferPage />} />
-          <Route path="/equipment/repair" element={<EquipmentRepairPage />} />
-          <Route path="/equipment/scrap" element={<EquipmentScrapPage />} />
-          <Route path="/equipment/return" element={<EquipmentReturnPage />} />
+          <Route path="/equipment/inbounds/create" element={<InboundCreatePage />} />
+          <Route path="/equipment/borrowings/create" element={<BorrowingCreatePage />} />
+          <Route path="/equipment/borrowings/:id/return" element={<BorrowingReturnPage />} />
+          <Route path="/equipment/transfers/create" element={<TransferCreatePage />} />
+          <Route path="/equipment/transfers/:id" element={<TransferDetailPage />} />
           <Route path="/personnel" element={<PersonnelListPage />} />
           <Route path="/personnel/:id" element={<EmployeeDetailPage />} />
           <Route path="/personnel/onboard" element={<PersonnelOnboardPage />} />
-          <Route path="/personnel/offboard" element={<PersonnelOffboardPage />} />
-          <Route path="/personnel/regular" element={<PersonnelRegularPage />} />
-          <Route path="/personnel/leave" element={<PersonnelLeavePage />} />
-          <Route path="/personnel/trip" element={<PersonnelTripPage />} />
+          <Route path="/personnel/onboard/:instanceId" element={<PersonnelOnboardDetailPage />} />
           <Route path="/personnel/transfer" element={<PersonnelTransferPage />} />
           <Route path="/customers" element={<CustomerListPage />} />
           <Route path="/warehouses" element={<WarehouseListPage />} />
+          <Route path="/warehouses/:id" element={<WarehouseDetailPage />} />
           <Route path="/approvals/pending" element={<ApprovalPendingPage />} />
           <Route path="/approvals/mine" element={<ApprovalMinePage />} />
           <Route path="/approvals/new" element={<NewProcessPage />} />
@@ -151,9 +147,9 @@ function App() {
           <Route path="/workflow/designer/new" element={<WorkflowDesignerNewPage />} />
           <Route path="/workflow/designer/:id" element={<WorkflowDesignerNewPage />} />
           <Route path="/workflow/visualization/:instanceId" element={<WorkflowVisualizationPage />} />
+          <Route path="/workflow/detail/:instanceId" element={<WorkflowDetailPage />} />
           <Route path="/workflow/instance/:instanceId" element={<ProcessInstanceDetailPage />} />
           <Route path="/purchase/request" element={<PurchaseRequestPage />} />
-          <Route path="/purchase" element={<PurchaseListPage />} />
           <Route path="/reports/dashboard" element={<DailyReportDashboard />} />
           <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/notifications/alerts" element={<AlertManagementPage />} />

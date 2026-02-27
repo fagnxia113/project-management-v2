@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { API_URL } from '../../config/api'
+import { 
+  GitBranch, 
+  History, 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  ChevronUp, 
+  ChevronDown,
+  Send,
+  User,
+  RotateCcw
+} from 'lucide-react'
 
 interface Project {
   id: string
@@ -63,6 +75,47 @@ interface User {
   role: string
 }
 
+interface WorkflowInstance {
+  id: string
+  definition_id: string
+  definition_key: string
+  title: string
+  status: string
+  result: string | null
+  initiator_id: string
+  initiator_name: string
+  start_time: string
+  end_time: string | null
+  current_node_id: string | null
+  current_node_name: string | null
+  business_id: string | null
+}
+
+interface WorkflowTask {
+  id: string
+  name: string
+  node_id: string
+  status: string
+  assignee_id: string
+  assignee_name: string
+  result: string | null
+  comment: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+interface WorkflowLog {
+  id: string
+  action: string
+  node_id: string
+  node_name?: string
+  status: string
+  operator_id?: string
+  operator_name?: string
+  comment?: string
+  created_at: string
+}
+
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   proposal: { label: '立项', color: 'gray' },
   in_progress: { label: '进行中', color: 'blue' },
@@ -90,11 +143,21 @@ export default function ProjectDetailPage() {
   const [phases, setPhases] = useState<Phase[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [personnel, setPersonnel] = useState<ProjectPersonnel[]>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'phases' | 'tasks' | 'team'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'phases' | 'tasks' | 'team' | 'approval'>('overview')
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Project>>({})
+  
+  const [workflowInstance, setWorkflowInstance] = useState<WorkflowInstance | null>(null)
+  const [workflowTasks, setWorkflowTasks] = useState<WorkflowTask[]>([])
+  const [workflowLogs, setWorkflowLogs] = useState<WorkflowLog[]>([])
+  const [currentTask, setCurrentTask] = useState<WorkflowTask | null>(null)
+  const [workflowLoading, setWorkflowLoading] = useState(false)
+  const [showAllLogs, setShowAllLogs] = useState(false)
+  const [actionType, setActionType] = useState<'approve' | 'reject' | ''>('')
+  const [comment, setComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -232,6 +295,136 @@ export default function ProjectDetailPage() {
       alert(err instanceof Error ? err.message : '删除失败')
     }
   }
+
+  const loadWorkflowData = async () => {
+    try {
+      setWorkflowLoading(true)
+      const token = localStorage.getItem('token')
+
+      const instanceRes = await fetch(`${API_URL.BASE}/api/workflow/processes/business/${id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (instanceRes.ok) {
+        const instanceResult = await instanceRes.json()
+        if (instanceResult.success && instanceResult.data) {
+          setWorkflowInstance(instanceResult.data)
+
+          const tasksRes = await fetch(`${API_URL.BASE}/api/workflow/v2/process/instance/${instanceResult.data.id}/tasks`, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+          })
+
+          if (tasksRes.ok) {
+            const tasksResult = await tasksRes.json()
+            if (tasksResult.success) {
+              setWorkflowTasks(tasksResult.data || [])
+              const activeTask = tasksResult.data?.find((t: WorkflowTask) => t.status === 'assigned' || t.status === 'in_progress')
+              setCurrentTask(activeTask || null)
+            }
+          }
+
+          const logsRes = await fetch(`${API_URL.BASE}/api/workflow/v2/process/instance/${instanceResult.data.id}/logs`, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token && { 'Authorization': `Bearer ${token}` })
+            }
+          })
+
+          if (logsRes.ok) {
+            const logsResult = await logsRes.json()
+            if (logsResult.success) {
+              setWorkflowLogs(logsResult.data || [])
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('加载工作流数据失败:', error)
+    } finally {
+      setWorkflowLoading(false)
+    }
+  }
+
+  const handleApprove = async () => {
+    if (!currentTask) {
+      alert('没有待审批的任务')
+      return
+    }
+
+    if (actionType === 'reject' && !comment.trim()) {
+      alert('驳回时必须填写意见')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const token = localStorage.getItem('token')
+
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${currentTask.id}/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          action: actionType === 'approve' ? 'approve' : 'reject',
+          comment: comment.trim()
+        })
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        alert(actionType === 'approve' ? '审批通过' : '已驳回')
+        setActionType('')
+        setComment('')
+        loadWorkflowData()
+      } else {
+        alert(data.error || '操作失败')
+      }
+    } catch (error) {
+      console.error('审批操作失败:', error)
+      alert('操作失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!workflowInstance || !confirm('确定要撤回此申请吗？')) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL.BASE}/api/workflow/processes/${workflowInstance.id}/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (res.ok) {
+        alert('已撤回')
+        loadWorkflowData()
+      }
+    } catch (error) {
+      alert('撤回失败')
+    }
+  }
+
+  useEffect(() => {
+    if (id && activeTab === 'approval') {
+      loadWorkflowData()
+    }
+  }, [id, activeTab])
 
   const renderGanttChart = () => {
     if (phases.length === 0) {
@@ -455,6 +648,7 @@ export default function ProjectDetailPage() {
               { key: 'phases', label: '阶段甘特图' },
               { key: 'tasks', label: '任务列表' },
               { key: 'team', label: '项目团队' },
+              { key: 'approval', label: '审批流程' },
             ].map(tab => (
               <button
                 key={tab.key}
@@ -613,6 +807,191 @@ export default function ProjectDetailPage() {
                       ))}
                     </tbody>
                   </table>
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'approval' && (
+            <div className="space-y-6">
+              {workflowLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+              ) : !workflowInstance ? (
+                <div className="text-center text-gray-500 py-8">
+                  <p className="mb-4">该项目暂无审批流程</p>
+                  <p className="text-sm">如需启动审批流程，请联系管理员</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                      <div className="flex items-center">
+                        <GitBranch className="w-5 h-5 text-blue-600 mr-2" />
+                        <h2 className="text-lg font-semibold text-gray-900">流程图</h2>
+                      </div>
+                      {workflowInstance.status === 'running' && (
+                        <button
+                          onClick={handleWithdraw}
+                          className="px-3 py-1.5 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          撤回
+                        </button>
+                      )}
+                    </div>
+                    <div className="p-6">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="space-y-4">
+                          {workflowTasks.map((task, index) => (
+                            <div key={task.id} className="flex items-center">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                task.status === 'completed' ? 'bg-green-100' : 
+                                task.status === 'assigned' || task.status === 'in_progress' ? 'bg-blue-100' : 
+                                'bg-gray-100'
+                              }`}>
+                                {task.status === 'completed' ? (
+                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                ) : task.status === 'assigned' || task.status === 'in_progress' ? (
+                                  <Clock className="w-4 h-4 text-blue-600" />
+                                ) : (
+                                  <div className="w-2 h-2 bg-gray-400 rounded-full" />
+                                )}
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium text-gray-900">{task.name}</span>
+                                  <span className="text-xs text-gray-500">{task.assignee_name || '待分配'}</span>
+                                </div>
+                                {task.status === 'completed' && task.comment && (
+                                  <div className="text-xs text-gray-600 mt-1">{task.comment}</div>
+                                )}
+                              </div>
+                              {index < workflowTasks.length - 1 && (
+                                <div className="absolute left-4 top-8 bottom-0 w-0.5 bg-gray-200" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {currentTask && (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h2 className="text-lg font-semibold text-gray-900">审批操作</h2>
+                      </div>
+                      <div className="p-6">
+                        <div className="mb-4">
+                          <p className="text-sm text-gray-600 mb-2">当前任务：{currentTask.name}</p>
+                          <p className="text-sm text-gray-600">审批人：{currentTask.assignee_name}</p>
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => setActionType('approve')}
+                              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                                actionType === 'approve' 
+                                  ? 'bg-green-600 text-white' 
+                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+                              }`}
+                            >
+                              同意
+                            </button>
+                            <button
+                              onClick={() => setActionType('reject')}
+                              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                                actionType === 'reject' 
+                                  ? 'bg-red-600 text-white' 
+                                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+                              }`}
+                            >
+                              驳回
+                            </button>
+                          </div>
+                          <textarea
+                            value={comment}
+                            onChange={(e) => setComment(e.target.value)}
+                            placeholder={actionType === 'reject' ? '请输入驳回意见（必填）' : '请输入审批意见（选填）'}
+                            rows={3}
+                            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-3"
+                          />
+                          <button
+                            onClick={handleApprove}
+                            disabled={!actionType || submitting}
+                            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            <Send className="w-4 h-4" />
+                            {submitting ? '提交中...' : '提交审批'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {workflowLogs.length > 0 && (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <History className="w-5 h-5 text-blue-600 mr-2" />
+                          <h2 className="text-lg font-semibold text-gray-900">流程历史</h2>
+                        </div>
+                        <button
+                          onClick={() => setShowAllLogs(!showAllLogs)}
+                          className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                        >
+                          {showAllLogs ? (
+                            <>
+                              收起 <ChevronUp className="w-4 h-4 ml-1" />
+                            </>
+                          ) : (
+                            <>
+                              展开全部 <ChevronDown className="w-4 h-4 ml-1" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="p-6">
+                        <div className="space-y-4">
+                          {workflowLogs.slice().reverse().slice(0, showAllLogs ? workflowLogs.length : 3).map((log, index) => (
+                            <div key={log.id || index} className="flex items-start">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                log.status === 'completed' || log.status === 'approved' ? 'bg-green-100' : 
+                                log.status === 'rejected' ? 'bg-red-100' : 
+                                'bg-blue-100'
+                              }`}>
+                                {log.status === 'completed' || log.status === 'approved' ? (
+                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                ) : log.status === 'rejected' ? (
+                                  <XCircle className="w-4 h-4 text-red-600" />
+                                ) : (
+                                  <Clock className="w-4 h-4 text-blue-600" />
+                                )}
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-gray-900">{log.node_name || log.action}</span>
+                                  <span className="text-xs text-gray-500">{new Date(log.created_at).toLocaleString('zh-CN')}</span>
+                                </div>
+                                {log.operator_name && (
+                                  <div className="text-sm text-gray-600 mb-1">
+                                    操作人：{log.operator_name}
+                                  </div>
+                                )}
+                                {log.comment && (
+                                  <div className="text-sm text-gray-600 bg-gray-50 rounded px-3 py-2">
+                                    {log.comment}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

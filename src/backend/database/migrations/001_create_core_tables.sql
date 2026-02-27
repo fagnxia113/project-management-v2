@@ -121,23 +121,14 @@ CREATE TABLE IF NOT EXISTS project_personnel (
   UNIQUE KEY uk_proj_emp (project_id, employee_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 8. 设备型号字典表
-CREATE TABLE IF NOT EXISTS equipment_models (
-  id VARCHAR(36) PRIMARY KEY,
-  category ENUM('instrument', 'fake_load') NOT NULL,
-  name VARCHAR(200) NOT NULL,
-  model_no VARCHAR(100) NOT NULL,
-  brand VARCHAR(100),
-  unit VARCHAR(20) DEFAULT '台',
-  calibration_cycle INT DEFAULT 12,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- 9. 设备物理实例表 (一物一码)
 CREATE TABLE IF NOT EXISTS equipment_instances (
   id VARCHAR(36) PRIMARY KEY,
-  model_id VARCHAR(36) NOT NULL,
+  equipment_name VARCHAR(200) NOT NULL,
+  model_no VARCHAR(100) NOT NULL,
+  brand VARCHAR(100),
+  category ENUM('instrument', 'fake_load', 'cable') NOT NULL,
+  unit VARCHAR(20) DEFAULT '台',
   serial_number VARCHAR(100),
   manage_code VARCHAR(50) UNIQUE NOT NULL,
   health_status ENUM('normal', 'slightly_damaged', 'affected_use', 'repairing', 'scrapped') DEFAULT 'normal',
@@ -151,7 +142,7 @@ CREATE TABLE IF NOT EXISTS equipment_instances (
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_model (model_id)
+  INDEX idx_equipment (equipment_name, model_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 10. 日报汇报表

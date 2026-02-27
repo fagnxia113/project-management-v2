@@ -241,6 +241,30 @@ router.get('/processes/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * 根据业务ID获取流程实例
+ * GET /api/workflow/processes/business/:businessId
+ */
+router.get('/processes/business/:businessId', async (req: Request, res: Response) => {
+  try {
+    const { businessId } = req.params;
+    const instances = await instanceService.getInstances({
+      businessId: businessId as string,
+      page: 1,
+      pageSize: 1
+    });
+    
+    if (instances.data && instances.data.length > 0) {
+      const instance = await enhancedWorkflowEngine.getProcessInstance(instances.data[0].id);
+      res.json({ success: true, data: instance });
+    } else {
+      res.json({ success: true, data: null });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * 终止流程实例
  * POST /api/workflow/processes/:id/terminate
  */
@@ -675,6 +699,25 @@ router.get('/form-templates/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const template = unifiedFormService.getTemplateById(id);
+    
+    if (!template) {
+      return res.status(404).json({ error: '表单模板不存在' });
+    }
+    
+    res.json({ success: true, data: template });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 通过 key 获取表单模板
+ * GET /api/workflow/form-templates/key/:key
+ */
+router.get('/form-templates/key/:key', async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    const template = unifiedFormService.getTemplateByKey(key);
     
     if (!template) {
       return res.status(404).json({ error: '表单模板不存在' });

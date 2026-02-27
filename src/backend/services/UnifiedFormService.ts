@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 export type BusinessModule = 'project' | 'equipment' | 'personnel' | 'task' | 'purchase' | 'customer' | 'warehouse';
 
 // 表单字段类型
-export type FormFieldType = 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean' | 'user' | 'lookup';
+export type FormFieldType = 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean' | 'user' | 'lookup' | 'array';
 
 // 表单字段定义
 export interface UnifiedFormField {
@@ -65,6 +65,8 @@ export interface UnifiedFormField {
     filter?: Record<string, any>;
     autoFill?: boolean;
   };
+  // 数组项字段定义
+  itemFields?: UnifiedFormField[];
 }
 
 // 表单模板定义
@@ -464,7 +466,7 @@ export class UnifiedFormService {
         name: '设备调拨表单',
         module: 'equipment',
         category: 'equipment',
-        description: '设备调拨表单，基于现有EquipmentTransferPage组件',
+        description: '设备调拨表单',
         businessEntityType: 'EquipmentTransfer',
         version: 1,
         status: 'active',
@@ -473,78 +475,190 @@ export class UnifiedFormService {
         updatedAt: new Date().toISOString(),
         fields: [
           {
-            id: 'field-transfer-equipment',
-            name: 'equipment_id',
-            label: '设备',
-            type: 'lookup',
+            id: 'field-from-location-type',
+            name: 'fromLocationType',
+            label: '调出位置类型',
+            type: 'select',
             required: true,
-            placeholder: '请选择设备',
-            businessConfig: {
-              module: 'equipment',
-              entityType: 'Equipment',
-              lookupField: 'id',
-              displayField: 'name',
-              filter: { status: { $in: ['available', 'in_use'] } },
-              autoFill: true
-            }
+            options: [
+              { label: '仓库', value: 'warehouse' },
+              { label: '项目', value: 'project' }
+            ]
           },
           {
-            id: 'field-transfer-current-project',
-            name: 'current_project',
-            label: '当前项目',
-            type: 'lookup',
-            required: true,
-            placeholder: '请选择当前项目',
-            businessConfig: {
-              module: 'project',
-              entityType: 'Project',
-              lookupField: 'id',
-              displayField: 'name',
-              filter: { status: { $in: ['planning', 'in_progress'] } },
-              autoFill: true
-            }
+            id: 'field-from-location-id',
+            name: 'fromLocationId',
+            label: '调出位置ID',
+            type: 'text',
+            required: true
           },
           {
-            id: 'field-transfer-current-manager',
-            name: 'current_project_manager',
-            label: '当前项目负责人',
-            type: 'user',
-            required: true,
-            placeholder: '请选择当前项目负责人'
+            id: 'field-from-manager-id',
+            name: 'fromManagerId',
+            label: '调出负责人ID',
+            type: 'text',
+            required: true
           },
           {
-            id: 'field-transfer-target-project',
-            name: 'target_project',
-            label: '目标项目',
-            type: 'lookup',
+            id: 'field-to-location-type',
+            name: 'toLocationType',
+            label: '调入位置类型',
+            type: 'select',
             required: true,
-            placeholder: '请选择目标项目',
-            businessConfig: {
-              module: 'project',
-              entityType: 'Project',
-              lookupField: 'id',
-              displayField: 'name',
-              filter: { status: { $in: ['planning', 'in_progress'] } },
-              autoFill: true
-            }
+            options: [
+              { label: '仓库', value: 'warehouse' },
+              { label: '项目', value: 'project' }
+            ]
           },
           {
-            id: 'field-transfer-target-manager',
-            name: 'target_project_manager',
-            label: '目标项目负责人',
-            type: 'user',
-            required: true,
-            placeholder: '请选择目标项目负责人'
+            id: 'field-to-location-id',
+            name: 'toLocationId',
+            label: '调入位置ID',
+            type: 'text',
+            required: true
+          },
+          {
+            id: 'field-to-manager-id',
+            name: 'toManagerId',
+            label: '调入负责人ID',
+            type: 'text',
+            required: true
           },
           {
             id: 'field-transfer-reason',
-            name: 'transfer_reason',
+            name: 'transferReason',
             label: '调拨原因',
             type: 'textarea',
             required: true,
             placeholder: '请输入调拨原因',
             rows: 3,
-            minLength: 10
+            minLength: 1
+          },
+          {
+            id: 'field-estimated-arrival-date',
+            name: 'estimatedArrivalDate',
+            label: '期望到达时间',
+            type: 'date',
+            required: true
+          },
+          {
+            id: 'field-shipping-date',
+            name: 'shipping_date',
+            label: '发货时间',
+            type: 'date',
+            required: false,
+            visible: false,
+            visibleOn: 'node_id.includes("from")'
+          },
+          {
+            id: 'field-shipping-no',
+            name: 'shipping_no',
+            label: '物流单号',
+            type: 'text',
+            required: false,
+            placeholder: '请输入物流单号',
+            visible: false,
+            visibleOn: 'node_id.includes("from")'
+          },
+          {
+            id: 'field-shipping-notes',
+            name: 'shipping_notes',
+            label: '发货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入发货备注',
+            rows: 2,
+            visible: false,
+            visibleOn: 'node_id.includes("from")'
+          },
+          {
+            id: 'field-receive-status',
+            name: 'receive_status',
+            label: '收货状态',
+            type: 'select',
+            required: false,
+            placeholder: '请选择收货状态',
+            options: [
+              { label: '正常收货', value: 'normal' },
+              { label: '异常收货', value: 'exception' }
+            ],
+            visible: false,
+            visibleOn: 'node_id.includes("to")'
+          },
+          {
+            id: 'field-receive-comment',
+            name: 'receive_comment',
+            label: '收货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入收货备注',
+            rows: 2,
+            visible: false,
+            visibleOn: 'node_id.includes("to")'
+          },
+          {
+            id: 'field-items',
+            name: 'items',
+            label: '调拨设备列表',
+            type: 'array',
+            required: true,
+            itemFields: [
+              {
+                name: 'equipment_id',
+                label: '设备ID',
+                type: 'text'
+              },
+              {
+                name: 'equipment_name',
+                label: '设备名称',
+                type: 'text',
+                required: true
+              },
+              {
+                name: 'model_no',
+                label: '型号',
+                type: 'text',
+                required: true
+              },
+              {
+                name: 'brand',
+                label: '品牌',
+                type: 'text'
+              },
+              {
+                name: 'category',
+                label: '类别',
+                type: 'select',
+                required: true,
+                options: [
+                  { label: '仪器类', value: 'instrument' },
+                  { label: '假负载类', value: 'fake_load' },
+                  { label: '线材类', value: 'cable' }
+                ]
+              },
+              {
+                name: 'unit',
+                label: '单位',
+                type: 'text'
+              },
+              {
+                name: 'manage_code',
+                label: '管理编号',
+                type: 'text'
+              },
+              {
+                name: 'serial_number',
+                label: '序列号',
+                type: 'text'
+              },
+              {
+                name: 'quantity',
+                label: '数量',
+                type: 'number',
+                required: true,
+                min: 1
+              }
+            ]
           }
         ]
       },
@@ -1216,6 +1330,211 @@ export class UnifiedFormService {
             rows: 2
           }
         ]
+      },
+      {
+        id: 'form-equipment-transfer-shipping',
+        key: 'equipment-transfer-shipping-form',
+        name: '设备调拨发货表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备调拨发货表单',
+        businessEntityType: 'EquipmentTransfer',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+            id: 'field-shipping-date',
+            name: 'shippingDate',
+            label: '发货时间',
+            type: 'date',
+            required: true
+          },
+          {
+            id: 'field-waybill-no',
+            name: 'waybillNo',
+            label: '备注单号',
+            type: 'text',
+            required: true,
+            placeholder: '请输入备注单号'
+          },
+          {
+            id: 'field-shipping-notes',
+            name: 'shippingNotes',
+            label: '发货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入发货备注',
+            rows: 2
+          }
+        ]
+      },
+      {
+        id: 'form-equipment-transfer-receiving',
+        key: 'equipment-transfer-receiving-form',
+        name: '设备调拨收货表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备调拨收货表单',
+        businessEntityType: 'EquipmentTransfer',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+            id: 'field-receiving-date',
+            name: 'receivingDate',
+            label: '收货时间',
+            type: 'date',
+            required: true
+          },
+          {
+            id: 'field-received-status',
+            name: 'receivedStatus',
+            label: '收货状态',
+            type: 'select',
+            required: true,
+            options: [
+              { label: '已收货', value: 'received' },
+              { label: '部分收货', value: 'partially_received' },
+              { label: '未收货', value: 'not_received' }
+            ]
+          },
+          {
+            id: 'field-receiving-notes',
+            name: 'receivingNotes',
+            label: '收货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入收货备注',
+            rows: 2
+          }
+        ]
+      },
+      {
+        id: 'form-equipment-inbound',
+        key: 'equipment-inbound-form',
+        name: '设备入库表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备入库表单',
+        businessEntityType: 'EquipmentInbound',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+            id: 'field-order-no',
+            name: 'order_no',
+            label: '入库单号',
+            type: 'text',
+            required: false,
+            disabled: true,
+            readonly: true,
+            placeholder: '系统自动生成'
+          },
+          {
+            id: 'field-warehouse-id',
+            name: 'warehouse_id',
+            label: '仓库',
+            type: 'select',
+            required: true,
+            placeholder: '请选择仓库'
+          },
+          {
+            id: 'field-supplier',
+            name: 'supplier',
+            label: '供应商',
+            type: 'text',
+            required: false,
+            placeholder: '请输入供应商名称'
+          },
+          {
+            id: 'field-purchase-date',
+            name: 'purchase_date',
+            label: '采购日期',
+            type: 'date',
+            required: false
+          },
+          {
+            id: 'field-total-price',
+            name: 'total_price',
+            label: '总金额',
+            type: 'number',
+            required: false,
+            placeholder: '请输入总金额'
+          },
+          {
+            id: 'field-items',
+            name: 'items',
+            label: '设备明细',
+            type: 'array',
+            required: true,
+            itemFields: [
+              {
+                name: 'equipment_name',
+                label: '设备名称',
+                type: 'text',
+                required: true,
+                placeholder: '请输入设备名称'
+              },
+              {
+                name: 'model_no',
+                label: '设备型号',
+                type: 'text',
+                required: true,
+                placeholder: '请输入设备型号'
+              },
+              {
+                name: 'category',
+                label: '设备类型',
+                type: 'select',
+                required: true,
+                options: [
+                  { label: '仪器', value: 'instrument' },
+                  { label: '假负载', value: 'fake_load' },
+                  { label: '线材', value: 'cable' }
+                ]
+              },
+              {
+                name: 'quantity',
+                label: '数量',
+                type: 'number',
+                required: true,
+                placeholder: '请输入数量'
+              },
+              {
+                name: 'purchase_price',
+                label: '单价',
+                type: 'number',
+                required: false,
+                placeholder: '请输入单价'
+              },
+              {
+                name: 'total_price',
+                label: '小计',
+                type: 'number',
+                required: false,
+                placeholder: '请输入小计'
+              }
+            ]
+          },
+          {
+            id: 'field-notes',
+            name: 'notes',
+            label: '备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入备注信息',
+            rows: 2
+          }
+        ]
       }
     ];
 
@@ -1501,6 +1820,36 @@ export class UnifiedFormService {
             });
           }
         }
+
+        // 数组验证
+        if (field.type === 'array' && Array.isArray(value)) {
+          if (field.itemFields && value.length > 0) {
+            value.forEach((item: any, index: number) => {
+              if (typeof item !== 'object' || item === null) {
+                errors.push({
+                  field: field.name,
+                  message: `${field.label}[${index + 1}]必须是对象`
+                });
+              } else {
+                field.itemFields?.forEach((itemField: any) => {
+                  const itemValue = item[itemField.name];
+                  if (itemField.required && !this.hasValue(itemValue)) {
+                    errors.push({
+                      field: field.name,
+                      message: `${field.label}[${index + 1}]的${itemField.label}是必填字段`
+                    });
+                  }
+                  if (this.hasValue(itemValue) && !this.validateType(itemValue, itemField.type)) {
+                    errors.push({
+                      field: field.name,
+                      message: `${field.label}[${index + 1}]的${itemField.label}类型不正确`
+                    });
+                  }
+                });
+              }
+            });
+          }
+        }
       }
     });
 
@@ -1544,7 +1893,9 @@ export class UnifiedFormService {
       case 'boolean':
         return typeof value === 'boolean';
       case 'select':
-        return true; // 选择值的验证在其他地方处理
+        return true;
+      case 'array':
+        return Array.isArray(value);
       default:
         return true;
     }

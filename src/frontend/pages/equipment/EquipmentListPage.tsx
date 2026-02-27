@@ -1,19 +1,33 @@
 import { useState, useEffect } from 'react'
-import EquipmentForm, { EquipmentFormData } from './EquipmentForm'
 import DataTable, { Pagination, SearchBox } from '../../components/DataTable'
 import { API_URL } from '../../config/api'
 
 interface Equipment {
   id: string
-  name: string
-  code: string
-  type: string
-  status: string
+  equipment_name: string
+  model_no: string
+  brand: string
+  category: 'instrument' | 'fake_load' | 'cable'
+  unit: string
+  quantity: number
+  serial_number: string | null
+  factory_serial_no: string | null
+  manage_code: string
+  health_status: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped'
+  usage_status: 'idle' | 'in_use'
+  location_status: 'warehouse' | 'in_project' | 'repairing' | 'transferring'
+  location_id: string | null
+  location_name: string | null
+  keeper_id: string | null
+  keeper_name: string | null
   purchase_date: string | null
   purchase_price: number | null
-  supplier: string | null
-  location: string | null
+  calibration_expiry: string | null
+  certificate_no: string | null
+  certificate_issuer: string | null
+  accessory_desc: string | null
   notes: string | null
+  attachment: string | null
   created_at: string
 }
 
@@ -32,15 +46,15 @@ export default function EquipmentListPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
-
-  // Modal状态
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
-  const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null)
+  
+  const [filterCategory, setFilterCategory] = useState<string>('')
+  const [filterHealthStatus, setFilterHealthStatus] = useState<string>('')
+  const [filterUsageStatus, setFilterUsageStatus] = useState<string>('')
+  const [filterLocationStatus, setFilterLocationStatus] = useState<string>('')
 
   useEffect(() => {
     loadEquipment()
-  }, [page, searchTerm])
+  }, [page, searchTerm, filterCategory, filterHealthStatus, filterUsageStatus, filterLocationStatus])
 
   const loadEquipment = async () => {
     try {
@@ -48,7 +62,11 @@ export default function EquipmentListPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: '10',
-        ...(searchTerm && { search: searchTerm })
+        ...(searchTerm && { search: searchTerm }),
+        ...(filterCategory && { category: filterCategory }),
+        ...(filterHealthStatus && { health_status: filterHealthStatus }),
+        ...(filterUsageStatus && { usage_status: filterUsageStatus }),
+        ...(filterLocationStatus && { location_status: filterLocationStatus })
       })
 
       const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`)
@@ -70,95 +88,76 @@ export default function EquipmentListPage() {
     setPage(1)
   }
 
-  // 打开新建设备对话框
-  const handleCreate = () => {
-    setFormMode('create')
-    setEditingEquipment(null)
-    setIsFormOpen(true)
-  }
-
-  // 打开编辑设备对话框
-  const handleEdit = (eq: Equipment) => {
-    setFormMode('edit')
-    setEditingEquipment(eq)
-    setIsFormOpen(true)
-  }
-
-  // 提交表单
-  const handleSubmit = async (data: EquipmentFormData) => {
-    const url = formMode === 'create'
-      ? 'http://localhost:8080/api/data/Equipment'
-      : `http://localhost:8080/api/data/Equipment/${editingEquipment?.id}`
-
-    const method = formMode === 'create' ? 'POST' : 'PUT'
-
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    })
-
-    if (response.ok) {
-      await loadEquipment()
-    } else {
-      throw new Error(formMode === 'create' ? '创建失败' : '更新失败')
-    }
-  }
-
-  // 删除设备
-  const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除此设备吗？')) return
-
-    try {
-      const response = await fetch(`${API_URL.BASE}/api/data/Equipment/${id}`, {
-        method: 'DELETE'
-      })
-
-      if (response.ok) {
-        await loadEquipment()
-      } else {
-        alert('删除失败')
-      }
-    } catch (error) {
-      console.error('删除设备失败:', error)
-      alert('删除失败')
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
+  const getHealthStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      available: 'bg-green-100 text-green-700',
-      in_use: 'bg-blue-100 text-blue-700',
-      maintenance: 'bg-yellow-100 text-yellow-700',
+      normal: 'bg-green-100 text-green-700',
+      slightly_damaged: 'bg-yellow-100 text-yellow-700',
+      affected_use: 'bg-orange-100 text-orange-700',
+      repairing: 'bg-blue-100 text-blue-700',
       scrapped: 'bg-red-100 text-red-700'
     }
     const labels: Record<string, string> = {
-      available: '可用',
-      in_use: '使用中',
-      maintenance: '维护中',
-      scrapped: '报废'
+      normal: '正常',
+      slightly_damaged: '轻微损坏',
+      affected_use: '影响使用',
+      repairing: '维修中',
+      scrapped: '已报废'
     }
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.available}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.normal}`}>
         {labels[status] || status}
       </span>
     )
   }
 
-  const getTypeBadge = (type: string) => {
-    const labels: Record<string, string> = {
-      machinery: '机械设备',
-      vehicle: '运输工具',
-      tool: '工具',
-      electronics: '电子设备',
-      other: '其他'
+  const getUsageStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      idle: 'bg-green-100 text-green-700',
+      in_use: 'bg-blue-100 text-blue-700'
     }
-    return labels[type] || type
+    const labels: Record<string, string> = {
+      idle: '闲置',
+      in_use: '使用中'
+    }
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.idle}`}>
+        {labels[status] || status}
+      </span>
+    )
+  }
+
+  const getLocationStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      warehouse: 'bg-gray-100 text-gray-700',
+      in_project: 'bg-blue-100 text-blue-700',
+      repairing: 'bg-yellow-100 text-yellow-700',
+      transferring: 'bg-orange-100 text-orange-700'
+    }
+    const labels: Record<string, string> = {
+      warehouse: '仓库',
+      in_project: '项目中',
+      repairing: '维修中',
+      transferring: '调拨中'
+    }
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.warehouse}`}>
+        {labels[status] || status}
+      </span>
+    )
+  }
+
+  const getCategoryBadge = (category: string) => {
+    const labels: Record<string, string> = {
+      instrument: '仪器类',
+      fake_load: '假负载类',
+      cable: '线材类'
+    }
+    return labels[category] || category
   }
 
   const columns = [
     {
-      key: 'name' as keyof Equipment,
+      key: 'equipment_name' as keyof Equipment,
       header: '设备名称',
       render: (value: string, row: Equipment) => (
         <div>
@@ -168,29 +167,70 @@ export default function EquipmentListPage() {
           >
             {value}
           </button>
-          <div className="text-xs text-gray-500">{row.code}</div>
+          <div className="text-xs text-gray-500">{row.model_no} | {row.brand || '-'}</div>
         </div>
       )
     },
     {
-      key: 'type' as keyof Equipment,
-      header: '类型',
-      render: (value: string) => getTypeBadge(value)
+      key: 'manage_code' as keyof Equipment,
+      header: '管理编码',
+      render: (value: string) => value
     },
     {
-      key: 'status' as keyof Equipment,
-      header: '状态',
-      render: (value: string) => getStatusBadge(value)
+      key: 'quantity' as keyof Equipment,
+      header: '数量',
+      render: (value: number, row: Equipment) => {
+        if (row.category === 'instrument') {
+          return <span className="text-sm">1 台</span>
+        } else {
+          return <span className="text-sm font-medium">{value} {row.unit}</span>
+        }
+      }
+    },
+    {
+      key: 'serial_number' as keyof Equipment,
+      header: '序列号',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'factory_serial_no' as keyof Equipment,
+      header: '仪器出厂编号',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'category' as keyof Equipment,
+      header: '类别',
+      render: (value: string) => getCategoryBadge(value)
+    },
+    {
+      key: 'health_status' as keyof Equipment,
+      header: '健康状态',
+      render: (value: string) => getHealthStatusBadge(value)
+    },
+    {
+      key: 'usage_status' as keyof Equipment,
+      header: '使用状态',
+      render: (value: string) => getUsageStatusBadge(value)
+    },
+    {
+      key: 'location_status' as keyof Equipment,
+      header: '位置状态',
+      render: (value: string) => getLocationStatusBadge(value)
+    },
+    {
+      key: 'location_name' as keyof Equipment,
+      header: '当前位置',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'keeper_name' as keyof Equipment,
+      header: '保管人',
+      render: (value: string | null) => value || '-'
     },
     {
       key: 'purchase_price' as keyof Equipment,
       header: '采购价格',
       render: (value: number | null) => value ? `¥${value.toLocaleString()}` : '-'
-    },
-    {
-      key: 'location' as keyof Equipment,
-      header: '存放位置',
-      render: (value: string | null) => value || '-'
     },
     {
       key: 'id' as keyof Equipment,
@@ -221,12 +261,32 @@ export default function EquipmentListPage() {
           <h1 className="text-2xl font-bold text-gray-900">设备管理</h1>
           <p className="mt-1 text-sm text-gray-600">管理所有设备信息</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          + 新增设备
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => window.location.href = '/equipment/statistics'}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            统计报表
+          </button>
+          <button
+            onClick={() => window.location.href = '/equipment/inbounds/create'}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            + 创建入库单
+          </button>
+          <button
+            onClick={() => window.location.href = '/equipment/borrowings/create'}
+            className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
+          >
+            + 借用设备
+          </button>
+          <button
+            onClick={() => window.location.href = '/warehouses'}
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+          >
+            + 仓库管理
+          </button>
+        </div>
       </div>
 
       <SearchBox
@@ -236,11 +296,59 @@ export default function EquipmentListPage() {
         onSearch={handleSearch}
       />
 
+      <div className="flex gap-4 mb-4">
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">全部类别</option>
+          <option value="instrument">仪器类</option>
+          <option value="fake_load">假负载类</option>
+          <option value="cable">线材类</option>
+        </select>
+
+        <select
+          value={filterHealthStatus}
+          onChange={(e) => setFilterHealthStatus(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">全部健康状态</option>
+          <option value="normal">正常</option>
+          <option value="slightly_damaged">轻微损坏</option>
+          <option value="affected_use">影响使用</option>
+          <option value="repairing">维修中</option>
+          <option value="scrapped">已报废</option>
+        </select>
+
+        <select
+          value={filterUsageStatus}
+          onChange={(e) => setFilterUsageStatus(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">全部使用状态</option>
+          <option value="idle">闲置</option>
+          <option value="in_use">使用中</option>
+        </select>
+
+        <select
+          value={filterLocationStatus}
+          onChange={(e) => setFilterLocationStatus(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">全部位置状态</option>
+          <option value="warehouse">仓库</option>
+          <option value="in_project">项目中</option>
+          <option value="repairing">维修中</option>
+          <option value="transferring">调拨中</option>
+        </select>
+      </div>
+
       <DataTable
         data={equipment}
         columns={columns}
         loading={loading}
-        emptyMessage={searchTerm ? '未找到匹配的设备' : '暂无设备数据，点击上方按钮创建新设备'}
+        emptyMessage={searchTerm ? '未找到匹配的设备' : '暂无设备数据'}
         rowKey="id"
       />
 
@@ -252,24 +360,6 @@ export default function EquipmentListPage() {
           onPageChange={setPage}
         />
       )}
-
-      <EquipmentForm
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSubmit={handleSubmit}
-        mode={formMode}
-        initialValues={editingEquipment ? {
-          name: editingEquipment.name,
-          code: editingEquipment.code,
-          type: editingEquipment.type,
-          status: editingEquipment.status,
-          purchase_date: editingEquipment.purchase_date || '',
-          purchase_price: editingEquipment.purchase_price || 0,
-          supplier: editingEquipment.supplier || '',
-          location: editingEquipment.location || '',
-          notes: editingEquipment.notes || ''
-        } : undefined}
-      />
     </div>
   )
 }

@@ -74,8 +74,8 @@ export class PurchaseReminderService {
       scenario: string;
     }>(
       `SELECT id, equipment_name, to_project_name, scenario
-       FROM equipment_transfers
-       WHERE status = 'pending' AND scenario = 'B'`
+       FROM equipment_transfer_orders
+       WHERE status = 'pending_from'`
     );
 
     for (const transfer of pendingTransfers) {
@@ -236,8 +236,8 @@ export class PurchaseReminderService {
       requester_id: string;
       requester_name: string;
     }>(
-      'SELECT * FROM equipment_transfers WHERE id = ? AND scenario = ?',
-      [transferId, 'B']
+      'SELECT * FROM equipment_transfer_orders WHERE id = ?',
+      [transferId]
     );
 
     if (!transfer) return null;

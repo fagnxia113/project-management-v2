@@ -11,15 +11,24 @@ import workflowRouter from './routes/workflow.js';
 import enhancedWorkflowRouter from './routes/enhancedWorkflowRoutes.js';
 import authRouter, { initUsersTable } from './routes/auth.js';
 import organizationRouter from './routes/organization.js';
+import employeesRouter from './routes/employees.js';
 import equipmentRouter from './routes/equipment.js';
+import warehouseRouter from './routes/warehouse.js';
+import inboundRouter from './routes/inbound.js';
+import borrowingRouter from './routes/borrowings.js';
+import transferRouter from './routes/transfer.js';
 import projectsRouter from './routes/projects.js';
 import workTimeRouter from './routes/work-time.js';
 import notificationsRouter from './routes/notifications.js';
 import permissionsRouter from './routes/permissions.js';
+import processFormsRouter from './routes/process-forms.js';
+import uploadRouter from './routes/upload.js';
 import { schedulerService } from './services/SchedulerService.js';
 import { WorkflowTemplatesService } from './services/WorkflowTemplates.js';
 import { definitionService } from './services/DefinitionService.js';
 import { enhancedWorkflowEngine } from './services/EnhancedWorkflowEngine.js';
+import { InboundOrderService } from './services/InboundOrderService.js';
+import { TransferOrderService } from './services/TransferOrderService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,13 +74,22 @@ app.use('/api/data', dataRouter);
 app.use('/api/metadata', metadataRouter);
 app.use('/api/workflow', workflowRouter);
 app.use('/api/workflow/v2', enhancedWorkflowRouter);
+app.use('/api/workflow/form-presets', processFormsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/organization', organizationRouter);
+app.use('/api/personnel', employeesRouter);
 app.use('/api/equipment', equipmentRouter);
+app.use('/api/warehouses', warehouseRouter);
+app.use('/api/equipment/inbounds', inboundRouter);
+app.use('/api/equipment/borrowings', borrowingRouter);
+app.use('/api/equipment/transfers', transferRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/work-time', workTimeRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/permissions', permissionsRouter);
+app.use('/api/upload', uploadRouter);
+
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 // 数据库迁移路由
 app.post('/api/migrate', async (req, res) => {
@@ -613,10 +631,12 @@ async function startServer() {
 
     // 监听流程结束事件，更新项目状态
     enhancedWorkflowEngine.getEventBus().on('process.ended', async (data: any) => {
+      console.log(`[Server] 收到 process.ended 事件:`, JSON.stringify(data));
       try {
         const { instanceId, result } = data;
         
-        // 获取流程实例信息
+        console.log(`[Server] 查询流程实例信息: instanceId=${instanceId}`);
+        
         const instance = await db.queryOne(
           `SELECT i.id, i.definition_id, i.business_id, d.\`key\` as definition_key
            FROM workflow_instances i
@@ -625,11 +645,15 @@ async function startServer() {
           [instanceId]
         );
         
+        console.log(`[Server] 流程实例信息:`, JSON.stringify(instance));
+        
         if (!instance || !instance.business_id) {
+          console.log(`[Server] 流程实例不存在或没有 business_id，跳过处理`);
           return;
         }
         
-        // 如果是项目审批流程，更新项目状态
+        console.log(`[Server] 流程定义 key: ${instance.definition_key}, 结果: ${result}`);
+        
         if (instance.definition_key === 'project-approval') {
           const newStatus = result === 'approved' ? 'in_progress' : 'proposal';
           await db.execute(
@@ -638,6 +662,15 @@ async function startServer() {
           );
           console.log(`[Server] 项目 ${instance.business_id} 状态已更新为: ${newStatus}`);
         }
+        
+        if (instance.definition_key === 'equipment-inbound' && result === 'approved') {
+          console.log(`[Server] 准备完成入库单: ${instance.business_id}`);
+          const inboundOrderService = new InboundOrderService();
+          await inboundOrderService.completeOrder(instance.business_id);
+          console.log(`[Server] 入库单 ${instance.business_id} 已完成，设备已添加到台账`);
+        }
+        
+        // 设备调拨单的设备位置更新已在 confirmReceiving 中处理，不需要额外处理
       } catch (error) {
         console.error('[Server] 处理流程结束事件失败:', error);
       }

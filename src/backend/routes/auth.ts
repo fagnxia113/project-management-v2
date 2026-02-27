@@ -194,8 +194,87 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: '不能删除管理员账号' })
     }
 
-    await db.delete('DELETE FROM users WHERE id = ?', [id])
-    res.json({ success: true, message: '用户删除成功' })
+    // 开始事务
+    await db.beginTransaction()
+
+    try {
+      // 1. 删除users表中的用户
+      await db.delete('DELETE FROM users WHERE id = ?', [id])
+
+      // 2. 删除employees表中关联的员工记录
+      await db.delete('DELETE FROM employees WHERE user_id = ?', [id])
+
+      // 3. 清理流程定义中的用户引用（将节点配置中的用户ID替换为空）
+      const definitions = await db.query<any>(
+        'SELECT id, definition FROM workflow_definitions'
+      )
+      
+      for (const def of definitions) {
+        let definition = def.definition
+        let updated = false
+        
+        // 解析JSON并清理用户引用
+        if (typeof definition === 'string') {
+          definition = JSON.parse(definition)
+        }
+        
+        // 遍历所有节点，清理用户引用
+        if (definition.nodes) {
+          definition.nodes.forEach((node: any) => {
+            if (node.config && node.config.assignee) {
+              if (node.config.assignee.type === 'user' || node.config.assignee.type === 'fixed') {
+                const userIds = Array.isArray(node.config.assignee.value) 
+                  ? node.config.assignee.value 
+                  : [node.config.assignee.value]
+                
+                const filteredUserIds = userIds.filter((uid: string) => uid !== id)
+                
+                if (filteredUserIds.length !== userIds.length) {
+                  updated = true
+                  if (filteredUserIds.length === 0) {
+                    // 如果没有用户了，删除assignee配置
+                    delete node.config.assignee
+                  } else {
+                    node.config.assignee.value = Array.isArray(node.config.assignee.value) 
+                      ? filteredUserIds 
+                      : filteredUserIds[0]
+                  }
+                }
+              }
+            }
+          })
+        }
+        
+        // 如果有更新，保存回数据库
+        if (updated) {
+          await db.update(
+            'UPDATE workflow_definitions SET definition = ? WHERE id = ?',
+            [JSON.stringify(definition), def.id]
+          )
+        }
+      }
+
+      // 4. 清理待办任务中的用户引用
+      await db.delete(
+        'DELETE FROM workflow_tasks WHERE assignee_id = ? AND status = "assigned"',
+        [id]
+      )
+
+      // 5. 清理已完成任务中的用户引用（保留记录，但清空assignee_id）
+      await db.update(
+        'UPDATE workflow_tasks SET assignee_id = NULL, assignee_name = NULL WHERE assignee_id = ?',
+        [id]
+      )
+
+      // 提交事务
+      await db.commit()
+
+      res.json({ success: true, message: '用户删除成功' })
+    } catch (error) {
+      // 回滚事务
+      await db.rollback()
+      throw error
+    }
   } catch (error) {
     res.status(500).json({ error: '删除用户失败' })
   }

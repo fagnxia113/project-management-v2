@@ -49,17 +49,8 @@ const categoryIcons: Record<string, React.ReactNode> = {
 
 const presetRoutes: Record<string, string> = {
   'preset-employee-onboard': '/personnel/onboard',
-  'preset-employee-offboard': '/personnel/offboard',
-  'preset-employee-regular': '/personnel/regular',
-  'preset-employee-leave': '/personnel/leave',
-  'preset-employee-trip': '/personnel/trip',
-  'preset-equipment-inbound': '/equipment/inbound',
-  'preset-equipment-outbound': '/equipment/outbound',
-  'preset-equipment-transfer': '/equipment/transfer',
-  'preset-equipment-return': '/equipment/return',
-  'preset-equipment-repair': '/equipment/repair',
-  'preset-equipment-scrap': '/equipment/scrap',
-  'preset-purchase-request': '/purchase/request',
+  'preset-equipment-inbound': '/equipment/inbounds/create',
+  'preset-equipment-transfer': '/equipment/transfers/create',
   'preset-project-completion': '/projects',
 }
 
@@ -85,17 +76,8 @@ export default function NewProcessPage() {
       // 使用默认数据
       setPresets([
         { id: 'preset-employee-onboard', name: '人员入职', category: 'hr', description: '新员工入职审批流程', status: 'active' },
-        { id: 'preset-employee-offboard', name: '人员离职', category: 'hr', description: '员工离职审批流程', status: 'active' },
-        { id: 'preset-employee-regular', name: '人员转正', category: 'hr', description: '员工转正审批流程', status: 'active' },
-        { id: 'preset-employee-leave', name: '请假申请', category: 'hr', description: '员工请假审批流程', status: 'active' },
-        { id: 'preset-employee-trip', name: '出差申请', category: 'hr', description: '员工出差审批流程', status: 'active' },
         { id: 'preset-equipment-inbound', name: '设备入库', category: 'equipment', description: '设备入库审批流程', status: 'active' },
-        { id: 'preset-equipment-outbound', name: '设备出库', category: 'equipment', description: '设备出库审批流程', status: 'active' },
-        { id: 'preset-equipment-transfer', name: '设备调拨', category: 'equipment', description: '设备调拨审批流程', status: 'active' },
-        { id: 'preset-equipment-return', name: '设备归还', category: 'equipment', description: '项目结束后设备归还', status: 'active' },
-        { id: 'preset-equipment-repair', name: '设备维修', category: 'equipment', description: '设备维修审批流程', status: 'active' },
-        { id: 'preset-equipment-scrap', name: '设备报废', category: 'equipment', description: '设备报废审批流程', status: 'active' },
-        { id: 'preset-purchase-request', name: '采购申请', category: 'purchase', description: '设备物资采购申请', status: 'active' },
+        { id: 'preset-equipment-transfer', name: '设备调拨', category: 'equipment', description: '设备跨位置调拨审批流程', status: 'active' },
         { id: 'preset-project-completion', name: '项目结项', category: 'project', description: '项目结项审批流程', status: 'active' },
       ])
     } finally {

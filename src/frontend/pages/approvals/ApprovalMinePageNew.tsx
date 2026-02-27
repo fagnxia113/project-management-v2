@@ -61,7 +61,26 @@ const FORM_FIELD_LABELS: Record<string, string> = {
   'graduation_date': '毕业日期',
   'bank_account': '银行卡号',
   'bank_name': '开户银行',
-  'remark': '备注'
+  'remark': '备注',
+  'inbound_type': '入库类型',
+  'warehouse_id': '仓库',
+  'supplier': '供应商',
+  'purchase_date': '采购日期',
+  'notes': '备注',
+  // 设备调拨相关字段
+  'fromLocationType': '调出位置类型',
+  'fromLocationId': '调出位置',
+  'fromManagerId': '调出位置负责人',
+  'toLocationType': '调入位置类型',
+  'toLocationId': '调入位置',
+  'toManagerId': '调入位置负责人',
+  'transferReason': '调拨原因',
+  'estimatedArrivalDate': '预期到货时间',
+  'shippingDate': '发货时间',
+  'waybillNo': '备注单号',
+  'shippingNotes': '发货备注',
+  'receiveStatus': '收货状态',
+  'receiveComment': '收货备注'
 }
 
 // 性别映射
@@ -78,6 +97,34 @@ const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
   'intern': '实习生',
   'contract': '合同工',
   'part_time': '兼职'
+}
+
+// 入库类型映射
+const INBOUND_TYPE_LABELS: Record<string, string> = {
+  'purchase': '采购入库',
+  'repair_return': '维修返还',
+  'other': '其他入库'
+}
+
+// 设备类别映射
+const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
+  'instrument': '仪器类',
+  'fake_load': '假负载类',
+  'cable': '线材类'
+}
+
+// 位置类型映射
+const LOCATION_TYPE_LABELS: Record<string, string> = {
+  'warehouse': '仓库',
+  'project': '项目'
+}
+
+// 收货状态映射
+const RECEIVE_STATUS_LABELS: Record<string, string> = {
+  'normal': '正常',
+  'damaged': '损坏',
+  'missing': '缺失',
+  'partial': '部分'
 }
 
 const ORDER_TYPE_LABELS: Record<string, { label: string; color: string; icon: any }> = {
@@ -114,11 +161,42 @@ export default function ApprovalMinePageNew() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<ApprovalOrder | null>(null)
+  const [transferOrderDetail, setTransferOrderDetail] = useState<any>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [dateRange, setDateRange] = useState<'all' | 'week' | 'month' | 'quarter'>('all')
 
   useEffect(() => { loadOrders() }, [])
+  
+  // 当选中设备调拨单时，加载调拨单详情
+  useEffect(() => {
+    const loadTransferDetail = async () => {
+      // 尝试从多个来源获取调拨单ID
+      const transferOrderId = selectedOrder?.form_data?.transferOrderId || selectedOrder?.form_data?.businessId || (selectedOrder as any)?.business_id
+      console.log('[ApprovalMinePage] selectedOrder:', selectedOrder?.order_type, 'transferOrderId:', transferOrderId)
+      
+      if (selectedOrder?.order_type === 'equipment-transfer' && transferOrderId) {
+        try {
+          const token = localStorage.getItem('token')
+          const res = await fetch(`${API_URL.BASE}/api/equipment/transfers/${transferOrderId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (res.ok) {
+            const result = await res.json()
+            if (result.success && result.data) {
+              console.log('[ApprovalMinePage] 加载调拨单详情成功:', result.data)
+              setTransferOrderDetail(result.data)
+            }
+          }
+        } catch (e) {
+          console.warn('加载调拨单详情失败', e)
+        }
+      } else {
+        setTransferOrderDetail(null)
+      }
+    }
+    loadTransferDetail()
+  }, [selectedOrder])
 
   const loadOrders = async () => {
     setLoading(true)
@@ -269,7 +347,7 @@ export default function ApprovalMinePageNew() {
           <div 
             key={order.id} 
             className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group"
-            onClick={() => setSelectedOrder(order)}
+            onClick={() => navigate(`/workflow/detail/${order.id}`)}
           >
             <div className="p-5">
               <div className="flex items-start justify-between mb-4">
@@ -310,7 +388,7 @@ export default function ApprovalMinePageNew() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigate(`/workflow/visualization/${order.id}`)
+                    navigate(`/workflow/detail/${order.id}`)
                   }}
                   className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
                 >
@@ -362,7 +440,7 @@ export default function ApprovalMinePageNew() {
                 <tr 
                   key={order.id} 
                   className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => setSelectedOrder(order)}
+                  onClick={() => navigate(`/workflow/detail/${order.id}`)}
                 >
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-3">
@@ -389,7 +467,7 @@ export default function ApprovalMinePageNew() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          navigate(`/workflow/visualization/${order.id}`)
+                          navigate(`/workflow/detail/${order.id}`)
                         }}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
                         title="查看流程"
@@ -498,39 +576,205 @@ export default function ApprovalMinePageNew() {
               </h4>
               <div className="bg-gray-50 rounded-lg p-4">
                 {Object.entries(selectedOrder.form_data).length > 0 ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    {(() => {
-                      // 获取部门/职位名称映射
-                      const deptMap = selectedOrder.form_data._deptMap || {}
-                      const posMap = selectedOrder.form_data._posMap || {}
-                      
-                      return Object.entries(selectedOrder.form_data)
-                        .filter(([key]) => !key.startsWith('_')) // 过滤内部字段
-                        .map(([key, value]) => {
-                          // 格式化显示值
-                          let displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
-                          if (key === 'gender' && GENDER_LABELS[String(value)]) {
-                            displayValue = GENDER_LABELS[String(value)]
-                          } else if (key === 'employee_type' && EMPLOYEE_TYPE_LABELS[String(value)]) {
-                            displayValue = EMPLOYEE_TYPE_LABELS[String(value)]
-                          } else if (key === 'department_id' && deptMap[String(value)]) {
-                            displayValue = deptMap[String(value)]
-                          } else if (key === 'position_id' && posMap[String(value)]) {
-                            displayValue = posMap[String(value)]
-                          }
-                          
-                          return (
-                            <div key={key} className="flex flex-col">
-                              <span className="text-xs text-gray-500 mb-1">
-                                {FORM_FIELD_LABELS[key] || key}
-                              </span>
-                              <span className="text-sm font-medium text-gray-900">
-                                {displayValue}
+                  <div className="space-y-6">
+                    {/* 设备调拨特殊处理 */}
+                    {selectedOrder.order_type === 'equipment-transfer' && selectedOrder.form_data.items && (
+                      <div>
+                        <h5 className="font-medium text-gray-900 mb-3">调拨设备</h5>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">设备名称</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">序列号</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {selectedOrder.form_data.items.map((item: any, idx: number) => (
+                                <tr key={idx}>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.equipment_name}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.model_no}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{EQUIPMENT_CATEGORY_LABELS[item.category] || item.category}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.quantity}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.manage_code}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.serial_number || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 设备调拨位置和负责人信息 */}
+                    {selectedOrder.order_type === 'equipment-transfer' && (
+                      <div>
+                        <h5 className="font-medium text-gray-900 mb-3">调拨信息</h5>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">调出位置：</span>
+                            <span className="text-sm text-gray-900 ml-2">
+                              {selectedOrder.form_data._fromLocationName || '-'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">调出负责人：</span>
+                            <span className="text-sm text-gray-900 ml-2">
+                              {selectedOrder.form_data._fromManagerName || '-'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">调入位置：</span>
+                            <span className="text-sm text-gray-900 ml-2">
+                              {selectedOrder.form_data._toLocationName || '-'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">调入负责人：</span>
+                            <span className="text-sm text-gray-900 ml-2">
+                              {selectedOrder.form_data._toManagerName || '-'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 设备调拨发货信息 - 从调拨单详情获取 */}
+                    {selectedOrder.order_type === 'equipment-transfer' && transferOrderDetail &&
+                      (transferOrderDetail.shipping_no || transferOrderDetail.shipped_at || transferOrderDetail.shipping_attachment) && (
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <h5 className="font-medium text-gray-900 mb-3">发货信息</h5>
+                        <div className="grid grid-cols-2 gap-4">
+                          {transferOrderDetail.shipped_at && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-700">发货时间：</span>
+                              <span className="text-sm text-gray-900 ml-2">
+                                {new Date(transferOrderDetail.shipped_at).toLocaleString('zh-CN')}
                               </span>
                             </div>
-                          )
-                        })
-                    })()}
+                          )}
+                          {transferOrderDetail.shipping_no && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-700">发货单号：</span>
+                              <span className="text-sm text-gray-900 ml-2">
+                                {transferOrderDetail.shipping_no}
+                              </span>
+                            </div>
+                          )}
+                          {transferOrderDetail.shipping_attachment && (
+                            <div className="col-span-2">
+                              <span className="text-sm font-medium text-gray-700">发货凭证：</span>
+                              <a
+                                href={transferOrderDetail.shipping_attachment}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:text-blue-800 ml-2 underline"
+                              >
+                                查看附件
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 入库单特殊处理 */}
+                    {selectedOrder.order_type === 'equipment-inbound' && selectedOrder.form_data.items && (
+                      <div>
+                        <h5 className="font-medium text-gray-900 mb-3">设备明细</h5>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-100">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">设备名称</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">单价</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">总价</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {selectedOrder.form_data.items.map((item: any, idx: number) => (
+                                <tr key={idx}>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.equipment_name}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.model_no}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{EQUIPMENT_CATEGORY_LABELS[item.category] || item.category}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.quantity}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">¥{item.purchase_price}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900">¥{item.total_price}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 其他字段 */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {(() => {
+                        // 获取部门/职位名称映射
+                        const deptMap = selectedOrder.form_data._deptMap || {}
+                        const posMap = selectedOrder.form_data._posMap || {}
+                        
+                        // 对于设备调拨，添加位置和负责人信息
+                        const fromLocationName = selectedOrder.form_data._fromLocationName || ''
+                        const toLocationName = selectedOrder.form_data._toLocationName || ''
+                        const fromManagerName = selectedOrder.form_data._fromManagerName || ''
+                        const toManagerName = selectedOrder.form_data._toManagerName || ''
+                        
+                        return Object.entries(selectedOrder.form_data)
+                          .filter(([key]) => !key.startsWith('_') && key !== 'items') // 过滤内部字段和items
+                          .filter(([key]) => {
+                            // 对于设备调拨，过滤掉一些不需要显示的字段
+                            if (selectedOrder.order_type === 'equipment-transfer') {
+                              return !['fromLocationId', 'toLocationId', 'fromManagerId', 'toManagerId'].includes(key)
+                            }
+                            return true
+                          })
+                          .map(([key, value]) => {
+                            // 格式化显示值
+                            let displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
+                            if (key === 'gender' && GENDER_LABELS[String(value)]) {
+                              displayValue = GENDER_LABELS[String(value)]
+                            } else if (key === 'employee_type' && EMPLOYEE_TYPE_LABELS[String(value)]) {
+                              displayValue = EMPLOYEE_TYPE_LABELS[String(value)]
+                            } else if (key === 'inbound_type' && INBOUND_TYPE_LABELS[String(value)]) {
+                              displayValue = INBOUND_TYPE_LABELS[String(value)]
+                            } else if (key === 'fromLocationType' && LOCATION_TYPE_LABELS[String(value)]) {
+                              displayValue = LOCATION_TYPE_LABELS[String(value)]
+                            } else if (key === 'toLocationType' && LOCATION_TYPE_LABELS[String(value)]) {
+                              displayValue = LOCATION_TYPE_LABELS[String(value)]
+                            } else if (key === 'receiveStatus' && RECEIVE_STATUS_LABELS[String(value)]) {
+                              displayValue = RECEIVE_STATUS_LABELS[String(value)]
+                            } else if (key === 'estimatedArrivalDate' && value) {
+                              displayValue = new Date(value).toLocaleDateString('zh-CN')
+                            } else if (key === 'shippingDate' && value) {
+                              displayValue = new Date(value).toLocaleDateString('zh-CN')
+                            } else if (key === 'department_id' && deptMap[String(value)]) {
+                              displayValue = deptMap[String(value)]
+                            } else if (key === 'position_id' && posMap[String(value)]) {
+                              displayValue = posMap[String(value)]
+                            }
+                            
+                            return (
+                              <div key={key} className="flex flex-col">
+                                <span className="text-xs text-gray-500 mb-1">
+                                  {FORM_FIELD_LABELS[key] || key}
+                                </span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {displayValue}
+                                </span>
+                              </div>
+                            )
+                          })
+                      })()}
+                    </div>
                   </div>
                 ) : (
                   <p className="text-gray-500 text-sm">暂无表单数据</p>

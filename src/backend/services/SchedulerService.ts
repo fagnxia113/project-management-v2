@@ -152,9 +152,8 @@ export class SchedulerService {
       manage_code: string;
       calibration_expiry: Date;
     }>(
-      `SELECT i.id, m.name, i.manage_code, i.calibration_expiry 
+      `SELECT i.id, i.equipment_name, i.manage_code, i.calibration_expiry 
        FROM equipment_instances i
-       JOIN equipment_models m ON i.model_id = m.id
        WHERE i.calibration_expiry IS NOT NULL 
        AND i.calibration_expiry <= ? 
        AND i.calibration_expiry > NOW()`,
@@ -163,10 +162,8 @@ export class SchedulerService {
 
     if (expiringCalibrations.length > 0) {
       console.log(`[SchedulerService] 发现 ${expiringCalibrations.length} 台设备校准证书即将过期`);
-      // TODO: 发送通知给设备管理员
     }
 
-    // 检查即将过期的维护周期
     const maintenanceDue = await db.query<{
       id: string;
       name: string;
@@ -174,19 +171,16 @@ export class SchedulerService {
       last_maintenance: Date;
       maintenance_cycle: number;
     }>(
-      `SELECT i.id, m.name, i.manage_code, i.last_maintenance, m.calibration_cycle as maintenance_cycle 
+      `SELECT i.id, i.equipment_name, i.manage_code, i.last_maintenance, 12 as maintenance_cycle 
        FROM equipment_instances i
-       JOIN equipment_models m ON i.model_id = m.id
        WHERE i.last_maintenance IS NOT NULL 
-       AND m.calibration_cycle IS NOT NULL
-       AND DATE_ADD(i.last_maintenance, INTERVAL m.calibration_cycle MONTH) <= ?
-       AND DATE_ADD(i.last_maintenance, INTERVAL m.calibration_cycle MONTH) > NOW()`,
+       AND DATE_ADD(i.last_maintenance, INTERVAL 12 MONTH) <= ?
+       AND DATE_ADD(i.last_maintenance, INTERVAL 12 MONTH) > NOW()`,
       [thirtyDaysLater]
     );
 
     if (maintenanceDue.length > 0) {
       console.log(`[SchedulerService] 发现 ${maintenanceDue.length} 台设备即将需要维护`);
-      // TODO: 发送通知给设备管理员
     }
   }
 

@@ -10,9 +10,9 @@ const router = express.Router();
 
 /**
  * 获取所有流程表单预设
- * GET /api/process-forms/presets
+ * GET /api/process-forms
  */
-router.get('/presets', (req, res) => {
+router.get('/', (req, res) => {
   try {
     const presets = processFormIntegrationService.getAllPresets();
     res.json({
@@ -29,10 +29,45 @@ router.get('/presets', (req, res) => {
 });
 
 /**
- * 根据ID获取流程表单预设
- * GET /api/process-forms/presets/:id
+ * 根据formKey获取表单字段
+ * GET /api/process-forms/form/:formKey
  */
-router.get('/presets/:id', (req, res) => {
+router.get('/form/:formKey', (req, res) => {
+  try {
+    const formKey = req.params.formKey;
+    const formTemplate = processFormIntegrationService.getFormTemplate(formKey);
+    
+    if (!formTemplate) {
+      res.status(404).json({
+        success: false,
+        message: '表单模板不存在'
+      });
+      return;
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        id: formTemplate.id,
+        key: formTemplate.key,
+        name: formTemplate.name,
+        fields: formTemplate.fields
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: '获取表单模板失败',
+      error: (error as Error).message
+    });
+  }
+});
+
+/**
+ * 根据ID获取流程表单预设
+ * GET /api/process-forms/:id
+ */
+router.get('/:id', (req, res) => {
   try {
     const preset = processFormIntegrationService.getPresetById(req.params.id);
     if (!preset) {
@@ -57,9 +92,9 @@ router.get('/presets/:id', (req, res) => {
 
 /**
  * 根据分类获取流程表单预设
- * GET /api/process-forms/presets/category/:category
+ * GET /api/process-forms/category/:category
  */
-router.get('/presets/category/:category', (req, res) => {
+router.get('/category/:category', (req, res) => {
   try {
     const presets = processFormIntegrationService.getPresetsByCategory(req.params.category);
     res.json({
@@ -77,9 +112,9 @@ router.get('/presets/category/:category', (req, res) => {
 
 /**
  * 根据业务类型获取流程表单预设
- * GET /api/process-forms/presets/business-type/:businessType
+ * GET /api/process-forms/business-type/:businessType
  */
-router.get('/presets/business-type/:businessType', (req, res) => {
+router.get('/business-type/:businessType', (req, res) => {
   try {
     const presets = processFormIntegrationService.getPresetsByBusinessType(req.params.businessType);
     res.json({
@@ -97,9 +132,9 @@ router.get('/presets/business-type/:businessType', (req, res) => {
 
 /**
  * 创建流程表单预设
- * POST /api/process-forms/presets
+ * POST /api/process-forms
  */
-router.post('/presets', (req, res) => {
+router.post('/', (req, res) => {
   try {
     const presetData = req.body;
     if (!presetData.name || !presetData.category || !presetData.formTemplateKey || !presetData.workflowTemplateId || !presetData.businessType) {
@@ -131,9 +166,9 @@ router.post('/presets', (req, res) => {
 
 /**
  * 更新流程表单预设
- * PUT /api/process-forms/presets/:id
+ * PUT /api/process-forms/:id
  */
-router.put('/presets/:id', (req, res) => {
+router.put('/:id', (req, res) => {
   try {
     const preset = processFormIntegrationService.updatePreset(req.params.id, req.body);
     if (!preset) {
@@ -158,9 +193,9 @@ router.put('/presets/:id', (req, res) => {
 
 /**
  * 删除流程表单预设
- * DELETE /api/process-forms/presets/:id
+ * DELETE /api/process-forms/:id
  */
-router.delete('/presets/:id', (req, res) => {
+router.delete('/:id', (req, res) => {
   try {
     const result = processFormIntegrationService.deletePreset(req.params.id);
     if (!result) {
@@ -185,9 +220,9 @@ router.delete('/presets/:id', (req, res) => {
 
 /**
  * 启动流程（包含表单验证）
- * POST /api/process-forms/presets/:id/start
+ * POST /api/process-forms/:id/start
  */
-router.post('/presets/:id/start', async (req, res) => {
+router.post('/:id/start', async (req, res) => {
   try {
     const { formData, businessKey, businessId, title, initiator, additionalVariables } = req.body;
     const result = await processFormIntegrationService.startProcessWithForm({
@@ -223,9 +258,9 @@ router.post('/presets/:id/start', async (req, res) => {
 
 /**
  * 获取流程表单的默认值
- * GET /api/process-forms/presets/:id/default-values
+ * GET /api/process-forms/:id/default-values
  */
-router.get('/presets/:id/default-values', (req, res) => {
+router.get('/:id/default-values', (req, res) => {
   try {
     const defaultValues = processFormIntegrationService.getFormDefaultValues(req.params.id);
     res.json({
@@ -243,9 +278,9 @@ router.get('/presets/:id/default-values', (req, res) => {
 
 /**
  * 获取流程表单的字段定义
- * GET /api/process-forms/presets/:id/form-fields
+ * GET /api/process-forms/:id/form-fields
  */
-router.get('/presets/:id/form-fields', async (req, res) => {
+router.get('/:id/form-fields', async (req, res) => {
   try {
     const formFields = await processFormIntegrationService.getFormFields(req.params.id);
     res.json({

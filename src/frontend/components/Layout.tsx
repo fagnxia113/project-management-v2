@@ -93,11 +93,10 @@ const getMenus = (role: string): MenuItem[] => {
       icon: 'box',
       children: [
         { label: '设备台账', path: '/equipment' },
-        { label: '入库登记', path: '/equipment/inbound' },
-        { label: '出库领用', path: '/equipment/outbound' },
-        { label: '调拨转移', path: '/equipment/transfer' },
-        { label: '归还入库', path: '/equipment/return' },
-        { label: '维修报废', path: '/equipment/repair' },
+        { label: '仓库管理', path: '/warehouses' },
+        { label: '入库登记', path: '/equipment/inbounds/create' },
+        { label: '设备借用', path: '/equipment/borrowings/create' },
+        { label: '设备调拨', path: '/equipment/transfers/create' },
       ]
     },
     

@@ -112,6 +112,13 @@ const FORM_GROUP_CONFIG: Record<string, { title: string; fields: string[] }[]> =
     { title: '教育背景', fields: ['education', 'major', 'graduation_school', 'graduation_date'] },
     { title: '银行信息', fields: ['bank_account', 'bank_name'] }
   ],
+  'equipment-transfer': [
+    { title: '调拨信息', fields: ['fromLocationType', 'toLocationType', 'transferReason', 'estimatedArrivalDate'] },
+    { title: '调出位置', fields: ['_fromLocationName', '_fromManagerName'] },
+    { title: '调入位置', fields: ['_toLocationName', '_toManagerName'] },
+    { title: '发货信息', fields: ['shippingDate', 'waybillNo', 'shippingNotes'] },
+    { title: '收货信息', fields: ['receiveStatus', 'receiveComment'] }
+  ],
   'default': [
     { title: '表单内容', fields: [] } // 空数组表示显示所有字段
   ]
@@ -134,6 +141,8 @@ export default function ProcessInstanceDetailPage() {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showAllLogs, setShowAllLogs] = useState(false)
+  const [taskFormData, setTaskFormData] = useState<Record<string, any>>({})
+  const [taskFormFields, setTaskFormFields] = useState<FormField[]>([])
 
   useEffect(() => {
     if (instanceId) {
@@ -196,6 +205,11 @@ export default function ProcessInstanceDetailPage() {
           (t: Task) => t.assignee_id === userId && ['assigned', 'in_progress'].includes(t.status)
         )
         setCurrentTask(pendingTask || null)
+        
+        // 加载当前任务的表单字段
+        if (pendingTask) {
+          await loadTaskFormFields(pendingTask, instanceData.data.definition_id)
+        }
       }
       
       // 4. 加载执行日志
@@ -300,6 +314,14 @@ export default function ProcessInstanceDetailPage() {
       return
     }
     
+    // 验证必填字段
+    for (const field of taskFormFields) {
+      if (field.required && !taskFormData[field.name]) {
+        alert(`请填写${field.label}`)
+        return
+      }
+    }
+    
     try {
       setSubmitting(true)
       const token = localStorage.getItem('token')
@@ -312,7 +334,8 @@ export default function ProcessInstanceDetailPage() {
         },
         body: JSON.stringify({
           action: actionType === 'approve' ? 'approve' : 'reject',
-          comment: comment.trim()
+          comment: comment.trim(),
+          formData: taskFormData
         })
       })
       
@@ -320,7 +343,12 @@ export default function ProcessInstanceDetailPage() {
       
       if (data.success) {
         alert(actionType === 'approve' ? '审批通过' : '已驳回')
-        navigate('/approvals/pending')
+        // 重新加载流程实例数据，而不是直接导航
+        await loadInstanceData()
+        // 清空表单数据和操作状态
+        setTaskFormData({})
+        setActionType('')
+        setComment('')
       } else {
         alert(data.error || '操作失败')
       }
@@ -350,6 +378,52 @@ export default function ProcessInstanceDetailPage() {
     } catch (error) {
       alert('撤回成功')
       loadInstanceData()
+    }
+  }
+
+  // 加载当前任务的表单字段
+  const loadTaskFormFields = async (task: Task, definitionId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      
+      // 获取流程定义
+      const definitionRes = await fetch(`${API_URL.BASE}/api/workflow/definitions/${definitionId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const definitionData = await definitionRes.json()
+      
+      console.log('Definition data:', definitionData)
+      
+      if (definitionData.success && definitionData.data?.definition) {
+        const definition = definitionData.data.definition
+        
+        // 找到当前节点
+        const currentNode = definition.nodes.find((n: any) => n.id === task.node_id)
+        
+        console.log('Current node:', currentNode)
+        
+        if (currentNode?.config?.formKey) {
+          const formKey = currentNode.config.formKey
+          
+          console.log('Form key:', formKey)
+          
+          // 获取表单字段
+          const formRes = await fetch(`${API_URL.BASE}/api/workflow/form-presets/form/${formKey}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const formData = await formRes.json()
+          
+          console.log('Form data:', formData)
+          
+          if (formData.success && formData.data?.fields) {
+            setTaskFormFields(formData.data.fields)
+          } else {
+            console.error('Form data error:', formData)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('加载任务表单字段失败:', error)
     }
   }
 
@@ -607,6 +681,65 @@ export default function ProcessInstanceDetailPage() {
                     驳回
                   </button>
                 </div>
+
+                {/* 任务表单字段 */}
+                {taskFormFields.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      填写表单信息
+                    </label>
+                    <div className="space-y-3">
+                      {taskFormFields.map(field => (
+                        <div key={field.name}>
+                          <label className="block text-sm text-gray-600 mb-1">
+                            {field.label}
+                            {field.required && <span className="text-red-500 ml-1">*</span>}
+                          </label>
+                          {field.type === 'text' && (
+                            <input
+                              type="text"
+                              value={taskFormData[field.name] || ''}
+                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
+                              placeholder={field.placeholder || `请输入${field.label}`}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                          )}
+                          {field.type === 'textarea' && (
+                            <textarea
+                              value={taskFormData[field.name] || ''}
+                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
+                              placeholder={field.placeholder || `请输入${field.label}`}
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                          )}
+                          {field.type === 'date' && (
+                            <input
+                              type="date"
+                              value={taskFormData[field.name] || ''}
+                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                          )}
+                          {field.type === 'select' && field.options && (
+                            <select
+                              value={taskFormData[field.name] || ''}
+                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                              <option value="">请选择</option>
+                              {field.options.map(option => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 审批意见 */}
                 <div>

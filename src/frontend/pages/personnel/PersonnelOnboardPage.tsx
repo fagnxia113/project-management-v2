@@ -7,7 +7,7 @@ export default function PersonnelOnboardPage() {
 
   const handleSuccess = (processInstanceId: string) => {
     console.log('入职流程启动成功:', processInstanceId)
-    navigate('/personnel')
+    navigate(-1)
   }
 
   const handleCancel = () => {

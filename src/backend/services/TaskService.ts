@@ -93,20 +93,33 @@ export class TaskService {
   }
 
   async getTasksByInstance(instanceId: string, status?: string[]): Promise<WorkflowTask[]> {
-    let whereClause = 'instance_id = ?';
+    let whereClause = 't.instance_id = ?';
     const params = [instanceId];
 
     if (status && status.length > 0) {
-      whereClause += ` AND status IN (${status.map(() => '?').join(', ')})`;
+      whereClause += ` AND t.status IN (${status.map(() => '?').join(', ')})`;
       params.push(...status);
     }
 
     const rows = await db.query<any>(
-      `SELECT * FROM workflow_tasks WHERE ${whereClause} ORDER BY created_at DESC`,
+      `SELECT t.*, i.title as process_title, i.definition_key, i.initiator_id, i.initiator_name,
+              e.user_id as assignee_user_id
+       FROM workflow_tasks t
+       LEFT JOIN workflow_instances i ON t.instance_id = i.id
+       LEFT JOIN employees e ON t.assignee_id = e.id
+       WHERE ${whereClause}
+       ORDER BY t.created_at DESC`,
       params
     );
 
-    return rows.map((row: any) => this.parseTaskRow(row));
+    return rows.map((row: any) => {
+      const task = this.parseTaskRow(row);
+      // 如果 assignee_id 是 employee_id，则使用关联的 user_id
+      if (row.assignee_user_id) {
+        task.assignee_id = row.assignee_user_id;
+      }
+      return task;
+    });
   }
 
   async getTasksByAssignee(assigneeId: string, status?: string[]): Promise<WorkflowTask[]> {
@@ -117,7 +130,8 @@ export class TaskService {
     );
     const employeeIds = employees.map((e: any) => e.id);
     
-    // 构建查询条件：assignee_id 等于用户ID 或 员工ID
+    // 构建查询条件：通过employees表的user_id字段关联
+    // 任务表的assignee_id可能是user_id或employee_id
     let whereClause = '(t.assignee_id = ?';
     const params: any[] = [assigneeId];
     
@@ -235,9 +249,29 @@ export class TaskService {
       formData: params.formData
     }, task.instance_id, task.node_id);
 
-    // 更新流程变量
-    if (params.variables) {
-      await instanceService.updateVariables(task.instance_id, params.variables);
+    // 更新流程变量，合并表单数据
+    let variablesToUpdate = params.variables || {};
+    
+    // 如果有表单数据，合并到formData中
+    if (params.formData) {
+      const instance = await instanceService.getInstance(task.instance_id);
+      const currentFormData = instance.variables?.formData || {};
+      const mergedFormData = {
+        ...currentFormData,
+        ...params.formData
+      };
+      
+      console.log('Merging form data:', {
+        current: currentFormData,
+        new: params.formData,
+        merged: mergedFormData
+      });
+      
+      variablesToUpdate.formData = mergedFormData;
+    }
+    
+    if (Object.keys(variablesToUpdate).length > 0) {
+      await instanceService.updateVariables(task.instance_id, variablesToUpdate);
     }
   }
 

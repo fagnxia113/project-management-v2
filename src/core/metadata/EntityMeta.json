@@ -450,57 +450,6 @@
         }
       }
     },
-"EquipmentModel": {
-      "name": "设备型号",
-      "table": "equipment_models",
-      "fields": {
-        "id": {
-          "type": "uuid",
-          "primaryKey": true,
-          "label": "ID"
-        },
-        "category": {
-          "type": "enum",
-          "enumRef": "EquipmentCategory",
-          "label": "设备类型",
-          "default": "instrument"
-        },
-        "name": {
-          "type": "string",
-          "label": "设备名称",
-          "required": true
-        },
-        "model_no": {
-          "type": "string",
-          "label": "型号编号",
-          "required": true
-        },
-        "brand": {
-          "type": "string",
-          "label": "品牌"
-        },
-        "unit": {
-          "type": "string",
-          "label": "单位",
-          "default": "台"
-        },
-        "calibration_cycle": {
-          "type": "number",
-          "label": "校准周期(月)",
-          "default": 12
-        },
-        "created_at": {
-          "type": "datetime",
-          "label": "创建时间",
-          "autoValue": "now"
-        },
-        "updated_at": {
-          "type": "datetime",
-          "label": "更新时间",
-          "autoValue": "now_on_update"
-        }
-      }
-    },
     "EquipmentInstance": {
       "name": "设备实例",
       "table": "equipment_instances",
@@ -509,18 +458,6 @@
           "type": "uuid",
           "primaryKey": true,
           "label": "ID"
-        },
-        "model_id": {
-          "type": "uuid",
-          "label": "设备型号ID",
-          "relatedEntity": "EquipmentModel",
-          "required": true
-        },
-        "model_name": {
-          "type": "string",
-          "label": "设备名称",
-          "relationField": "model_id",
-          "refDisplay": "name"
         },
         "serial_number": {
           "type": "string",
@@ -584,6 +521,31 @@
           "type": "datetime",
           "label": "更新时间",
           "autoValue": "now_on_update"
+        },
+        "equipment_name": {
+          "type": "string",
+          "label": "设备名称",
+          "required": true
+        },
+        "model_no": {
+          "type": "string",
+          "label": "型号编号",
+          "required": true
+        },
+        "brand": {
+          "type": "string",
+          "label": "品牌"
+        },
+        "category": {
+          "type": "enum",
+          "enumRef": "EquipmentCategory",
+          "label": "设备类型",
+          "default": "instrument"
+        },
+        "unit": {
+          "type": "string",
+          "label": "单位",
+          "default": "台"
         }
       }
     },

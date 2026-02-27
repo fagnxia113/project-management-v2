@@ -9,8 +9,7 @@ export default function ProjectCreatePage() {
   const handleSuccess = (processInstanceId: string) => {
     console.log('项目创建流程启动成功:', processInstanceId)
     setIsFormOpen(false)
-    // 这里可以添加跳转到项目列表或审批中心的逻辑
-    navigate('/approvals/pending')
+    navigate('/projects')
   }
 
   const handleCancel = () => {

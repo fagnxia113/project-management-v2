@@ -72,7 +72,6 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; bgColor: s
   'low': { label: '低优', color: 'text-gray-700', bgColor: 'bg-gray-50' }
 }
 
-// 表单字段中文标签映射
 const FORM_FIELD_LABELS: Record<string, string> = {
   'employee_name': '员工姓名',
   'employee_id': '员工编号',
@@ -99,13 +98,11 @@ const FORM_FIELD_LABELS: Record<string, string> = {
   'system_access': '系统权限'
 }
 
-// 性别映射
 const GENDER_LABELS: Record<string, string> = {
   'male': '男',
   'female': '女'
 }
 
-// 员工类型映射
 const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
   'regular': '正式员工',
   'probation': '试用期',
@@ -121,12 +118,8 @@ export default function ApprovalPendingPageNew() {
   const [viewMode, setViewMode] = useState<'card' | 'table'>('table')
   const [filter, setFilter] = useState<'all' | 'high' | 'normal' | 'low'>('all')
   const [searchKeyword, setSearchKeyword] = useState('')
-  const [selectedTask, setSelectedTask] = useState<ApprovalTask | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
-  const [approvalComment, setApprovalComment] = useState('')
-  const [approvalFormData, setApprovalFormData] = useState<Record<string, any>>({})
-  const [processing, setProcessing] = useState(false)
 
   useEffect(() => { loadTasks() }, [])
 
@@ -159,20 +152,17 @@ export default function ApprovalPendingPageNew() {
             const deptMap = formData._deptMap || {}
             const posMap = formData._posMap || {}
             
-            // 移除映射数据，只保留原始表单数据
-            const { _deptMap, _posMap, ...cleanFormData } = formData
-            
             return {
               id: item.id,
               task_id: item.id,
               process_id: item.instance_id,
-              process_title: item.process_title || '未命名流程',
-              process_type: item.definition_key || 'unknown',
-              node_name: item.name || '审批节点',
-              initiator_name: item.initiator_name || '未知',
+              process_title: item.process_title || item.name,
+              process_type: item.definition_key || item.process_type,
+              node_name: item.name,
+              initiator_name: item.initiator_name,
               created_at: item.created_at,
               priority: item.priority || 'normal',
-              form_data: cleanFormData,
+              form_data: formData,
               field_permissions: item.field_permissions,
               dept_map: deptMap,
               pos_map: posMap,
@@ -180,24 +170,19 @@ export default function ApprovalPendingPageNew() {
             }
           })
           setTasks(mappedTasks)
-        } else {
-          setTasks([])
         }
       }
     } catch (e) {
-      console.error('加载待办任务失败:', e)
-      setTasks([])
+      console.error('加载任务失败:', e)
+      alert('加载失败，请重试')
     } finally {
       setLoading(false)
     }
   }
 
-  // 过滤和搜索
   const filteredTasks = tasks.filter(task => {
-    // 优先级过滤
     if (filter !== 'all' && task.priority !== filter) return false
     
-    // 搜索过滤
     if (searchKeyword) {
       const keyword = searchKeyword.toLowerCase()
       const matchTitle = task.process_title.toLowerCase().includes(keyword)
@@ -209,132 +194,8 @@ export default function ApprovalPendingPageNew() {
     return true
   })
 
-  // 分页
   const totalPages = Math.ceil(filteredTasks.length / pageSize)
   const paginatedTasks = filteredTasks.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-
-  const handleApprove = async (taskId: string) => {
-    if (!confirm('确定要通过此申请吗？')) return
-    setProcessing(true)
-    try {
-      const token = localStorage.getItem('token')
-      let userId = 'current-user'
-      let userName = '当前用户'
-      if (token) {
-        try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
-            userId = payload.userId || payload.id || 'current-user'
-            userName = payload.name || payload.username || payload.sub || '当前用户'
-          }
-        } catch (e) {
-          console.warn('Token解析失败')
-        }
-      }
-      
-      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${taskId}/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          action: 'approved',
-          comment: approvalComment,
-          formData: approvalFormData,
-          operator: { id: userId, name: userName }
-        })
-      })
-      if (res.ok) {
-        alert('审批通过')
-        setSelectedTask(null)
-        setApprovalComment('')
-        setApprovalFormData({})
-        loadTasks()
-      }
-    } catch (e) {
-      alert('审批成功（模拟）')
-      setSelectedTask(null)
-      setApprovalComment('')
-      setApprovalFormData({})
-      loadTasks()
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const handleReject = async (taskId: string) => {
-    if (!taskId) {
-      alert('任务ID无效')
-      return
-    }
-    if (!approvalComment.trim()) {
-      alert('请填写驳回原因')
-      return
-    }
-    if (!confirm('确定要驳回此申请吗？')) return
-    setProcessing(true)
-    try {
-      const token = localStorage.getItem('token')
-      let userId = 'current-user'
-      let userName = '当前用户'
-      if (token) {
-        try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
-            userId = payload.userId || payload.id || 'current-user'
-            userName = payload.name || payload.username || payload.sub || '当前用户'
-          }
-        } catch (e) {
-          console.warn('Token解析失败')
-        }
-      }
-      
-      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${taskId}/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          action: 'rejected',
-          comment: approvalComment,
-          formData: approvalFormData,
-          operator: { id: userId, name: userName }
-        })
-      })
-      if (res.ok) {
-        alert('已驳回')
-        setSelectedTask(null)
-        setApprovalComment('')
-        setApprovalFormData({})
-        // 强制清空任务列表并重新加载
-        setTasks([])
-        setTimeout(() => loadTasks(), 100)
-      }
-    } catch (e) {
-      alert('驳回成功（模拟）')
-      setSelectedTask(null)
-      setApprovalComment('')
-      setApprovalFormData({})
-      setTasks([])
-      setTimeout(() => loadTasks(), 100)
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  const getPriorityBadge = (priority: string) => {
-    const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG['normal']
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
-        {priority === 'high' && <AlertCircle className="w-3 h-3" />}
-        {config.label}
-      </span>
-    )
-  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -355,7 +216,16 @@ export default function ApprovalPendingPageNew() {
     })
   }
 
-  // 卡片视图
+  const getPriorityBadge = (priority: string) => {
+    const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG['normal']
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
+        {priority === 'high' && <AlertCircle className="w-3 h-3" />}
+        {config.label}
+      </span>
+    )
+  }
+
   const renderCardView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {paginatedTasks.map(task => {
@@ -366,7 +236,7 @@ export default function ApprovalPendingPageNew() {
           <div 
             key={task.id} 
             className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group"
-            onClick={() => setSelectedTask(task)}
+            onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
           >
             <div className="p-5">
               <div className="flex items-start justify-between mb-4">
@@ -412,7 +282,7 @@ export default function ApprovalPendingPageNew() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    navigate(`/workflow/visualization/${task.process_id}`)
+                    navigate(`/workflow/detail/${task.process_id}`)
                   }}
                   className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
                 >
@@ -422,7 +292,7 @@ export default function ApprovalPendingPageNew() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    setSelectedTask(task)
+                    navigate(`/workflow/detail/${task.process_id}`)
                   }}
                   className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
                 >
@@ -437,83 +307,70 @@ export default function ApprovalPendingPageNew() {
     </div>
   )
 
-  // 表格视图
   const renderTableView = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">申请信息</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">类型</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">当前节点</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">发起人</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">优先级</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">到达时间</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedTasks.map(task => {
-              const typeConfig = PROCESS_TYPE_LABELS[task.process_type] || { label: task.process_type, color: 'gray', icon: FileText }
-              const TypeIcon = typeConfig.icon
-              
-              return (
-                <tr 
-                  key={task.id} 
-                  className="border-b border-gray-100 hover:bg-gray-50"
-                >
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg bg-${typeConfig.color}-100 flex items-center justify-center flex-shrink-0`}>
-                        <TypeIcon className={`w-4 h-4 text-${typeConfig.color}-600`} />
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{task.process_title}</div>
-                        {task.timeout && task.timeout < 24 && (
-                          <span className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
-                            <Clock className="w-3 h-3" />
-                            即将超时
-                          </span>
-                        )}
-                      </div>
+      <table className="w-full">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">任务</th>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">类型</th>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">发起人</th>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">当前节点</th>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">优先级</th>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">到达时间</th>
+            <th className="py-3 px-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {paginatedTasks.map(task => {
+            const typeConfig = PROCESS_TYPE_LABELS[task.process_type] || { label: task.process_type, color: 'gray', icon: FileText }
+            
+            return (
+              <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                <td className="py-4 px-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg bg-${typeConfig.color}-100 flex items-center justify-center`}>
+                      <typeConfig.icon className={`w-5 h-5 text-${typeConfig.color}-600`} />
                     </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className="px-2 py-1 bg-gray-100 rounded text-xs text-gray-700">{typeConfig.label}</span>
-                  </td>
-                  <td className="py-4 px-4 text-sm text-gray-600">{task.node_name}</td>
-                  <td className="py-4 px-4 text-sm text-gray-600">{task.initiator_name}</td>
-                  <td className="py-4 px-4">{getPriorityBadge(task.priority)}</td>
-                  <td className="py-4 px-4 text-sm text-gray-600">{formatDate(task.created_at)}</td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => navigate(`/workflow/visualization/${task.process_id}`)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                        title="查看流程"
-                      >
-                        <GitBranch className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setSelectedTask(task)}
-                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        审批
-                      </button>
+                    <div>
+                      <div className="font-medium text-gray-900">{task.process_title}</div>
+                      <div className="text-xs text-gray-500 font-mono">{task.task_id.slice(0, 8)}</div>
                     </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                  </div>
+                </td>
+                <td className="py-4 px-4">
+                  <span className="px-2 py-1 bg-gray-100 rounded text-xs">{typeConfig.label}</span>
+                </td>
+                <td className="py-4 px-4 text-sm text-gray-600">{task.initiator_name}</td>
+                <td className="py-4 px-4 text-sm text-gray-600">{task.node_name}</td>
+                <td className="py-4 px-4">{getPriorityBadge(task.priority)}</td>
+                <td className="py-4 px-4 text-sm text-gray-600">{formatDate(task.created_at)}</td>
+                <td className="py-4 px-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                      title="查看流程"
+                    >
+                      <GitBranch className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      审批
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 
-  // 空状态
   const renderEmpty = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -523,178 +380,6 @@ export default function ApprovalPendingPageNew() {
       <p className="text-gray-500">您已完成所有审批任务</p>
     </div>
   )
-
-  // 审批弹窗
-  const renderApprovalModal = () => {
-    if (!selectedTask) return null
-    
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-          {/* 头部 */}
-          <div className="p-6 border-b border-gray-200 flex justify-between items-start bg-gray-50">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                {getPriorityBadge(selectedTask.priority)}
-                <span className="text-sm text-gray-500">来自 {selectedTask.initiator_name}</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900">{selectedTask.process_title}</h3>
-            </div>
-            <button 
-              onClick={() => { setSelectedTask(null); setApprovalComment(''); setApprovalFormData({}) }} 
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              <XCircle className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-          
-          {/* 内容 */}
-          <div className="p-6 overflow-y-auto max-h-[50vh]">
-            {/* 基本信息 */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-500 mb-1">当前节点</div>
-                <div className="font-medium text-gray-900 flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-blue-500" />
-                  {selectedTask.node_name}
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-500 mb-1">申请类型</div>
-                <div className="font-medium text-gray-900">
-                  {PROCESS_TYPE_LABELS[selectedTask.process_type]?.label || selectedTask.process_type}
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-500 mb-1">到达时间</div>
-                <div className="font-medium text-gray-900">{formatDate(selectedTask.created_at)}</div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-500 mb-1">任务ID</div>
-                <div className="font-medium text-gray-900 font-mono text-sm">{selectedTask.task_id}</div>
-              </div>
-            </div>
-            
-            {/* 表单数据 */}
-            <div className="border-t border-gray-200 pt-6">
-              <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-gray-400" />
-                申请内容
-              </h4>
-              <div className="bg-gray-50 rounded-lg p-4">
-                {Object.entries(selectedTask.form_data).length > 0 ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(selectedTask.form_data)
-                      .filter(([key]) => {
-                        // 如果没有权限配置，显示所有字段
-                        if (!selectedTask.field_permissions) return true
-                        // 查找字段权限
-                        const permission = selectedTask.field_permissions.find(p => p.fieldName === key)
-                        // 如果没有找到权限配置，默认显示；否则根据visible决定
-                        return !permission || permission.visible !== false
-                      })
-                      .map(([key, value]) => {
-                        const permission = selectedTask.field_permissions?.find(p => p.fieldName === key)
-                        const isEditable = permission?.editable !== false // 默认可编辑
-                        
-                        // 获取字段中文标签
-                        const label = FORM_FIELD_LABELS[key] || key
-                        
-                        // 转换值为中文显示
-                        let displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value)
-                        if (key === 'gender' && GENDER_LABELS[value as string]) {
-                          displayValue = GENDER_LABELS[value as string]
-                        } else if (key === 'employee_type' && EMPLOYEE_TYPE_LABELS[value as string]) {
-                          displayValue = EMPLOYEE_TYPE_LABELS[value as string]
-                        } else if (key === 'department_id' && selectedTask.dept_map?.[value as string]) {
-                          displayValue = selectedTask.dept_map[value as string]
-                        } else if (key === 'position_id' && selectedTask.pos_map?.[value as string]) {
-                          displayValue = selectedTask.pos_map[value as string]
-                        }
-                        
-                        return (
-                          <div key={key} className="flex flex-col">
-                            <span className="text-xs text-gray-500 mb-1">
-                              {label}
-                              {permission && !isEditable && (
-                                <span className="ml-1 text-xs text-orange-500">(只读)</span>
-                              )}
-                            </span>
-                            {isEditable ? (
-                              <input
-                                type="text"
-                                defaultValue={displayValue}
-                                className="text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                onChange={(e) => {
-                                  setApprovalFormData(prev => ({
-                                    ...prev,
-                                    [key]: e.target.value
-                                  }))
-                                }}
-                              />
-                            ) : (
-                              <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                                {displayValue}
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-sm">暂无表单数据</p>
-                )}
-              </div>
-            </div>
-            
-            {/* 审批意见 */}
-            <div className="border-t border-gray-200 pt-6 mt-6">
-              <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-gray-400" />
-                审批意见
-              </h4>
-              <textarea
-                value={approvalComment}
-                onChange={(e) => setApprovalComment(e.target.value)}
-                placeholder="请输入审批意见（驳回时必填）"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                rows={4}
-              />
-            </div>
-          </div>
-          
-          {/* 底部操作 */}
-          <div className="p-6 border-t border-gray-200 bg-gray-50 flex justify-between">
-            <button
-              onClick={() => navigate(`/workflow/visualization/${selectedTask.process_id}`)}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-            >
-              <GitBranch className="w-4 h-4" />
-              查看流程图
-            </button>
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleReject(selectedTask.task_id)}
-                disabled={processing}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 disabled:opacity-50"
-              >
-                <XCircle className="w-4 h-4" />
-                {processing ? '处理中...' : '驳回'}
-              </button>
-              <button
-                onClick={() => handleApprove(selectedTask.task_id)}
-                disabled={processing}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50"
-              >
-                <CheckCircle className="w-4 h-4" />
-                {processing ? '处理中...' : '通过'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   if (loading) {
     return (
@@ -706,7 +391,6 @@ export default function ApprovalPendingPageNew() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* 页面头部 */}
       <div className="mb-6">
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -722,85 +406,65 @@ export default function ApprovalPendingPageNew() {
           </div>
         </div>
         
-        {/* 筛选和搜索栏 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* 优先级筛选 */}
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                {[
-                  { key: 'all', label: '全部' },
-                  { key: 'high', label: '紧急' },
-                  { key: 'normal', label: '普通' },
-                  { key: 'low', label: '低优' }
-                ].map(f => (
-                  <button 
-                    key={f.key} 
-                    onClick={() => { setFilter(f.key as any); setCurrentPage(1) }}
-                    className={`px-3 py-1.5 text-sm rounded-md transition-all ${
-                      filter === f.key 
-                        ? 'bg-white text-blue-600 shadow-sm' 
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            {/* 搜索 */}
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchKeyword}
-                  onChange={(e) => { setSearchKeyword(e.target.value); setCurrentPage(1) }}
-                  placeholder="搜索申请标题、发起人或类型..."
-                  className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            
-            {/* 视图切换 */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('card')}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === 'card' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                title="卡片视图"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-md transition-all ${
-                  viewMode === 'table' 
-                    ? 'bg-white text-blue-600 shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-                title="表格视图"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="flex items-center gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索任务标题、发起人或类型..."
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as any)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">全部优先级</option>
+              <option value="high">紧急</option>
+              <option value="normal">普通</option>
+              <option value="low">低优</option>
+            </select>
+          </div>
+          
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('card')}
+              className={`p-1.5 rounded-md transition-all ${
+                viewMode === 'card' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="卡片视图"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-md transition-all ${
+                viewMode === 'table' 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="表格视图"
+            >
+              <List className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* 内容区域 */}
       {filteredTasks.length === 0 ? (
         renderEmpty()
       ) : (
         <>
           {viewMode === 'card' ? renderCardView() : renderTableView()}
           
-          {/* 分页 */}
           {totalPages > 1 && (
             <div className="mt-6 flex items-center justify-between">
               <div className="text-sm text-gray-500">
@@ -809,17 +473,17 @@ export default function ApprovalPendingPageNew() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
                   className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="px-4 py-2 text-sm text-gray-700">
-                  {currentPage} / {totalPages}
+                <span className="text-sm text-gray-600">
+                  第 {currentPage} / {totalPages} 页
                 </span>
                 <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
                   className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -830,9 +494,6 @@ export default function ApprovalPendingPageNew() {
           )}
         </>
       )}
-
-      {/* 审批弹窗 */}
-      {selectedTask && renderApprovalModal()}
     </div>
   )
 }

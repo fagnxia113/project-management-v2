@@ -130,17 +130,21 @@ export class DailyReportReminderService {
       }
 
       // 同时通知项目经理
-      const projectManager = await db.queryOne<{ manager_id: string; manager: string }>(
-        'SELECT manager_id, manager FROM projects WHERE id = ?',
+      const projectManager = await db.queryOne<{ manager_id: string }>(
+        'SELECT manager_id FROM projects WHERE id = ?',
         [status.project_id]
       );
 
       if (projectManager?.manager_id) {
+        const manager = await db.queryOne<{ name: string }>(
+          'SELECT name FROM users WHERE id = ?',
+          [projectManager.manager_id]
+        );
         const unsubmittedNames = status.unsubmitted_members.map(m => m.name).join('、');
         
         await notificationService.sendNotification({
           user_id: projectManager.manager_id,
-          user_name: projectManager.manager,
+          user_name: manager?.name || '项目经理',
           type: 'in_app',
           title: `【日报统计】${status.project_name} - ${status.unsubmitted_count}人未提交`,
           content: `今日日报提交情况：\n已提交：${status.submitted_count}/${status.total_members}人\n未提交：${unsubmittedNames}`,

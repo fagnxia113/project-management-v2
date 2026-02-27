@@ -4,30 +4,28 @@ import { API_URL } from '../../config/api'
 
 interface EquipmentInstance {
   id: string
-  model_id: string
+  equipment_name: string
+  model_no: string
+  brand: string
+  category: 'instrument' | 'fake_load' | 'cable'
+  unit: string
   serial_number: string
+  factory_serial_no: string | null
   manage_code: string
   health_status: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped'
   usage_status: 'idle' | 'in_use'
   location_status: 'warehouse' | 'in_project' | 'repairing' | 'transferring'
   location_id: string | null
+  location_name: string | null
   keeper_id: string | null
   purchase_date: string | null
   purchase_price: number | null
   calibration_expiry: string | null
+  certificate_no: string | null
+  certificate_issuer: string | null
+  accessory_desc: string | null
   notes: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface EquipmentModel {
-  id: string
-  category: 'instrument' | 'fake_load'
-  name: string
-  model_no: string
-  brand: string
-  unit: string
-  calibration_cycle: number
+  attachment: string | null
   created_at: string
   updated_at: string
 }
@@ -52,7 +50,6 @@ export default function EquipmentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [equipment, setEquipment] = useState<EquipmentInstance | null>(null)
-  const [model, setModel] = useState<EquipmentModel | null>(null)
   const [keeper, setKeeper] = useState<Employee | null>(null)
   const [location, setLocation] = useState<Location | null>(null)
   const [loading, setLoading] = useState(true)
@@ -95,14 +92,8 @@ export default function EquipmentDetailPage() {
         setEquipment(result.data)
         setEditForm(result.data)
 
-        if (result.data.model_id) {
-          loadModel(result.data.model_id)
-        }
         if (result.data.keeper_id) {
           loadKeeper(result.data.keeper_id)
-        }
-        if (result.data.location_id) {
-          loadLocation(result.data.location_id)
         }
       } else {
         throw new Error('设备不存在')
@@ -111,27 +102,6 @@ export default function EquipmentDetailPage() {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadModel = async (modelId: string) => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`${API_URL.BASE}/api/equipment/models/${modelId}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.data) {
-          setModel(result.data)
-        }
-      }
-    } catch (err) {
-      console.error('加载设备型号失败:', err)
     }
   }
 
@@ -216,7 +186,7 @@ export default function EquipmentDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm(`确定要删除设备 "${model?.name}" 吗？此操作不可恢复！`)) {
+    if (!confirm(`确定要删除设备 "${equipment?.equipment_name}" 吗？此操作不可恢复！`)) {
       return
     }
 
@@ -291,7 +261,8 @@ export default function EquipmentDetailPage() {
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
       instrument: '仪器',
-      fake_load: '假负载'
+      fake_load: '假负载',
+      cable: '线材'
     }
     return labels[category] || category
   }
@@ -378,22 +349,10 @@ export default function EquipmentDetailPage() {
                 </>
               )}
               <button
-                onClick={() => navigate('/equipment/transfer')}
+                onClick={() => navigate('/equipment/transfers/create')}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
               >
                 调拨
-              </button>
-              <button
-                onClick={() => navigate('/equipment/repair')}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm"
-              >
-                维修
-              </button>
-              <button
-                onClick={() => navigate('/equipment/scrap')}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
-              >
-                报废
               </button>
             </div>
           </div>
@@ -407,19 +366,19 @@ export default function EquipmentDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm text-gray-500">设备名称</label>
-                    <div className="text-sm font-medium text-gray-900">{model?.name || '-'}</div>
+                    <div className="text-sm font-medium text-gray-900">{equipment?.equipment_name || '-'}</div>
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">型号</label>
-                    <div className="text-sm font-medium text-gray-900">{model?.model_no || '-'}</div>
+                    <div className="text-sm font-medium text-gray-900">{equipment?.model_no || '-'}</div>
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">品牌</label>
-                    <div className="text-sm font-medium text-gray-900">{model?.brand || '-'}</div>
+                    <div className="text-sm font-medium text-gray-900">{equipment?.brand || '-'}</div>
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">类别</label>
-                    <div className="text-sm font-medium text-gray-900">{model ? getCategoryLabel(model.category) : '-'}</div>
+                    <div className="text-sm font-medium text-gray-900">{equipment ? getCategoryLabel(equipment.category) : '-'}</div>
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">序列号</label>
@@ -434,6 +393,21 @@ export default function EquipmentDetailPage() {
                       <div className="text-sm font-medium text-gray-900">{equipment.serial_number || '-'}</div>
                     )}
                   </div>
+                  {equipment.category === 'instrument' && (
+                    <div>
+                      <label className="text-sm text-gray-500">仪器出厂编号</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editForm.factory_serial_no || ''}
+                          onChange={(e) => setEditForm({ ...editForm, factory_serial_no: e.target.value })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                        />
+                      ) : (
+                        <div className="text-sm font-medium text-gray-900">{equipment.factory_serial_no || '-'}</div>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <label className="text-sm text-gray-500">管理编码</label>
                     {isEditing ? (
@@ -511,7 +485,7 @@ export default function EquipmentDetailPage() {
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">单位</label>
-                    <div className="text-sm font-medium text-gray-900">{model?.unit || '-'}</div>
+                    <div className="text-sm font-medium text-gray-900">{equipment?.unit || '-'}</div>
                   </div>
                 </div>
               </div>
@@ -528,7 +502,7 @@ export default function EquipmentDetailPage() {
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">当前位置</label>
-                  <div className="text-sm font-medium text-gray-900">{location?.name || '-'}</div>
+                  <div className="text-sm font-medium text-gray-900">{equipment?.location_name || '-'}</div>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">采购日期</label>
@@ -569,12 +543,49 @@ export default function EquipmentDetailPage() {
                     <div className="text-sm font-medium text-gray-900">{formatDate(equipment.calibration_expiry)}</div>
                   )}
                 </div>
-                {model && model.calibration_cycle && (
+                {equipment.category === 'instrument' && (
                   <div>
-                    <label className="text-sm text-gray-500">校准周期</label>
-                    <div className="text-sm font-medium text-gray-900">{model.calibration_cycle} 天</div>
+                    <label className="text-sm text-gray-500">校准证书编号</label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editForm.certificate_no || ''}
+                        onChange={(e) => setEditForm({ ...editForm, certificate_no: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                      />
+                    ) : (
+                      <div className="text-sm font-medium text-gray-900">{equipment.certificate_no || '-'}</div>
+                    )}
                   </div>
                 )}
+                {equipment.category === 'instrument' && (
+                  <div>
+                    <label className="text-sm text-gray-500">发证单位</label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editForm.certificate_issuer || ''}
+                        onChange={(e) => setEditForm({ ...editForm, certificate_issuer: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                      />
+                    ) : (
+                      <div className="text-sm font-medium text-gray-900">{equipment.certificate_issuer || '-'}</div>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm text-gray-500">配件情况</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editForm.accessory_desc || ''}
+                      onChange={(e) => setEditForm({ ...editForm, accessory_desc: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                    />
+                  ) : (
+                    <div className="text-sm font-medium text-gray-900">{equipment.accessory_desc || '-'}</div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -590,6 +601,78 @@ export default function EquipmentDetailPage() {
               ) : (
                 <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-4">
                   {equipment.notes || '暂无备注'}
+                </div>
+              )}
+            </div>
+
+            <div className="lg:col-span-2">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">附件</h2>
+              {isEditing ? (
+                <div className="space-y-2">
+                  {editForm.attachment ? (
+                    <div className="flex items-center space-x-2">
+                      <a
+                        href={`${API_URL.BASE}${editForm.attachment}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        查看附件
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, attachment: null })}
+                        className="text-red-600 hover:text-red-800 text-sm"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="file"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          try {
+                            const formData = new FormData()
+                            formData.append('file', file)
+                            
+                            const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                              method: 'POST',
+                              body: formData
+                            })
+                            
+                            const result = await response.json()
+                            if (result.success) {
+                              setEditForm({ ...editForm, attachment: result.fileUrl })
+                            } else {
+                              alert('文件上传失败')
+                            }
+                          } catch (error) {
+                            console.error('文件上传失败:', error)
+                            alert('文件上传失败')
+                          }
+                        }
+                      }}
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.zip,.rar,.7z,.tar,.gz,.tgz"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-4">
+                  {equipment.attachment ? (
+                    <a
+                      href={`${API_URL.BASE}${equipment.attachment}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline"
+                    >
+                      查看附件
+                    </a>
+                  ) : (
+                    '暂无附件'
+                  )}
                 </div>
               )}
             </div>

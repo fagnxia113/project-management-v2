@@ -40,7 +40,7 @@ export const API_URL = {
     FORM_TEMPLATE_DETAIL: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/form-templates/${id}`,
     FORM_TEMPLATE_VALIDATE: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/form-templates/${id}/validate`,
     FORM_TEMPLATE_LINK: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/form-templates/${id}/link`,
-    PROCESS_PRESETS: `${API_BASE_URL}${API_PATHS.WORKFLOW}/form-presets`,
+    PROCESS_PRESETS: `${API_BASE_URL}/api/workflow/form-presets`,
   },
   ORGANIZATION: {
     DEPARTMENTS: `${API_BASE_URL}/api/organization/departments`,

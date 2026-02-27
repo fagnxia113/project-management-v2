@@ -312,8 +312,28 @@ export class ApproverResolver {
   }
 
   private async getUserInfo(userId: string): Promise<Approver | null> {
-    const row = await db.queryOne<any>(
-      `SELECT id, name, department_id, position FROM employees WHERE id = ?`,
+    // 先尝试作为用户ID查询
+    let row = await db.queryOne<any>(
+      `SELECT u.id as user_id, e.id, e.name, e.department_id, e.position 
+       FROM users u
+       LEFT JOIN employees e ON u.id = e.user_id
+       WHERE u.id = ?`,
+      [userId]
+    );
+
+    // 如果找到用户关联的员工，返回员工信息，但使用user_id
+    if (row && row.id) {
+      return {
+        id: row.user_id,
+        name: row.name,
+        department: row.department_id,
+        position: row.position
+      };
+    }
+
+    // 如果没有找到，尝试作为员工ID查询
+    row = await db.queryOne<any>(
+      `SELECT id, name, department_id, position, user_id FROM employees WHERE id = ?`,
       [userId]
     );
 
@@ -321,6 +341,17 @@ export class ApproverResolver {
       return null;
     }
 
+    // 如果有user_id，使用user_id作为审批人ID
+    if (row.user_id) {
+      return {
+        id: row.user_id,
+        name: row.name,
+        department: row.department_id,
+        position: row.position
+      };
+    }
+
+    // 如果没有user_id，使用员工ID
     return {
       id: row.id,
       name: row.name,
@@ -331,12 +362,15 @@ export class ApproverResolver {
 
   private async getUsersByRole(role: string): Promise<Approver[]> {
     const rows = await db.query<any>(
-      `SELECT id, name, department_id, position FROM employees WHERE role = ? AND status = 'active'`,
+      `SELECT u.id as user_id, e.id, e.name, e.department_id, e.position 
+       FROM users u
+       JOIN employees e ON u.id = e.user_id
+       WHERE u.role = ? AND e.status = 'active'`,
       [role]
     );
 
     return rows.map((row: any) => ({
-      id: row.id,
+      id: row.user_id,
       name: row.name,
       department: row.department_id,
       position: row.position
@@ -345,13 +379,15 @@ export class ApproverResolver {
 
   private async getUsersByDepartment(department: string): Promise<Approver[]> {
     const rows = await db.query<any>(
-      `SELECT id, name, department_id, position FROM employees 
-       WHERE department_id = ? AND status = 'active'`,
+      `SELECT u.id as user_id, e.id, e.name, e.department_id, e.position 
+       FROM employees e
+       LEFT JOIN users u ON e.user_id = u.id
+       WHERE e.department_id = ? AND e.status = 'active'`,
       [department]
     );
 
     return rows.map((row: any) => ({
-      id: row.id,
+      id: row.user_id || row.id,
       name: row.name,
       department: row.department_id,
       position: row.position

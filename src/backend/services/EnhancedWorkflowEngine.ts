@@ -477,9 +477,30 @@ export class EnhancedWorkflowEngine {
     definition: WorkflowDefinition, 
     node: WorkflowNode
   ): Promise<void> {
-    const approvalConfig = node.config?.approvalConfig || node.approvalConfig;
+    let approvalConfig = node.config?.approvalConfig || node.approvalConfig;
+    
+    // 如果没有标准的approvalConfig，尝试从node.config.assignee获取
+    if (!approvalConfig && node.config?.assignee) {
+      approvalConfig = {
+        approvalType: 'single',
+        approverSource: node.config.assignee
+      };
+    }
+    
     if (!approvalConfig) {
-      throw new Error('用户任务缺少审批配置');
+      console.error(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 缺少审批配置，自动跳过`);
+      console.error(`[EnhancedWorkflowEngine] 节点完整配置:`, JSON.stringify(node.config, null, 2));
+      
+      // 自动跳过该节点
+      await this.updateCurrentNode(instance.id, node.id, node.name);
+      const nextNodes = await this.findNextNodes(definition, node.id);
+      if (nextNodes.length > 0) {
+        await this.continueExecution(instance, definition, nextNodes[0]);
+        return;
+      } else {
+        await this.endInstance(instance.id, 'completed');
+        return;
+      }
     }
 
     const context: ProcessContext = {
@@ -490,22 +511,38 @@ export class EnhancedWorkflowEngine {
       initiator: { id: instance.initiator_id, name: instance.initiator_name }
     };
 
-    const approvers = await this.resolveApproversWithCache(node, approvalConfig.approverSource, context);
+    let approvers: any[] = [];
+    try {
+      approvers = await this.resolveApproversWithCache(node, approvalConfig.approverSource, context);
+    } catch (error) {
+      console.error(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 解析审批人失败:`, error);
+      console.error(`[EnhancedWorkflowEngine] 审批人来源配置:`, JSON.stringify(approvalConfig.approverSource, null, 2));
+    }
 
     if (approvers.length === 0) {
-      console.log(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 无法解析审批人，自动跳过`);
+      console.log(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 无法解析审批人，创建任务给发起人`);
+      console.log(`[EnhancedWorkflowEngine] 审批人来源:`, JSON.stringify(approvalConfig.approverSource, null, 2));
       
-      // 更新当前节点为正在跳过的节点
+      // 更新当前节点为正在处理的节点
       await this.updateCurrentNode(instance.id, node.id, node.name);
       
-      const nextNodes = await this.findNextNodes(definition, node.id);
-      if (nextNodes.length > 0) {
-        await this.continueExecution(instance, definition, nextNodes[0]);
-        return;
-      } else {
-        await this.endInstance(instance.id, 'skipped');
-        return;
-      }
+      // 创建任务给流程发起人
+      await taskService.createTask({
+        instanceId: instance.id,
+        nodeId: node.id,
+        name: node.name + '（需要指定审批人）',
+        description: `无法自动解析审批人，请手动指定审批人后重新提交。审批人来源: ${JSON.stringify(approvalConfig.approverSource)}`,
+        assigneeId: instance.initiator_id,
+        assigneeName: instance.initiator_name,
+        priority: 50,
+        variables: {
+          approvalType: approvalConfig.approvalType,
+          needsManualApprover: true,
+          approverSource: approvalConfig.approverSource
+        }
+      });
+      
+      return;
     }
 
     const approvalMode = (approvalConfig as any).approvalMode || 'or_sign';
@@ -714,6 +751,13 @@ export class EnhancedWorkflowEngine {
         [userId, username, defaultPassword, employeeName, email, 'user', 'active']
       );
       console.log(`[EnhancedWorkflowEngine] 用户账号创建成功: ${username} (${userId})`);
+      
+      // 3. 关联用户账号到员工记录
+      await db.execute(
+        `UPDATE employees SET user_id = ? WHERE id = ?`,
+        [userId, employeeId]
+      );
+      console.log(`[EnhancedWorkflowEngine] 员工记录已关联用户账号: ${employeeId} -> ${userId}`);
       
       // 记录执行日志
       if (this.config.enableExecutionLog) {
@@ -950,10 +994,12 @@ export class EnhancedWorkflowEngine {
   // ==================== 辅助方法 ====================
 
   private async endInstance(instanceId: string, result: string): Promise<void> {
-    // 清除当前节点信息
+    console.log(`[EnhancedWorkflowEngine] endInstance 被调用: instanceId=${instanceId}, result=${result}`);
     await this.clearCurrentNode(instanceId);
     await instanceService.endInstance(instanceId, result as any);
+    console.log(`[EnhancedWorkflowEngine] 准备触发 process.ended 事件: instanceId=${instanceId}, result=${result}`);
     this.eventBus.emit('process.ended', { instanceId, result, timestamp: new Date() });
+    console.log(`[EnhancedWorkflowEngine] process.ended 事件已触发`);
   }
 
   private async updateCurrentNode(instanceId: string, nodeId: string, nodeName: string): Promise<void> {

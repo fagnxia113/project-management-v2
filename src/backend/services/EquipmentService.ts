@@ -1,20 +1,16 @@
 import { db } from '../database/connection.js';
 import { v4 as uuidv4 } from 'uuid';
 
-export interface EquipmentModel {
-    id: string;
-    category: 'instrument' | 'fake_load';
-    name: string;
-    model_no: string;
-    brand?: string;
-    unit: string;
-    calibration_cycle: number;
-}
-
 export interface EquipmentInstance {
     id: string;
-    model_id: string;
+    equipment_name: string;
+    model_no: string;
+    brand?: string;
+    category: 'instrument' | 'fake_load' | 'cable';
+    unit: string;
+    quantity: number;
     serial_number?: string;
+    factory_serial_no?: string;
     manage_code: string;
     health_status: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped';
     usage_status: 'idle' | 'in_use';
@@ -24,60 +20,48 @@ export interface EquipmentInstance {
     purchase_date?: string;
     purchase_price?: number;
     calibration_expiry?: string;
+    certificate_no?: string;
+    certificate_issuer?: string;
+    accessory_desc?: string;
     notes?: string;
+    technical_doc?: string;
 }
 
 export class EquipmentService {
-    // --- Model Methods ---
-
-    async getModels(filters: { search?: string; page: number; pageSize: number }): Promise<{ data: any[]; total: number; totalPages: number }> {
-        const { search, page, pageSize } = filters;
-        const offset = (page - 1) * pageSize;
-        let whereClause = '1=1';
-        const params: any[] = [];
-        if (search) {
-            whereClause += ' AND (name LIKE ? OR model_no LIKE ? OR brand LIKE ?)';
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-        }
-        const countRes = await db.queryOne<{ total: number }>(`SELECT COUNT(*) as total FROM equipment_models WHERE ${whereClause}`, params);
-        const total = countRes?.total || 0;
-        const data = await db.query(`SELECT * FROM equipment_models WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`, [...params, pageSize, offset]);
-        return { data, total, totalPages: Math.ceil(total / pageSize) };
-    }
-
-    async createModel(data: Partial<EquipmentModel>): Promise<EquipmentModel> {
-        const id = uuidv4();
-        await db.insert(
-            'INSERT INTO equipment_models (id, category, name, model_no, brand, unit, calibration_cycle) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id, data.category, data.name, data.model_no, data.brand, data.unit, data.calibration_cycle || 12]
-        );
-        return { id, ...data } as EquipmentModel;
-    }
-
-    // --- Instance Methods ---
-
     async createInstance(data: Omit<EquipmentInstance, 'id'>): Promise<EquipmentInstance> {
         const id = uuidv4();
         await db.execute(
             `INSERT INTO equipment_instances (
-        id, model_id, serial_number, manage_code, health_status, usage_status,
+        id, equipment_name, model_no, brand, category, unit, quantity, serial_number, factory_serial_no, manage_code, health_status, usage_status,
         location_status, location_id, keeper_id, purchase_date, purchase_price,
-        calibration_expiry, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        calibration_expiry, certificate_no, certificate_issuer, accessory_desc, notes, technical_doc
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                id, data.model_id, data.serial_number || null, data.manage_code,
+                id, data.equipment_name, data.model_no, data.brand, data.category, data.unit, data.quantity || 1,
+                data.serial_number || null, data.factory_serial_no || null, data.manage_code,
                 data.health_status || 'normal', data.usage_status || 'idle',
                 data.location_status || 'warehouse', data.location_id || null,
                 data.keeper_id || null, data.purchase_date || null,
                 data.purchase_price || null, data.calibration_expiry || null,
-                data.notes || null
+                data.certificate_no || null, data.certificate_issuer || null,
+                data.accessory_desc || null, data.notes || null, data.technical_doc || null
             ]
         );
         return { id, ...data };
     }
 
     async getInstanceById(id: string): Promise<EquipmentInstance | undefined> {
-        const res = await db.queryOne<EquipmentInstance>('SELECT * FROM equipment_instances WHERE id = ?', [id]);
+        const res = await db.queryOne<EquipmentInstance>(
+            `SELECT i.*, 
+                CASE 
+                    WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
+                    WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
+                    ELSE NULL
+                END as location_name
+            FROM equipment_instances i 
+            WHERE i.id = ?`, 
+            [id]
+        );
         return res || undefined;
     }
 
@@ -94,37 +78,64 @@ export class EquipmentService {
         await db.execute(`UPDATE equipment_instances SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
     }
 
+    async updateInstance(id: string, updates: Partial<EquipmentInstance>): Promise<EquipmentInstance | undefined> {
+        const fields = Object.keys(updates);
+        if (fields.length === 0) return await this.getInstanceById(id);
+
+        const setClause = fields.map(f => `${f} = ?`).join(', ');
+        const values = [...Object.values(updates), id];
+
+        await db.execute(`UPDATE equipment_instances SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
+        return await this.getInstanceById(id);
+    }
+
+    async deleteInstance(id: string): Promise<void> {
+        await db.execute('DELETE FROM equipment_instances WHERE id = ?', [id]);
+    }
+
     async getInstances(filters: {
-        model_id?: string;
         location_id?: string;
         status?: string;
         search?: string;
+        category?: string;
+        health_status?: string;
+        usage_status?: string;
+        location_status?: string;
+        equipment_source?: string;
         page: number;
         pageSize: number
     }): Promise<{ data: any[]; total: number; totalPages: number }> {
-        const { model_id, location_id, status, search, page, pageSize } = filters;
+        const { location_id, status, search, category, health_status, usage_status, location_status, equipment_source, page, pageSize } = filters;
         const offset = (page - 1) * pageSize;
         let whereClause = '1=1';
         const params: any[] = [];
 
-        if (model_id) { whereClause += ' AND i.model_id = ?'; params.push(model_id); }
         if (location_id) { whereClause += ' AND i.location_id = ?'; params.push(location_id); }
         if (status) { whereClause += ' AND i.location_status = ?'; params.push(status); }
+        if (category) { whereClause += ' AND i.category = ?'; params.push(category); }
+        if (health_status) { whereClause += ' AND i.health_status = ?'; params.push(health_status); }
+        if (usage_status) { whereClause += ' AND i.usage_status = ?'; params.push(usage_status); }
+        if (location_status) { whereClause += ' AND i.location_status = ?'; params.push(location_status); }
+        if (equipment_source) { whereClause += ' AND i.equipment_source = ?'; params.push(equipment_source); }
         if (search) {
-            whereClause += ' AND (i.manage_code LIKE ? OR i.serial_number LIKE ? OR m.name LIKE ?)';
+            whereClause += ' AND (i.manage_code LIKE ? OR i.serial_number LIKE ? OR i.equipment_name LIKE ?)';
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         const countRes = await db.queryOne<{ total: number }>(
-            `SELECT COUNT(*) as total FROM equipment_instances i JOIN equipment_models m ON i.model_id = m.id WHERE ${whereClause}`,
+            `SELECT COUNT(*) as total FROM equipment_instances i WHERE ${whereClause}`,
             params
         );
         const total = countRes?.total || 0;
 
         const data = await db.query(
-            `SELECT i.*, m.name as model_name, m.model_no, m.brand 
+            `SELECT i.*, 
+                CASE 
+                    WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
+                    WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
+                    ELSE NULL
+                END as location_name
        FROM equipment_instances i 
-       JOIN equipment_models m ON i.model_id = m.id 
        WHERE ${whereClause} 
        ORDER BY i.created_at DESC LIMIT ? OFFSET ?`,
             [...params, pageSize, offset]
@@ -138,10 +149,9 @@ export class EquipmentService {
      * 获取设备型号在各位置的库存分布
      * 包括仓库和项目中的设备数量
      */
-    async getStockDistribution(modelId: string): Promise<any[]> {
+    async getStockDistribution(equipmentName: string, modelNo: string): Promise<any[]> {
         const distribution: any[] = [];
 
-        // 1. 查询仓库中的库存
         const warehouseStock = await db.query(`
             SELECT 
                 w.id as location_id,
@@ -152,11 +162,12 @@ export class EquipmentService {
                 COUNT(*) as total_qty
             FROM warehouses w
             LEFT JOIN equipment_instances i ON i.location_id = w.id 
-                AND i.model_id = ? 
+                AND i.equipment_name = ? 
+                AND i.model_no = ?
                 AND i.location_status = 'warehouse'
             WHERE w.status = 'active'
             GROUP BY w.id, w.name, w.location
-        `, [modelId]);
+        `, [equipmentName, modelNo]);
 
         for (const row of warehouseStock) {
             if (row.total_qty > 0) {
@@ -171,7 +182,6 @@ export class EquipmentService {
             }
         }
 
-        // 2. 查询项目中的库存
         const projectStock = await db.query(`
             SELECT 
                 p.id as location_id,
@@ -182,11 +192,12 @@ export class EquipmentService {
                 COUNT(*) as total_qty
             FROM projects p
             LEFT JOIN equipment_instances i ON i.location_id = p.id 
-                AND i.model_id = ? 
+                AND i.equipment_name = ? 
+                AND i.model_no = ?
                 AND i.location_status = 'in_project'
             WHERE p.status IN ('in_progress', 'proposal')
             GROUP BY p.id, p.name, p.type
-        `, [modelId]);
+        `, [equipmentName, modelNo]);
 
         for (const row of projectStock) {
             if (row.total_qty > 0) {
@@ -201,9 +212,7 @@ export class EquipmentService {
             }
         }
 
-        // 3. 如果没有真实数据，返回模拟数据便于测试
         if (distribution.length === 0) {
-            // 获取仓库列表生成模拟数据
             const warehouses = await db.query('SELECT id, name, location FROM warehouses WHERE status = \'active\' LIMIT 2');
             if (warehouses.length > 0) {
                 for (const wh of warehouses) {
@@ -217,7 +226,6 @@ export class EquipmentService {
                     });
                 }
             } else {
-                // 完全模拟数据
                 distribution.push(
                     { location_id: 'wh-domestic', location_name: '国内仓库', location_type: 'warehouse', country: '中国', available_qty: 5, total_qty: 5 },
                     { location_id: 'wh-overseas', location_name: '国外仓库', location_type: 'warehouse', country: '新加坡', available_qty: 3, total_qty: 3 }
@@ -226,6 +234,142 @@ export class EquipmentService {
         }
 
         return distribution;
+    }
+
+    // --- Statistics ---
+    async getStatistics(): Promise<any> {
+        const totalRes = await db.queryOne<{ total: number }>('SELECT COUNT(*) as total FROM equipment_instances');
+        const total = totalRes?.total || 0;
+
+        const categoryStats = await db.query(`
+            SELECT 
+                category,
+                equipment_name as category_name,
+                CASE WHEN category = 'instrument' THEN '仪器类' WHEN category = 'fake_load' THEN '假负载类' WHEN category = 'cable' THEN '线材类' ELSE category END as category_label,
+                COUNT(*) as count
+            FROM equipment_instances
+            GROUP BY category, equipment_name
+        `);
+
+        const healthStats = await db.query(`
+            SELECT 
+                health_status,
+                CASE 
+                    WHEN health_status = 'normal' THEN '正常'
+                    WHEN health_status = 'slightly_damaged' THEN '轻微损坏'
+                    WHEN health_status = 'affected_use' THEN '影响使用'
+                    WHEN health_status = 'repairing' THEN '维修中'
+                    WHEN health_status = 'scrapped' THEN '已报废'
+                    ELSE health_status
+                END as health_status_label,
+                COUNT(*) as count
+            FROM equipment_instances
+            GROUP BY health_status
+        `);
+
+        const usageStats = await db.query(`
+            SELECT 
+                usage_status,
+                CASE 
+                    WHEN usage_status = 'idle' THEN '闲置'
+                    WHEN usage_status = 'in_use' THEN '使用中'
+                    ELSE usage_status
+                END as usage_status_label,
+                COUNT(*) as count
+            FROM equipment_instances
+            GROUP BY usage_status
+        `);
+
+        const locationStats = await db.query(`
+            SELECT 
+                location_status,
+                CASE 
+                    WHEN location_status = 'warehouse' THEN '仓库'
+                    WHEN location_status = 'in_project' THEN '项目中'
+                    WHEN location_status = 'repairing' THEN '维修中'
+                    WHEN location_status = 'transferring' THEN '调拨中'
+                    ELSE location_status
+                END as location_status_label,
+                COUNT(*) as count
+            FROM equipment_instances
+            GROUP BY location_status
+        `);
+
+        const locationDistribution = await db.query(`
+            SELECT 
+                COALESCE(w.name, p.name) as location_name,
+                CASE 
+                    WHEN i.location_status = 'warehouse' THEN '仓库'
+                    WHEN i.location_status = 'in_project' THEN '项目'
+                    ELSE '其他'
+                END as location_type,
+                COUNT(*) as count
+            FROM equipment_instances i
+            LEFT JOIN warehouses w ON i.location_id = w.id AND i.location_status = 'warehouse'
+            LEFT JOIN projects p ON i.location_id = p.id AND i.location_status = 'in_project'
+            WHERE i.location_id IS NOT NULL
+            GROUP BY location_name, location_type
+            ORDER BY count DESC
+            LIMIT 10
+        `);
+
+        const calibrationAlerts = await db.query(`
+            SELECT 
+                i.id,
+                i.manage_code,
+                i.equipment_name as model_name,
+                i.calibration_expiry,
+                DATEDIFF(i.calibration_expiry, CURDATE()) as days_until_expiry
+            FROM equipment_instances i
+            WHERE i.calibration_expiry IS NOT NULL
+                AND i.calibration_expiry > CURDATE()
+                AND i.calibration_expiry <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+            ORDER BY i.calibration_expiry ASC
+        `);
+
+        const modelStats = await db.query(`
+            SELECT 
+                equipment_name as name,
+                model_no,
+                brand,
+                category,
+                COUNT(*) as total_count,
+                SUM(CASE WHEN health_status = 'normal' AND usage_status = 'idle' THEN 1 ELSE 0 END) as available_count
+            FROM equipment_instances
+            GROUP BY equipment_name, model_no, brand, category
+            ORDER BY total_count DESC
+        `);
+
+        return {
+            total,
+            categoryStats,
+            healthStats,
+            usageStats,
+            locationStats,
+            locationDistribution,
+            calibrationAlerts,
+            modelStats
+        };
+    }
+
+    async getEquipmentNames(): Promise<string[]> {
+        const result = await db.query(`
+            SELECT DISTINCT equipment_name
+            FROM equipment_instances
+            WHERE equipment_name IS NOT NULL AND equipment_name != ''
+            ORDER BY equipment_name
+        `);
+        return result.map((row: any) => row.equipment_name);
+    }
+
+    async getModelsByName(equipmentName: string): Promise<any[]> {
+        const result = await db.query(`
+            SELECT DISTINCT equipment_name, model_no, brand, category, unit
+            FROM equipment_instances
+            WHERE equipment_name = ?
+            ORDER BY model_no
+        `, [equipmentName]);
+        return result;
     }
 }
 

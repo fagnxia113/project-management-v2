@@ -418,7 +418,7 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
         if (onSuccess) {
           onSuccess(processInstanceId)
         } else {
-          navigate(`/workflow/instances/${processInstanceId}`)
+          navigate(-1)
         }
       } else {
         alert(responseData.error || '流程启动失败')
