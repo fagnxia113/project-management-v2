@@ -1190,6 +1190,187 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
 };
 
 /**
+ * 设备维修流程模板
+ */
+export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
+  id: 'equipment-repair',
+  name: '设备维修流程',
+  category: 'equipment',
+  entityType: 'EquipmentRepair',
+  description: '设备维修审批流程',
+  version: '1.0.0',
+  definition: {
+    nodes: [
+      {
+        id: 'start',
+        type: 'startEvent',
+        name: '提交维修申请',
+        config: {
+          formKey: 'equipment-repair-form'
+        }
+      },
+      {
+        id: 'location-manager',
+        type: 'userTask',
+        name: '位置管理员审批',
+        config: {
+          approvalConfig: {
+            approvalType: 'single',
+            approverSource: {
+              type: 'expression',
+              value: '${formData.location_manager_id}'
+            }
+          }
+        }
+      },
+      {
+        id: 'shipping',
+        type: 'userTask',
+        name: '发货',
+        config: {
+          approvalConfig: {
+            approvalType: 'single',
+            approverSource: {
+              type: 'expression',
+              value: '${formData.location_manager_id}'
+            }
+          },
+          formKey: 'equipment-repair-shipping-form'
+        }
+      },
+      {
+        id: 'receiving',
+        type: 'userTask',
+        name: '确认接收',
+        config: {
+          approvalConfig: {
+            approvalType: 'single',
+            approverSource: {
+              type: 'expression',
+              value: '${formData.location_manager_id}'
+            }
+          },
+          formKey: 'equipment-repair-receiving-form'
+        }
+      },
+      {
+        id: 'end-approved',
+        type: 'endEvent',
+        name: '审批通过'
+      },
+      {
+        id: 'end-rejected',
+        type: 'endEvent',
+        name: '审批驳回'
+      }
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        source: 'start',
+        target: 'location-manager',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-2',
+        source: 'location-manager',
+        target: 'shipping',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-3',
+        source: 'shipping',
+        target: 'receiving',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-4',
+        source: 'receiving',
+        target: 'end-approved',
+        type: 'sequenceFlow'
+      }
+    ]
+  },
+  formSchema: [
+    {
+      name: 'equipmentData',
+      label: '设备数据',
+      type: 'array',
+      required: true,
+      arrayFields: [
+        {
+          name: 'equipmentId',
+          label: '设备ID',
+          type: 'text',
+          required: true
+        },
+        {
+          name: 'equipmentName',
+          label: '设备名称',
+          type: 'text',
+          required: true
+        },
+        {
+          name: 'equipmentCategory',
+          label: '设备类别',
+          type: 'select',
+          required: true,
+          options: [
+            { label: '仪器类', value: 'instrument' },
+            { label: '假负载类', value: 'fake_load' },
+            { label: '线材类', value: 'cable' }
+          ]
+        },
+        {
+          name: 'repairQuantity',
+          label: '维修数量',
+          type: 'number',
+          required: true,
+          min: 1
+        }
+      ]
+    },
+    {
+      name: 'originalLocationType',
+      label: '原始位置类型',
+      type: 'select',
+      required: true,
+      options: [
+        { label: '仓库', value: 'warehouse' },
+        { label: '项目', value: 'project' }
+      ]
+    },
+    {
+      name: 'originalLocationId',
+      label: '原始位置ID',
+      type: 'text',
+      required: true
+    },
+    {
+      name: 'locationManagerId',
+      label: '位置管理员',
+      type: 'user',
+      required: true
+    },
+    {
+      name: 'faultDescription',
+      label: '故障描述',
+      type: 'textarea',
+      required: true,
+      placeholder: '请输入故障描述',
+      rows: 3
+    },
+    {
+      name: 'repairServiceProvider',
+      label: '维修服务商',
+      type: 'text',
+      required: false,
+      placeholder: '请输入维修服务商'
+    }
+  ]
+};
+
+/**
  * 流程模板服务类
  */
 export class WorkflowTemplatesService {
@@ -1197,6 +1378,7 @@ export class WorkflowTemplatesService {
     PROJECT_APPROVAL_TEMPLATE,
     EQUIPMENT_TRANSFER_TEMPLATE,
     EQUIPMENT_INBOUND_TEMPLATE,
+    EQUIPMENT_REPAIR_TEMPLATE,
     TASK_APPROVAL_TEMPLATE,
     PURCHASE_APPROVAL_TEMPLATE,
     EMPLOYEE_ONBOARD_TEMPLATE

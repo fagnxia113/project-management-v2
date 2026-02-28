@@ -187,6 +187,9 @@ export class ApproverResolver {
 
   private async resolveByExpression(value: string, context: ProcessContext): Promise<Approver[]> {
     try {
+      console.log('[ApproverResolver] 解析表达式:', value);
+      console.log('[ApproverResolver] context.formData:', context.formData);
+      
       // 支持简单表达式，如 "${formData.managerId}" 或 "${variables.departmentHead}"
       const expression = value.replace(/\$\{(.*?)\}/g, (_, expr) => {
         const parts = expr.split('.');
@@ -207,6 +210,8 @@ export class ApproverResolver {
         return current || '';
       });
 
+      console.log('[ApproverResolver] 解析后的表达式值:', expression);
+      
       // 表达式可能返回单个ID或ID数组
       if (expression) {
         // 检查是否是部门ID（以dept-开头或者是部门ID格式）
@@ -314,15 +319,15 @@ export class ApproverResolver {
   private async getUserInfo(userId: string): Promise<Approver | null> {
     // 先尝试作为用户ID查询
     let row = await db.queryOne<any>(
-      `SELECT u.id as user_id, e.id, e.name, e.department_id, e.position 
+      `SELECT u.id as user_id, e.id as employee_id, e.name, e.department_id, e.position 
        FROM users u
        LEFT JOIN employees e ON u.id = e.user_id
        WHERE u.id = ?`,
       [userId]
     );
 
-    // 如果找到用户关联的员工，返回员工信息，但使用user_id
-    if (row && row.id) {
+    // 如果找到用户关联的员工，返回员工信息，但使用user_id作为审批人ID（与前端userId匹配）
+    if (row && row.employee_id) {
       return {
         id: row.user_id,
         name: row.name,
@@ -341,7 +346,7 @@ export class ApproverResolver {
       return null;
     }
 
-    // 如果有user_id，使用user_id作为审批人ID
+    // 返回员工信息，使用user_id作为审批人ID（与前端userId匹配）
     if (row.user_id) {
       return {
         id: row.user_id,
@@ -351,7 +356,7 @@ export class ApproverResolver {
       };
     }
 
-    // 如果没有user_id，使用员工ID
+    // 如果没有user_id，使用employee_id
     return {
       id: row.id,
       name: row.name,

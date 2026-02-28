@@ -408,7 +408,7 @@ export default function ProcessInstanceDetailPage() {
           console.log('Form key:', formKey)
           
           // 获取表单字段
-          const formRes = await fetch(`${API_URL.BASE}/api/workflow/form-presets/form/${formKey}`, {
+          const formRes = await fetch(`${API_URL.BASE}/api/workflow/form-templates/key/${formKey}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
           const formData = await formRes.json()
@@ -716,6 +716,14 @@ export default function ProcessInstanceDetailPage() {
                           {field.type === 'date' && (
                             <input
                               type="date"
+                              value={taskFormData[field.name] || ''}
+                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                          )}
+                          {field.type === 'datetime' && (
+                            <input
+                              type="datetime-local"
                               value={taskFormData[field.name] || ''}
                               onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"

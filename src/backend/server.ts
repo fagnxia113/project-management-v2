@@ -17,6 +17,7 @@ import warehouseRouter from './routes/warehouse.js';
 import inboundRouter from './routes/inbound.js';
 import borrowingRouter from './routes/borrowings.js';
 import transferRouter from './routes/transfer.js';
+import repairsRouter from './routes/repairs.js';
 import projectsRouter from './routes/projects.js';
 import workTimeRouter from './routes/work-time.js';
 import notificationsRouter from './routes/notifications.js';
@@ -25,6 +26,7 @@ import processFormsRouter from './routes/process-forms.js';
 import uploadRouter from './routes/upload.js';
 import { schedulerService } from './services/SchedulerService.js';
 import { WorkflowTemplatesService } from './services/WorkflowTemplates.js';
+import { workflowEventListener } from './services/WorkflowEventListener.js';
 import { definitionService } from './services/DefinitionService.js';
 import { enhancedWorkflowEngine } from './services/EnhancedWorkflowEngine.js';
 import { InboundOrderService } from './services/InboundOrderService.js';
@@ -83,6 +85,7 @@ app.use('/api/warehouses', warehouseRouter);
 app.use('/api/equipment/inbounds', inboundRouter);
 app.use('/api/equipment/borrowings', borrowingRouter);
 app.use('/api/equipment/transfers', transferRouter);
+app.use('/api/equipment/repairs', repairsRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/work-time', workTimeRouter);
 app.use('/api/notifications', notificationsRouter);
@@ -628,6 +631,11 @@ async function startServer() {
 
     // 启动定时任务调度服务
     await schedulerService.start();
+
+    // 初始化工作流事件监听器
+    console.log('[Server] 初始化工作流事件监听器...');
+    workflowEventListener.setupListeners();
+    console.log('[Server] 工作流事件监听器已启动');
 
     // 监听流程结束事件，更新项目状态
     enhancedWorkflowEngine.getEventBus().on('process.ended', async (data: any) => {

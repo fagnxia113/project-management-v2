@@ -19,7 +19,8 @@ import {
   MapPin,
   Phone,
   Mail,
-  DollarSign
+  DollarSign,
+  AlertTriangle
 } from 'lucide-react'
 
 interface WorkflowInstance {
@@ -159,7 +160,18 @@ const FORM_FIELD_LABELS: Record<string, { label: string; icon?: any }> = {
   'shipping_notes': { label: '发货备注' },
   // 收货信息字段
   'receive_status': { label: '收货状态' },
-  'receive_comment': { label: '收货备注' }
+  'receive_comment': { label: '收货备注' },
+  // 设备维修相关字段
+  'equipment_data': { label: '设备信息', icon: FileText },
+  'equipment_id': { label: '设备ID' },
+  'equipment_name': { label: '设备名称' },
+  'equipment_category': { label: '设备类别' },
+  'repair_quantity': { label: '维修数量' },
+  'fault_description': { label: '故障描述', icon: AlertTriangle },
+  'original_location_type': { label: '原始位置类型', icon: MapPin },
+  'original_location_id': { label: '原始位置', icon: Building2 },
+  'location_manager_id': { label: '位置管理员', icon: User },
+  'repair_service_provider': { label: '维修服务商' }
 }
 
 const GENDER_LABELS: Record<string, string> = {
@@ -202,6 +214,9 @@ export default function WorkflowDetailPage() {
   const [transferOrder, setTransferOrder] = useState<any>(null)
   // 表单字段
   const [formFields, setFormFields] = useState<any[]>([])
+  // 设备维修 - 收货时间
+  const [receivingTime, setReceivingTime] = useState('')
+  const [receivingNote, setReceivingNote] = useState('')
 
   const [activeTab, setActiveTab] = useState<'form' | 'workflow' | 'history'>('form')
 
@@ -334,6 +349,18 @@ export default function WorkflowDetailPage() {
             userIds.push(formData.toManagerId)
           }
 
+          // 设备维修相关ID
+          if (formData.original_location_id) {
+            if (formData.original_location_type === 'warehouse') {
+              warehouseIds.push(formData.original_location_id)
+            } else {
+              projectIds.push(formData.original_location_id)
+            }
+          }
+          if (formData.location_manager_id) {
+            userIds.push(formData.location_manager_id)
+          }
+
           // 加载所有需要的映射数据
           const loadPromises: Promise<void>[] = []
           
@@ -439,6 +466,25 @@ export default function WorkflowDetailPage() {
               console.warn('加载调拨单详情失败', e)
             }
           }
+
+          // 设备维修 - 加载维修单详情
+          const isEquipmentRepair = instanceResult.data.definition_key === 'equipment-repair'
+          const repairOrderId = instanceResult.data.business_id || formData.repairOrderId
+          if (isEquipmentRepair && repairOrderId) {
+            try {
+              const repairRes = await fetch(`${API_URL.BASE}/api/equipment/repairs/${repairOrderId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              })
+              if (repairRes.ok) {
+                const repairResult = await repairRes.json()
+                if (repairResult.success && repairResult.data) {
+                  setRepairOrder(repairResult.data)
+                }
+              }
+            } catch (e) {
+              console.warn('加载维修单详情失败', e)
+            }
+          }
         }
       }
     } catch (error) {
@@ -454,14 +500,16 @@ export default function WorkflowDetailPage() {
     if (!currentTask || !instance) return
     
     const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer'
+    const isEquipmentRepair = instance.definition_key === 'equipment-repair'
     const formData = instance.variables?.formData || {}
     const transferOrderId = instance.business_id || formData.transferOrderId
+    const repairOrderId = instance.business_id || formData.repairOrderId
     
     console.log('[WorkflowDetailPage] handleApprove - isEquipmentTransfer:', isEquipmentTransfer)
+    console.log('[WorkflowDetailPage] handleApprove - isEquipmentRepair:', isEquipmentRepair)
     console.log('[WorkflowDetailPage] handleApprove - currentTask.node_id:', currentTask?.node_id)
     console.log('[WorkflowDetailPage] handleApprove - instance.business_id:', instance.business_id)
-    console.log('[WorkflowDetailPage] handleApprove - formData.transferOrderId:', formData.transferOrderId)
-    console.log('[WorkflowDetailPage] handleApprove - transferOrderId:', transferOrderId)
+    console.log('[WorkflowDetailPage] handleApprove - repairOrderId:', repairOrderId)
     
     // 设备调拨 - 调出方审批时验证发货时间
     if (isEquipmentTransfer && currentTask?.node_id && (currentTask.node_id === 'from-location-manager' || currentTask.node_id.includes('from'))) {
@@ -475,6 +523,26 @@ export default function WorkflowDetailPage() {
     if (isEquipmentTransfer && currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to'))) {
       if (receiveStatus === 'exception' && !receiveComment.trim()) {
         alert('请填写异常说明')
+        return
+      }
+    }
+    
+    // 设备维修 - 发货节点验证发货单号和发货时间
+    if (isEquipmentRepair && currentTask?.node_id === 'shipping') {
+      if (!shippingNo.trim()) {
+        alert('请填写发货单号')
+        return
+      }
+      if (!shippedAt) {
+        alert('请填写发货时间')
+        return
+      }
+    }
+    
+    // 设备维修 - 确认接收节点验证收货时间
+    if (isEquipmentRepair && currentTask?.node_id === 'receiving') {
+      if (!receivingTime) {
+        alert('请填写收货时间')
         return
       }
     }
@@ -526,7 +594,27 @@ export default function WorkflowDetailPage() {
         }
         console.log('[WorkflowDetailPage] 发货API调用成功')
       }
-      
+
+      // 设备维修 - 发货节点先调用发货API
+      if (isEquipmentRepair && currentTask?.node_id === 'shipping' && repairOrderId) {
+        console.log('[WorkflowDetailPage] 调用维修发货API - repairOrderId:', repairOrderId)
+        const shipRes = await fetch(`${API_URL.BASE}/api/equipment/repairs/${repairOrderId}/ship`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            shipping_no: shippingNo
+          })
+        })
+        if (!shipRes.ok) {
+          const errData = await shipRes.json()
+          throw new Error(errData.error || '维修发货失败')
+        }
+        console.log('[WorkflowDetailPage] 维修发货API调用成功')
+      }
+
       // 设备调拨 - 调入方确认收货时先调用收货API
       if (isEquipmentTransfer && currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to')) && transferOrderId) {
         const receiveRes = await fetch(`${API_URL.BASE}/api/equipment/transfers/${transferOrderId}/receive`, {
@@ -544,6 +632,23 @@ export default function WorkflowDetailPage() {
           const errData = await receiveRes.json()
           throw new Error(errData.error || '收货确认失败')
         }
+      }
+
+      // 设备维修 - 确认接收节点先调用收货API
+      if (isEquipmentRepair && currentTask?.node_id === 'receiving' && repairOrderId) {
+        console.log('[WorkflowDetailPage] 调用维修收货API - repairOrderId:', repairOrderId)
+        const receiveRes = await fetch(`${API_URL.BASE}/api/equipment/repairs/${repairOrderId}/receive`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        if (!receiveRes.ok) {
+          const errData = await receiveRes.json()
+          throw new Error(errData.error || '维修收货失败')
+        }
+        console.log('[WorkflowDetailPage] 维修收货API调用成功')
       }
 
       // 准备任务完成参数
@@ -570,6 +675,22 @@ export default function WorkflowDetailPage() {
         }
       }
 
+      // 设备维修 - 发货节点传递发货信息到流程变量
+      if (isEquipmentRepair && currentTask?.node_id === 'shipping') {
+        completeParams.formData = {
+          shipping_no: shippingNo,
+          shipping_time: shippedAt
+        }
+      }
+
+      // 设备维修 - 确认接收节点传递收货信息到流程变量
+      if (isEquipmentRepair && currentTask?.node_id === 'receiving') {
+        completeParams.formData = {
+          receiving_time: receivingTime,
+          receiving_note: receivingNote
+        }
+      }
+
       const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${currentTask.id}/complete`, {
         method: 'POST',
         headers: {
@@ -588,6 +709,8 @@ export default function WorkflowDetailPage() {
         setShippingNotes('')
         setReceiveStatus('normal')
         setReceiveComment('')
+        setReceivingTime('')
+        setReceivingNote('')
         loadInstanceData()
       } else {
         throw new Error('审批失败')
@@ -771,6 +894,40 @@ export default function WorkflowDetailPage() {
       return `${value.length} 项设备`
     }
 
+    // 设备维修相关字段转换
+    if (key === 'equipment_category') {
+      const categoryLabels: Record<string, string> = {
+        'instrument': '仪器类',
+        'fake_load': '假负载类',
+        'cable': '线材类'
+      }
+      return categoryLabels[value] || value
+    }
+
+    if (key === 'original_location_type') {
+      const typeLabels: Record<string, string> = {
+        'warehouse': '仓库',
+        'project': '项目'
+      }
+      return typeLabels[value] || value
+    }
+
+    if (key === 'original_location_id' && formData) {
+      if (formData.original_location_type === 'warehouse' && warehouseMap[value]) {
+        return warehouseMap[value]
+      } else if (formData.original_location_type === 'project' && projectMap[value]) {
+        return projectMap[value]
+      }
+    }
+
+    if (key === 'location_manager_id' && userMap[value]) {
+      return userMap[value]
+    }
+
+    if (key === 'equipment_data' && Array.isArray(value)) {
+      return `${value.length} 项设备`
+    }
+
     // 发货和收货字段格式化
     if (key === 'shippingDate' || key === 'receiveDate') {
       try {
@@ -838,6 +995,7 @@ export default function WorkflowDetailPage() {
     const Icon = fieldConfig.icon
     const displayValue = formatFieldValue(key, value, formData)
 
+    // 处理设备调拨的items数组
     if (key === 'items' && Array.isArray(value)) {
       return (
         <div key={key} className="col-span-1 md:col-span-2 p-3 bg-white rounded-lg border border-gray-100">
@@ -872,6 +1030,48 @@ export default function WorkflowDetailPage() {
                   <div>
                     <div className="text-gray-500 mb-1">序列号</div>
                     <div className="text-gray-900 break-all">{item.serial_numbers || '-'}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    // 处理设备维修的equipment_data数组
+    if (key === 'equipment_data' && Array.isArray(value)) {
+      const categoryLabels: Record<string, string> = {
+        'instrument': '仪器类',
+        'fake_load': '假负载类',
+        'cable': '线材类'
+      }
+
+      return (
+        <div key={key} className="col-span-1 md:col-span-2 p-3 bg-white rounded-lg border border-gray-100">
+          <div className="text-sm text-gray-500 mb-3 flex items-center gap-2">
+            {Icon && <Icon className="w-4 h-4 text-blue-600" />}
+            {fieldConfig.label}
+          </div>
+          <div className="space-y-2">
+            {value.map((item: any, index: number) => (
+              <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                  <div>
+                    <div className="text-gray-500 mb-1">设备名称</div>
+                    <div className="text-gray-900">{item.equipment_name || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 mb-1">设备类别</div>
+                    <div className="text-gray-900">{categoryLabels[item.equipment_category] || item.equipment_category || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 mb-1">维修数量</div>
+                    <div className="text-gray-900">{item.repair_quantity || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 mb-1">设备ID</div>
+                    <div className="text-gray-900 break-all">{item.equipment_id || '-'}</div>
                   </div>
                 </div>
               </div>
@@ -1301,7 +1501,40 @@ export default function WorkflowDetailPage() {
                 </div>
               </div>
             )}
-            
+
+            {/* 设备维修 - 发货节点显示发货信息 */}
+            {actionType === 'approve' && instance?.definition_key === 'equipment-repair' && 
+             currentTask?.node_id === 'shipping' && (
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-medium text-blue-800 mb-3">发货信息填写</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      发货单号 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={shippingNo}
+                      onChange={(e) => setShippingNo(e.target.value)}
+                      placeholder="请输入发货单号"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      发货时间 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={shippedAt}
+                      onChange={(e) => setShippedAt(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 设备调拨 - 调入方确认时显示收货信息 */}
             {actionType === 'approve' && (instance?.definition_key === 'equipment_transfer' || instance?.definition_key === 'equipment-transfer') && 
              currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to')) && (
@@ -1397,6 +1630,65 @@ export default function WorkflowDetailPage() {
                       />
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* 设备维修 - 确认接收节点显示收货信息 */}
+            {actionType === 'approve' && instance?.definition_key === 'equipment-repair' && 
+             currentTask?.node_id === 'receiving' && (
+              <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                <h4 className="font-medium text-green-800 mb-3">收货确认</h4>
+                
+                {/* 显示发货信息 */}
+                {(instance?.variables?.formData?.shipping_time || instance?.variables?.formData?.shipping_no) && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <h5 className="font-medium text-blue-800 mb-2 text-sm">发货信息</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                      {instance?.variables?.formData?.shipping_time && (
+                        <div>
+                          <span className="text-gray-500">发货时间：</span>
+                          <span className="text-gray-900">
+                            {instance.variables.formData.shipping_time}
+                          </span>
+                        </div>
+                      )}
+                      {instance?.variables?.formData?.shipping_no && (
+                        <div>
+                          <span className="text-gray-500">发货单号：</span>
+                          <span className="text-gray-900">
+                            {instance.variables.formData.shipping_no}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      收货时间 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={receivingTime}
+                      onChange={(e) => setReceivingTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      收货备注
+                    </label>
+                    <textarea
+                      value={receivingNote}
+                      onChange={(e) => setReceivingNote(e.target.value)}
+                      placeholder="请输入收货备注"
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
                 </div>
               </div>
             )}

@@ -51,6 +51,7 @@ const presetRoutes: Record<string, string> = {
   'preset-employee-onboard': '/personnel/onboard',
   'preset-equipment-inbound': '/equipment/inbounds/create',
   'preset-equipment-transfer': '/equipment/transfers/create',
+  'preset-equipment-repair': '/equipment/repairs/create',
   'preset-project-completion': '/projects',
 }
 
@@ -69,6 +70,7 @@ export default function NewProcessPage() {
       const res = await fetch(API_URL.PROCESS_PRESETS)
       if (res.ok) {
         const data = await res.json()
+        console.log('[NewProcessPage] Loaded presets:', data.data || data)
         setPresets(data.data || data || [])
       }
     } catch (error) {
@@ -78,6 +80,7 @@ export default function NewProcessPage() {
         { id: 'preset-employee-onboard', name: '人员入职', category: 'hr', description: '新员工入职审批流程', status: 'active' },
         { id: 'preset-equipment-inbound', name: '设备入库', category: 'equipment', description: '设备入库审批流程', status: 'active' },
         { id: 'preset-equipment-transfer', name: '设备调拨', category: 'equipment', description: '设备跨位置调拨审批流程', status: 'active' },
+        { id: 'preset-equipment-repair', name: '设备维修', category: 'equipment', description: '设备维修审批流程', status: 'active' },
         { id: 'preset-project-completion', name: '项目结项', category: 'project', description: '项目结项审批流程', status: 'active' },
       ])
     } finally {

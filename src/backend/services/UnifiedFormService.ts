@@ -663,6 +663,109 @@ export class UnifiedFormService {
         ]
       },
       {
+        id: 'form-equipment-repair',
+        key: 'equipment-repair-form',
+        name: '设备维修表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备维修申请表单',
+        businessEntityType: 'EquipmentRepair',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+            id: 'field-equipment-data',
+            name: 'equipment_data',
+            label: '设备数据',
+            type: 'array',
+            required: true,
+            arrayFields: [
+              {
+                id: 'field-equipment-id',
+                name: 'equipment_id',
+                label: '设备ID',
+                type: 'text',
+                required: true
+              },
+              {
+                id: 'field-equipment-name',
+                name: 'equipment_name',
+                label: '设备名称',
+                type: 'text',
+                required: true
+              },
+              {
+                id: 'field-equipment-category',
+                name: 'equipment_category',
+                label: '设备类别',
+                type: 'select',
+                required: true,
+                options: [
+                  { label: '仪器类', value: 'instrument' },
+                  { label: '假负载类', value: 'fake_load' },
+                  { label: '线材类', value: 'cable' }
+                ]
+              },
+              {
+                id: 'field-repair-quantity',
+                name: 'repair_quantity',
+                label: '维修数量',
+                type: 'number',
+                required: true,
+                min: 1
+              }
+            ]
+          },
+          {
+            id: 'field-original-location-type',
+            name: 'original_location_type',
+            label: '原始位置类型',
+            type: 'select',
+            required: true,
+            options: [
+              { label: '仓库', value: 'warehouse' },
+              { label: '项目', value: 'project' }
+            ]
+          },
+          {
+            id: 'field-original-location-id',
+            name: 'original_location_id',
+            label: '原始位置ID',
+            type: 'text',
+            required: true
+          },
+          {
+            id: 'field-location-manager-id',
+            name: 'location_manager_id',
+            label: '位置管理员ID',
+            type: 'text',
+            required: false,
+            visible: false
+          },
+          {
+            id: 'field-fault-description',
+            name: 'fault_description',
+            label: '故障描述',
+            type: 'textarea',
+            required: true,
+            placeholder: '请输入故障描述',
+            rows: 3,
+            minLength: 1
+          },
+          {
+            id: 'field-repair-service-provider',
+            name: 'repair_service_provider',
+            label: '维修服务商',
+            type: 'text',
+            required: false,
+            placeholder: '请输入维修服务商'
+          }
+        ]
+      },
+      {
         id: 'form-task-create',
         key: 'task-create-form',
         name: '任务创建表单',
@@ -739,6 +842,69 @@ export class UnifiedFormService {
             placeholder: '请输入任务描述',
             rows: 3,
             minLength: 10
+          }
+        ]
+      },
+      {
+        id: 'form-equipment-repair-shipping',
+        key: 'equipment-repair-shipping-form',
+        name: '设备维修发货表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备维修发货表单',
+        businessEntityType: 'EquipmentRepair',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+            id: 'field-shipping-no',
+            name: 'shipping_no',
+            label: '发货单号',
+            type: 'text',
+            required: true,
+            placeholder: '请输入发货单号'
+          },
+          {
+              id: 'field-shipping-time',
+              name: 'shipping_time',
+              label: '发货时间',
+              type: 'date',
+              required: true
+            }
+        ]
+      },
+      {
+        id: 'form-equipment-repair-receiving',
+        key: 'equipment-repair-receiving-form',
+        name: '设备维修收货表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备维修收货表单',
+        businessEntityType: 'EquipmentRepair',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+              id: 'field-receiving-time',
+              name: 'receiving_time',
+              label: '收货时间',
+              type: 'date',
+              required: true
+            },
+          {
+            id: 'field-receiving-note',
+            name: 'receiving_note',
+            label: '收货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入收货备注',
+            rows: 3
           }
         ]
       },
@@ -1963,9 +2129,9 @@ export class UnifiedFormService {
     const cleanedData: Record<string, any> = {};
 
     template.fields.forEach(field => {
-      if (this.isFieldVisible(field, data)) {
-        cleanedData[field.name] = data[field.name];
-      }
+      // 保留所有字段的值，不管是否可见
+      // visible属性只影响前端显示，不应该影响后端数据处理
+      cleanedData[field.name] = data[field.name];
     });
 
     return cleanedData;

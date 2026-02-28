@@ -12,6 +12,7 @@ import { projectService } from './ProjectService.js';
 import { instanceService } from './InstanceService.js';
 import { InboundOrderService } from './InboundOrderService.js';
 import { TransferOrderService } from './TransferOrderService.js';
+import { equipmentRepairService } from './EquipmentRepairService.js';
 import { db } from '../database/connection.js';
 
 interface ProcessFormPreset {
@@ -108,6 +109,18 @@ export class ProcessFormIntegrationService {
         formTemplateKey: 'equipment-transfer-form',
         workflowTemplateId: 'equipment-transfer',
         businessType: 'EquipmentTransfer',
+        status: 'active',
+        defaultVariables: {},
+        version: '1.0.0'
+      },
+      {
+        id: 'preset-equipment-repair',
+        name: '设备维修流程',
+        category: 'equipment',
+        description: '设备维修审批流程',
+        formTemplateKey: 'equipment-repair-form',
+        workflowTemplateId: 'equipment-repair',
+        businessType: 'EquipmentRepair',
         status: 'active',
         defaultVariables: {},
         version: '1.0.0'
@@ -368,6 +381,70 @@ export class ProcessFormIntegrationService {
   }
 
   /**
+   * 获取维修位置和负责人信息
+   */
+  private async getRepairLocationInfo(formData: Record<string, any>): Promise<Record<string, any>> {
+    const result: Record<string, any> = {};
+    
+    try {
+      // 获取原始位置信息
+      if (formData.original_location_type && formData.original_location_id) {
+        if (formData.original_location_type === 'warehouse') {
+          const warehouse = await this.db.queryOne(
+            'SELECT * FROM warehouses WHERE id = ?',
+            [formData.original_location_id]
+          );
+          
+          if (warehouse) {
+            result._originalLocationName = warehouse.name;
+            
+            // 获取负责人信息
+            if (warehouse.manager_id) {
+              const manager = await this.db.queryOne(
+                'SELECT * FROM employees WHERE id = ?',
+                [warehouse.manager_id]
+              );
+              
+              if (manager) {
+                result._locationManagerName = manager.name;
+                // 使用employees表中的user_id
+                result.location_manager_id = manager.user_id;
+              }
+            }
+          }
+        } else if (formData.original_location_type === 'project') {
+          const project = await this.db.queryOne(
+            'SELECT * FROM projects WHERE id = ?',
+            [formData.original_location_id]
+          );
+          
+          if (project) {
+            result._originalLocationName = project.name;
+            
+            // 获取负责人信息
+            if (project.manager_id) {
+              const manager = await this.db.queryOne(
+                'SELECT * FROM employees WHERE id = ?',
+                [project.manager_id]
+              );
+              
+              if (manager) {
+                result._locationManagerName = manager.name;
+                // 使用employees表中的user_id
+                result.location_manager_id = manager.user_id;
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('获取维修位置信息失败:', error);
+    }
+    
+    return result;
+  }
+
+  /**
    * 生成业务编号
    */
   private generateBusinessCode(prefix: string): string {
@@ -505,6 +582,20 @@ export class ProcessFormIntegrationService {
         // 清理表单数据（移除不可见字段的值）
         cleanedFormData = unifiedFormService.cleanFormData(formTemplate.id, businessLinkResult.data);
         console.log('Cleaned form data:', cleanedFormData);
+      }
+
+      // 在启动流程之前，为设备维修流程获取位置信息
+      if (preset.businessType === 'EquipmentRepair') {
+        const locationInfo = await this.getRepairLocationInfo(cleanedFormData);
+        console.log('[ProcessFormIntegrationService] 获取维修位置信息:', locationInfo);
+        
+        // 将位置和负责人信息添加到表单数据中
+        cleanedFormData = {
+          ...cleanedFormData,
+          ...locationInfo
+        };
+        
+        console.log('[ProcessFormIntegrationService] 增强后的维修表单数据:', cleanedFormData);
       }
 
       if (!definition) {
@@ -663,6 +754,50 @@ export class ProcessFormIntegrationService {
           console.log(`[ProcessFormIntegrationService] 调拨单创建成功: ${order.id}, 已更新 business_id 和 transferOrderId`);
         } catch (error) {
           console.error(`[ProcessFormIntegrationService] 调拨单创建失败:`, error);
+          console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
+          throw error;
+        }
+      } else if (preset.businessType === 'EquipmentRepair') {
+        // 在流程启动时创建维修单
+        try {
+          console.log('[ProcessFormIntegrationService] 开始创建维修单，formData:', cleanedFormData);
+          
+          let order;
+          if (cleanedFormData.equipment_data && Array.isArray(cleanedFormData.equipment_data)) {
+            // 批量维修单
+            const orders = await equipmentRepairService.createBatchRepairOrders(
+              cleanedFormData,
+              params.initiator.id,
+              params.initiator.name
+            );
+            order = orders[0]; // 使用第一个维修单作为主单
+            console.log('[ProcessFormIntegrationService] 批量维修单创建成功:', orders);
+          } else {
+            // 单个维修单
+            order = await equipmentRepairService.createRepairOrder(
+              cleanedFormData,
+              params.initiator.id,
+              params.initiator.name
+            );
+            console.log('[ProcessFormIntegrationService] 维修单创建成功:', order);
+          }
+          
+          // 更新流程实例的 businessId 和 formData 中的 repairOrderId
+          const updatedVariables = {
+            ...instance.variables,
+            formData: {
+              ...instance.variables?.formData,
+              repairOrderId: order.id
+            }
+          };
+          await instanceService.updateInstance(instance.id, {
+            business_id: order.id,
+            variables: updatedVariables
+          });
+          
+          console.log(`[ProcessFormIntegrationService] 维修单创建成功: ${order.id}, 已更新 business_id 和 repairOrderId`);
+        } catch (error) {
+          console.error(`[ProcessFormIntegrationService] 维修单创建失败:`, error);
           console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
           throw error;
         }

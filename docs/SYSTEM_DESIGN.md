@@ -2,8 +2,8 @@
 
 ## 📋 文档说明
 
-**文档版本**: v2.7  
-**最后更新**: 2026-02-26  
+**文档版本**: v2.8  
+**最后更新**: 2026-02-28  
 **维护方式**: 所有系统变更必须先更新此文档，再进行代码修改
 
 **v2.0 更新内容：**
@@ -51,6 +51,12 @@
 - 更新维修管理API定义，支持发货、收货、闭单操作
 
 **v2.8 更新内容：**
+- 实现设备维修流程与工作流引擎的深度集成
+- 维修发货和收货节点通过专门的API调用更新设备状态，确保状态变更的可靠性
+- 修复维修单查询时使用事务连接的问题，避免事务隔离导致的查询失败
+- 修复设备状态更新时参数为undefined的问题，确保SQL参数正确传递
+- 修复非仪器类设备维修时的model_no字段缺失问题
+- 更新维修管理API路径为/api/equipment/repairs，与实际实现保持一致
 - 修复调拨单创建失败问题（INSERT语句字段数量和参数数量不匹配）
 - 修复调拨单创建失败时没有抛出异常的问题（确保流程实例不会在调拨单创建失败时被创建）
 - 修复设备调拨到项目时使用状态设置逻辑（目标位置为项目时设置为"in_use"，目标位置为仓库时设置为"idle"）
@@ -629,12 +635,17 @@
 ##### 4.5.4.5 维修/报废逻辑（状态管控，避免无效流转）
 - **维修流程（完整闭环）**:
   - **申请维修**: 故障设备（仓库/项目内）可发起维修申请，填写故障描述、维修厂家、预计费用等信息
+  - **位置管理员审批**: 位置管理员审批维修申请，通过后进入发货环节
   - **发货维修**: 审批通过后，设备发货给维修厂家，设备状态变更为"维修中"（repairing），禁止调拨/领用/归还
+    - 仪器类：将设备location_id设置为'repairing'，health_status和location_status都设置为'repairing'
+    - 负载/线缆类：从原设备库存中扣减维修数量，创建一个临时的维修中设备记录
   - **收货确认**: 维修完成后，设备从厂家收货，确认维修结果（正常/部分修复/无法修复）
-  - **闭单完成**: 确认收货后，维修单闭单，设备状态恢复为"正常"（normal），恢复正常流转
+    - 仪器类：将设备location_id恢复为original_location_id，health_status恢复为'normal'，location_status恢复为原状态
+    - 负载/线缆类：删除临时维修中设备记录，将维修数量加回原设备库存
   - **状态变更规则**:
     - 发货时：location_status 变为 repairing，usage_status 变为 idle
     - 收货时：location_status 恢复为原状态（warehouse/in_project），health_status 根据维修结果更新
+  - **工作流集成**: 维修流程与工作流引擎深度集成，发货和收货节点通过专门的API调用更新设备状态，确保状态变更的可靠性
 - **报废申请**:
   - 无法维修/无使用价值的设备可发起报废，审批通过后：
     - 仪器：标记为已报废，从可用列表隐藏（仅管理员可查）
@@ -1570,12 +1581,13 @@ POST   /api/equipment/outbound                 # 出库领用
 GET    /api/equipment/outbound                 # 出库记录
 
 # 维修管理（完整闭环流程）
-POST   /api/equipment/repair                   # 申请维修
-PUT    /api/equipment/repair/:id/ship          # 维修发货
-PUT    /api/equipment/repair/:id/receive       # 维修收货
-PUT    /api/equipment/repair/:id/close         # 闭单完成
-GET    /api/equipment/repair                   # 维修记录
-GET    /api/equipment/repair/:id               # 维修详情
+POST   /api/equipment/repairs                  # 申请维修
+PUT    /api/equipment/repairs/:id/ship         # 维修发货
+PUT    /api/equipment/repairs/:id/receive      # 维修收货
+PUT    /api/equipment/repairs/:id/approve      # 审批通过
+PUT    /api/equipment/repairs/:id/reject       # 审批驳回
+GET    /api/equipment/repairs                  # 维修记录
+GET    /api/equipment/repairs/:id              # 维修详情
 POST   /api/equipment/scrap                    # 报废申请
 GET    /api/equipment/scrap                    # 报废记录
 GET    /api/equipment/scrap/:id                # 报废详情
