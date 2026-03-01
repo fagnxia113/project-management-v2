@@ -1,5 +1,7 @@
 import { enhancedWorkflowEngine } from './EnhancedWorkflowEngine.js';
 import { equipmentRepairService } from './EquipmentRepairService.js';
+import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
+import { instanceService } from './InstanceService.js';
 
 export class WorkflowEventListener {
   private listenersSetup = false;
@@ -33,7 +35,7 @@ export class WorkflowEventListener {
           return;
         }
 
-        const instance = await enhancedWorkflowEngine.getInstance(task.instance_id);
+        const instance = await instanceService.getInstance(task.instance_id);
         if (!instance || !instance.business_id) {
           console.log('[WorkflowEventListener] No instance or business_id, skipping');
           return;
@@ -50,6 +52,8 @@ export class WorkflowEventListener {
 
         if (definitionKey === 'equipment-repair') {
           await this.handleRepairOrderApproval(businessId, params, task.node_id);
+        } else if (definitionKey === 'equipment-scrap-sale') {
+          await this.handleScrapSaleOrderApproval(businessId, params, task.node_id);
         }
       } catch (error) {
         console.error('[WorkflowEventListener] Error handling task.completed event:', error);
@@ -88,6 +92,32 @@ export class WorkflowEventListener {
       }
     } catch (error) {
       console.error(`[WorkflowEventListener] Error handling repair order ${orderId} approval:`, error);
+      throw error;
+    }
+  }
+
+  private async handleScrapSaleOrderApproval(orderId: string, params: any, nodeId: string): Promise<void> {
+    try {
+      const action = params.action;
+      const operator = params.operator;
+      const comment = params.comment;
+
+      if (nodeId === 'location-manager') {
+        if (action === 'approve' || action === 'approved') {
+          await equipmentScrapSaleService.approveScrapSaleOrder(orderId, operator.id, operator.name, comment);
+          console.log(`[WorkflowEventListener] Scrap/Sale order ${orderId} approved by location manager`);
+        } else if (action === 'reject' || action === 'rejected') {
+          await equipmentScrapSaleService.rejectScrapSaleOrder(orderId, operator.id, operator.name, comment);
+          console.log(`[WorkflowEventListener] Scrap/Sale order ${orderId} rejected by location manager`);
+        }
+      } else if (nodeId === 'process') {
+        if (action === 'approve' || action === 'approved') {
+          await equipmentScrapSaleService.processScrapSaleOrder(orderId, operator.id);
+          console.log(`[WorkflowEventListener] Scrap/Sale order ${orderId} processed, equipment status changed to scrapped`);
+        }
+      }
+    } catch (error) {
+      console.error(`[WorkflowEventListener] Error handling scrap/sale order ${orderId} approval:`, error);
       throw error;
     }
   }

@@ -189,18 +189,16 @@ export default function EquipmentStatisticsPage() {
           <div className="p-6">
             <div className="space-y-3">
               {statistics.categoryStats.map((stat) => (
-                <div key={stat.category} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div key={stat.category} className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-900">{stat.category_label}</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(stat.count / statistics.total) * 100}%` }}
-                      ></div>
-                    </div>
                     <span className="text-sm font-medium text-gray-900">{stat.count}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{ width: `${Math.min((stat.count / statistics.total) * 100, 100)}%` }}
+                    ></div>
                   </div>
                 </div>
               ))}
@@ -215,20 +213,18 @@ export default function EquipmentStatisticsPage() {
           <div className="p-6">
             <div className="space-y-3">
               {statistics.healthStats.map((stat) => (
-                <div key={stat.health_status} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div key={stat.health_status} className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getHealthStatusColor(stat.health_status)}`}>
                       {stat.health_status_label}
                     </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(stat.count / statistics.total) * 100}%` }}
-                      ></div>
-                    </div>
                     <span className="text-sm font-medium text-gray-900">{stat.count}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{ width: `${Math.min((stat.count / statistics.total) * 100, 100)}%` }}
+                    ></div>
                   </div>
                 </div>
               ))}
@@ -243,20 +239,18 @@ export default function EquipmentStatisticsPage() {
           <div className="p-6">
             <div className="space-y-3">
               {statistics.usageStats.map((stat) => (
-                <div key={stat.usage_status} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div key={stat.usage_status} className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getUsageStatusColor(stat.usage_status)}`}>
                       {stat.usage_status_label}
                     </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(stat.count / statistics.total) * 100}%` }}
-                      ></div>
-                    </div>
                     <span className="text-sm font-medium text-gray-900">{stat.count}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{ width: `${Math.min((stat.count / statistics.total) * 100, 100)}%` }}
+                    ></div>
                   </div>
                 </div>
               ))}
@@ -271,20 +265,18 @@ export default function EquipmentStatisticsPage() {
           <div className="p-6">
             <div className="space-y-3">
               {statistics.locationStats.map((stat) => (
-                <div key={stat.location_status} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                <div key={stat.location_status} className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getLocationStatusColor(stat.location_status)}`}>
                       {stat.location_status_label}
                     </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${(stat.count / statistics.total) * 100}%` }}
-                      ></div>
-                    </div>
                     <span className="text-sm font-medium text-gray-900">{stat.count}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{ width: `${Math.min((stat.count / statistics.total) * 100, 100)}%` }}
+                    ></div>
                   </div>
                 </div>
               ))}

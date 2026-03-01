@@ -95,7 +95,6 @@ const getMenus = (role: string): MenuItem[] => {
         { label: '设备台账', path: '/equipment' },
         { label: '仓库管理', path: '/warehouses' },
         { label: '入库登记', path: '/equipment/inbounds/create' },
-        { label: '设备借用', path: '/equipment/borrowings/create' },
         { label: '设备调拨', path: '/equipment/transfers/create' },
       ]
     },

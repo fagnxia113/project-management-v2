@@ -52,7 +52,8 @@ const presetRoutes: Record<string, string> = {
   'preset-equipment-inbound': '/equipment/inbounds/create',
   'preset-equipment-transfer': '/equipment/transfers/create',
   'preset-equipment-repair': '/equipment/repairs/create',
-  'preset-project-completion': '/projects',
+  'preset-equipment-scrap-sale': '/equipment/scrap-sales/create',
+  'preset-project-approval': '/projects/create',
 }
 
 export default function NewProcessPage() {
@@ -75,13 +76,13 @@ export default function NewProcessPage() {
       }
     } catch (error) {
       console.error('加载流程预设失败:', error)
-      // 使用默认数据
       setPresets([
         { id: 'preset-employee-onboard', name: '人员入职', category: 'hr', description: '新员工入职审批流程', status: 'active' },
         { id: 'preset-equipment-inbound', name: '设备入库', category: 'equipment', description: '设备入库审批流程', status: 'active' },
         { id: 'preset-equipment-transfer', name: '设备调拨', category: 'equipment', description: '设备跨位置调拨审批流程', status: 'active' },
         { id: 'preset-equipment-repair', name: '设备维修', category: 'equipment', description: '设备维修审批流程', status: 'active' },
-        { id: 'preset-project-completion', name: '项目结项', category: 'project', description: '项目结项审批流程', status: 'active' },
+        { id: 'preset-equipment-scrap-sale', name: '设备报废/售出', category: 'equipment', description: '设备报废/售出审批流程', status: 'active' },
+        { id: 'preset-project-approval', name: '项目立项', category: 'project', description: '项目立项审批流程', status: 'active' },
       ])
     } finally {
       setLoading(false)

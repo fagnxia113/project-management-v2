@@ -602,18 +602,21 @@ export class EnhancedWorkflowEngine {
     // 更新当前节点信息
     await this.updateCurrentNode(instance.id, node.id, node.name);
 
+    // 重新获取实例以获取最新的变量
+    const updatedInstance = await instanceService.getInstance(instance.id);
+
     const context: ProcessContext = {
-      process: instance,
+      process: updatedInstance,
       definition,
-      variables: instance.variables,
-      formData: instance.variables.formData || {},
-      initiator: { id: instance.initiator_id, name: instance.initiator_name }
+      variables: updatedInstance.variables,
+      formData: updatedInstance.variables.formData || {},
+      initiator: { id: updatedInstance.initiator_id, name: updatedInstance.initiator_name }
     };
 
     const targetNodes = await gatewayHandler.handleExclusiveGateway(node, context);
 
     for (const targetNodeId of targetNodes) {
-      await this.continueExecution(instance, definition, targetNodeId);
+      await this.continueExecution(updatedInstance, definition, targetNodeId);
     }
   }
 
@@ -625,24 +628,27 @@ export class EnhancedWorkflowEngine {
     // 更新当前节点信息
     await this.updateCurrentNode(instance.id, node.id, node.name);
 
+    // 重新获取实例以获取最新的变量
+    const updatedInstance = await instanceService.getInstance(instance.id);
+
     const context: ProcessContext = {
-      process: instance,
+      process: updatedInstance,
       definition,
-      variables: instance.variables,
-      formData: instance.variables.formData || {},
-      initiator: { id: instance.initiator_id, name: instance.initiator_name }
+      variables: updatedInstance.variables,
+      formData: updatedInstance.variables.formData || {},
+      initiator: { id: updatedInstance.initiator_id, name: updatedInstance.initiator_name }
     };
 
     const targetNodes = await gatewayHandler.handleParallelGateway(node, context);
 
     for (const targetNodeId of targetNodes) {
       await instanceService.createExecution({
-        instanceId: instance.id,
+        instanceId: updatedInstance.id,
         nodeId: node.id,
         parentId: node.id
       });
 
-      await this.continueExecution(instance, definition, targetNodeId);
+      await this.continueExecution(updatedInstance, definition, targetNodeId);
     }
   }
 
@@ -654,18 +660,21 @@ export class EnhancedWorkflowEngine {
     // 更新当前节点信息
     await this.updateCurrentNode(instance.id, node.id, node.name);
 
+    // 重新获取实例以获取最新的变量
+    const updatedInstance = await instanceService.getInstance(instance.id);
+
     const context: ProcessContext = {
-      process: instance,
+      process: updatedInstance,
       definition,
-      variables: instance.variables,
-      formData: instance.variables.formData || {},
-      initiator: { id: instance.initiator_id, name: instance.initiator_name }
+      variables: updatedInstance.variables,
+      formData: updatedInstance.variables.formData || {},
+      initiator: { id: updatedInstance.initiator_id, name: updatedInstance.initiator_name }
     };
 
     const targetNodes = await gatewayHandler.handleInclusiveGateway(node, context);
 
     for (const targetNodeId of targetNodes) {
-      await this.continueExecution(instance, definition, targetNodeId);
+      await this.continueExecution(updatedInstance, definition, targetNodeId);
     }
   }
 

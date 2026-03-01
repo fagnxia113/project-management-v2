@@ -7,11 +7,12 @@ interface Equipment {
   equipment_name: string
   model_no: string
   brand: string
+  manufacturer: string | null
+  technical_params: string | null
   category: 'instrument' | 'fake_load' | 'cable'
   unit: string
   quantity: number
   serial_number: string | null
-  factory_serial_no: string | null
   manage_code: string
   health_status: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped'
   usage_status: 'idle' | 'in_use'
@@ -51,10 +52,37 @@ export default function EquipmentListPage() {
   const [filterHealthStatus, setFilterHealthStatus] = useState<string>('')
   const [filterUsageStatus, setFilterUsageStatus] = useState<string>('')
   const [filterLocationStatus, setFilterLocationStatus] = useState<string>('')
+  const [filterLocationId, setFilterLocationId] = useState<string>('')
+  const [locations, setLocations] = useState<Array<{id: string, name: string, type: string}>>([])
+
+  useEffect(() => {
+    loadLocations()
+  }, [])
 
   useEffect(() => {
     loadEquipment()
-  }, [page, searchTerm, filterCategory, filterHealthStatus, filterUsageStatus, filterLocationStatus])
+  }, [page, searchTerm, filterCategory, filterHealthStatus, filterUsageStatus, filterLocationStatus, filterLocationId])
+
+  const loadLocations = async () => {
+    try {
+      const [warehousesRes, projectsRes] = await Promise.all([
+        fetch(`${API_URL.BASE}/api/warehouses`),
+        fetch(`${API_URL.BASE}/api/projects`)
+      ])
+      
+      const warehouses = await warehousesRes.json()
+      const projects = await projectsRes.json()
+      
+      const locationList = [
+        ...(warehouses.data || []).map((w: any) => ({ id: w.id, name: w.name, type: 'warehouse' })),
+        ...(projects.data || []).map((p: any) => ({ id: p.id, name: p.name, type: 'project' }))
+      ]
+      
+      setLocations(locationList)
+    } catch (error) {
+      console.error('加载位置列表失败:', error)
+    }
+  }
 
   const loadEquipment = async () => {
     try {
@@ -66,7 +94,8 @@ export default function EquipmentListPage() {
         ...(filterCategory && { category: filterCategory }),
         ...(filterHealthStatus && { health_status: filterHealthStatus }),
         ...(filterUsageStatus && { usage_status: filterUsageStatus }),
-        ...(filterLocationStatus && { location_status: filterLocationStatus })
+        ...(filterLocationStatus && { location_status: filterLocationStatus }),
+        ...(filterLocationId && { location_id: filterLocationId })
       })
 
       const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`)
@@ -131,13 +160,15 @@ export default function EquipmentListPage() {
       warehouse: 'bg-gray-100 text-gray-700',
       in_project: 'bg-blue-100 text-blue-700',
       repairing: 'bg-yellow-100 text-yellow-700',
-      transferring: 'bg-orange-100 text-orange-700'
+      transferring: 'bg-orange-100 text-orange-700',
+      scrapped: 'bg-red-100 text-red-700'
     }
     const labels: Record<string, string> = {
       warehouse: '仓库',
       in_project: '项目中',
       repairing: '维修中',
-      transferring: '调拨中'
+      transferring: '调拨中',
+      scrapped: '已报废'
     }
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.warehouse}`}>
@@ -177,6 +208,16 @@ export default function EquipmentListPage() {
       render: (value: string) => value
     },
     {
+      key: 'manufacturer' as keyof Equipment,
+      header: '生产厂家',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'technical_params' as keyof Equipment,
+      header: '技术参数',
+      render: (value: string | null) => value ? <span className="max-w-xs truncate block" title={value}>{value}</span> : '-'
+    },
+    {
       key: 'quantity' as keyof Equipment,
       header: '数量',
       render: (value: number, row: Equipment) => {
@@ -190,11 +231,6 @@ export default function EquipmentListPage() {
     {
       key: 'serial_number' as keyof Equipment,
       header: '序列号',
-      render: (value: string | null) => value || '-'
-    },
-    {
-      key: 'factory_serial_no' as keyof Equipment,
-      header: '仪器出厂编号',
       render: (value: string | null) => value || '-'
     },
     {
@@ -228,9 +264,39 @@ export default function EquipmentListPage() {
       render: (value: string | null) => value || '-'
     },
     {
+      key: 'purchase_date' as keyof Equipment,
+      header: '采购日期',
+      render: (value: string | null) => value || '-'
+    },
+    {
       key: 'purchase_price' as keyof Equipment,
       header: '采购价格',
       render: (value: number | null) => value ? `¥${value.toLocaleString()}` : '-'
+    },
+    {
+      key: 'calibration_expiry' as keyof Equipment,
+      header: '校准到期',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'certificate_no' as keyof Equipment,
+      header: '证书编号',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'certificate_issuer' as keyof Equipment,
+      header: '发证单位',
+      render: (value: string | null) => value || '-'
+    },
+    {
+      key: 'accessory_desc' as keyof Equipment,
+      header: '配件情况',
+      render: (value: string | null) => value ? <span className="max-w-xs truncate block" title={value}>{value}</span> : '-'
+    },
+    {
+      key: 'notes' as keyof Equipment,
+      header: '备注',
+      render: (value: string | null) => value ? <span className="max-w-xs truncate block" title={value}>{value}</span> : '-'
     },
     {
       key: 'id' as keyof Equipment,
@@ -269,22 +335,10 @@ export default function EquipmentListPage() {
             统计报表
           </button>
           <button
-            onClick={() => window.location.href = '/equipment/inbounds/create'}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            onClick={() => window.location.href = '/equipment/scrap-sales'}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
-            + 创建入库单
-          </button>
-          <button
-            onClick={() => window.location.href = '/equipment/borrowings/create'}
-            className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700"
-          >
-            + 借用设备
-          </button>
-          <button
-            onClick={() => window.location.href = '/warehouses'}
-            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
-          >
-            + 仓库管理
+            已报废/售出清单
           </button>
         </div>
       </div>
@@ -341,6 +395,19 @@ export default function EquipmentListPage() {
           <option value="in_project">项目中</option>
           <option value="repairing">维修中</option>
           <option value="transferring">调拨中</option>
+        </select>
+
+        <select
+          value={filterLocationId}
+          onChange={(e) => setFilterLocationId(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">全部位置</option>
+          {locations.map((loc) => (
+            <option key={loc.id} value={loc.id}>
+              {loc.type === 'warehouse' ? `仓库: ${loc.name}` : `项目: ${loc.name}`}
+            </option>
+          ))}
         </select>
       </div>
 

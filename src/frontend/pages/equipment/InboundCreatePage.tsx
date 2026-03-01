@@ -12,10 +12,13 @@ interface InboundItem {
   purchase_price: number
   total_price: number
   serial_numbers: string
-  factory_serial_no: string
   certificate_no: string
   certificate_issuer: string
+  certificate_expiry_date: string
   accessory_desc: string
+  manufacturer: string
+  technical_params: string
+  item_notes: string
   attachment: string
   isCustomName: boolean
   isCustomModel: boolean
@@ -153,10 +156,13 @@ export default function InboundCreatePage() {
       purchase_price: 0,
       total_price: 0,
       serial_numbers: '',
-      factory_serial_no: '',
       certificate_no: '',
       certificate_issuer: '',
+      certificate_expiry_date: '',
       accessory_desc: '',
+      manufacturer: '',
+      technical_params: '',
+      item_notes: '',
       attachment: '',
       isCustomName: false,
       isCustomModel: false
@@ -242,10 +248,13 @@ export default function InboundCreatePage() {
           purchase_price: item.purchase_price,
           total_price: item.total_price,
           serial_numbers: item.serial_numbers || undefined,
-          factory_serial_no: item.factory_serial_no || undefined,
           certificate_no: item.certificate_no || undefined,
           certificate_issuer: item.certificate_issuer || undefined,
+          certificate_expiry_date: item.certificate_expiry_date || undefined,
           accessory_desc: item.accessory_desc || undefined,
+          manufacturer: item.manufacturer || undefined,
+          technical_params: item.technical_params || undefined,
+          item_notes: item.item_notes || undefined,
           attachment: item.attachment || undefined
         }))
       }
@@ -613,18 +622,27 @@ export default function InboundCreatePage() {
                       </div>
                     )}
                     
-                    {item.category === 'instrument' && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">仪器出厂编号</label>
-                        <input
-                          type="text"
-                          value={item.factory_serial_no}
-                          onChange={(e) => updateItem(index, 'factory_serial_no', e.target.value)}
-                          placeholder="出厂编号"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">生产厂家</label>
+                      <input
+                        type="text"
+                        value={item.manufacturer}
+                        onChange={(e) => updateItem(index, 'manufacturer', e.target.value)}
+                        placeholder="生产厂家"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">技术参数</label>
+                      <textarea
+                        value={item.technical_params}
+                        onChange={(e) => updateItem(index, 'technical_params', e.target.value)}
+                        placeholder="技术参数"
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                     
                     {item.category === 'instrument' && (
                       <div>
@@ -652,13 +670,39 @@ export default function InboundCreatePage() {
                       </div>
                     )}
                     
+                    {item.category === 'instrument' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">校准证书到期时间</label>
+                        <input
+                          type="date"
+                          value={item.certificate_expiry_date}
+                          onChange={(e) => updateItem(index, 'certificate_expiry_date', e.target.value)}
+                          placeholder="证书到期时间"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                    
+                    {item.category === 'instrument' && (
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">配件情况</label>
+                        <input
+                          type="text"
+                          value={item.accessory_desc}
+                          onChange={(e) => updateItem(index, 'accessory_desc', e.target.value)}
+                          placeholder="配件描述"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                    
                     <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">配件情况</label>
-                      <input
-                        type="text"
-                        value={item.accessory_desc}
-                        onChange={(e) => updateItem(index, 'accessory_desc', e.target.value)}
-                        placeholder="配件描述"
+                      <label className="block text-sm font-medium text-gray-700 mb-1">备注</label>
+                      <textarea
+                        value={item.item_notes}
+                        onChange={(e) => updateItem(index, 'item_notes', e.target.value)}
+                        placeholder="备注"
+                        rows={2}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>

@@ -13,12 +13,12 @@ const TaskBoardPage = lazy(() => import('./pages/tasks/TaskBoardPage'))
 const EquipmentListPage = lazy(() => import('./pages/equipment/EquipmentListPage'))
 const EquipmentDetailPage = lazy(() => import('./pages/equipment/EquipmentDetailPage'))
 const EquipmentStatisticsPage = lazy(() => import('./pages/equipment/EquipmentStatisticsPage'))
+const ScrapSaleListPage = lazy(() => import('./pages/equipment/ScrapSaleListPage'))
 const TransferCreatePage = lazy(() => import('./pages/equipment/TransferCreatePage'))
 const TransferDetailPage = lazy(() => import('./pages/equipment/TransferDetailPage'))
 const InboundCreatePage = lazy(() => import('./pages/equipment/InboundCreatePage'))
 const RepairCreatePage = lazy(() => import('./pages/equipment/RepairCreatePage'))
-const BorrowingCreatePage = lazy(() => import('./pages/equipment/BorrowingCreatePage'))
-const BorrowingReturnPage = lazy(() => import('./pages/equipment/BorrowingReturnPage'))
+const ScrapSaleCreatePage = lazy(() => import('./pages/equipment/ScrapSaleCreatePage'))
 const PersonnelListPage = lazy(() => import('./pages/personnel/PersonnelListPage'))
 const EmployeeDetailPage = lazy(() => import('./pages/personnel/EmployeeDetailPage'))
 const PersonnelTransferPage = lazy(() => import('./pages/personnel/PersonnelTransferPage'))
@@ -127,11 +127,11 @@ function App() {
           <Route path="/tasks/board" element={<TaskBoardPage />} />
           <Route path="/equipment" element={<EquipmentListPage />} />
           <Route path="/equipment/statistics" element={<EquipmentStatisticsPage />} />
+          <Route path="/equipment/scrap-sales" element={<ScrapSaleListPage />} />
           <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
           <Route path="/equipment/inbounds/create" element={<InboundCreatePage />} />
           <Route path="/equipment/repairs/create" element={<RepairCreatePage />} />
-          <Route path="/equipment/borrowings/create" element={<BorrowingCreatePage />} />
-          <Route path="/equipment/borrowings/:id/return" element={<BorrowingReturnPage />} />
+          <Route path="/equipment/scrap-sales/create" element={<ScrapSaleCreatePage />} />
           <Route path="/equipment/transfers/create" element={<TransferCreatePage />} />
           <Route path="/equipment/transfers/:id" element={<TransferDetailPage />} />
           <Route path="/personnel" element={<PersonnelListPage />} />

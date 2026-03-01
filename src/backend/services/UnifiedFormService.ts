@@ -766,6 +766,140 @@ export class UnifiedFormService {
         ]
       },
       {
+        id: 'form-equipment-scrap-sale',
+        key: 'equipment-scrap-sale-form',
+        name: '设备报废/售出表单',
+        module: 'equipment',
+        category: 'equipment',
+        description: '设备报废/售出申请表单',
+        businessEntityType: 'EquipmentScrapSale',
+        version: 1,
+        status: 'active',
+        createdBy: 'system',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fields: [
+          {
+            id: 'field-equipment-data',
+            name: 'equipment_data',
+            label: '设备数据',
+            type: 'array',
+            required: true,
+            arrayFields: [
+              {
+                id: 'field-equipment-id',
+                name: 'equipment_id',
+                label: '设备ID',
+                type: 'text',
+                required: true
+              },
+              {
+                id: 'field-equipment-name',
+                name: 'equipment_name',
+                label: '设备名称',
+                type: 'text',
+                required: true
+              },
+              {
+                id: 'field-equipment-category',
+                name: 'equipment_category',
+                label: '设备类别',
+                type: 'select',
+                required: true,
+                options: [
+                  { label: '仪器类', value: 'instrument' },
+                  { label: '假负载类', value: 'fake_load' },
+                  { label: '线材类', value: 'cable' }
+                ]
+              },
+              {
+                id: 'field-scrap-sale-quantity',
+                name: 'scrap_sale_quantity',
+                label: '报废/售出数量',
+                type: 'number',
+                required: true,
+                min: 1
+              }
+            ]
+          },
+          {
+            id: 'field-original-location-type',
+            name: 'original_location_type',
+            label: '原始位置类型',
+            type: 'select',
+            required: true,
+            options: [
+              { label: '仓库', value: 'warehouse' },
+              { label: '项目', value: 'project' }
+            ]
+          },
+          {
+            id: 'field-original-location-id',
+            name: 'original_location_id',
+            label: '原始位置ID',
+            type: 'text',
+            required: true
+          },
+          {
+            id: 'field-location-manager-id',
+            name: 'location_manager_id',
+            label: '位置管理员ID',
+            type: 'text',
+            required: false,
+            visible: false
+          },
+          {
+            id: 'field-type',
+            name: 'type',
+            label: '类型',
+            type: 'select',
+            required: true,
+            options: [
+              { label: '报废', value: 'scrap' },
+              { label: '售出', value: 'sale' }
+            ]
+          },
+          {
+            id: 'field-reason',
+            name: 'reason',
+            label: '报废/售出原因',
+            type: 'textarea',
+            required: true,
+            placeholder: '请输入报废/售出原因',
+            rows: 3,
+            minLength: 1
+          },
+          {
+            id: 'field-sale-price',
+            name: 'sale_price',
+            label: '售出价格',
+            type: 'number',
+            required: false,
+            min: 0,
+            visible: false,
+            condition: {
+              field: 'type',
+              operator: 'equals',
+              value: 'sale'
+            }
+          },
+          {
+            id: 'field-buyer',
+            name: 'buyer',
+            label: '购买方',
+            type: 'text',
+            required: false,
+            placeholder: '请输入购买方',
+            visible: false,
+            condition: {
+              field: 'type',
+              operator: 'equals',
+              value: 'sale'
+            }
+          }
+        ]
+      },
+      {
         id: 'form-task-create',
         key: 'task-create-form',
         name: '任务创建表单',

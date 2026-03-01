@@ -15,9 +15,9 @@ import employeesRouter from './routes/employees.js';
 import equipmentRouter from './routes/equipment.js';
 import warehouseRouter from './routes/warehouse.js';
 import inboundRouter from './routes/inbound.js';
-import borrowingRouter from './routes/borrowings.js';
 import transferRouter from './routes/transfer.js';
 import repairsRouter from './routes/repairs.js';
+import scrapSalesRouter from './routes/scrapSales.js';
 import projectsRouter from './routes/projects.js';
 import workTimeRouter from './routes/work-time.js';
 import notificationsRouter from './routes/notifications.js';
@@ -83,9 +83,9 @@ app.use('/api/personnel', employeesRouter);
 app.use('/api/equipment', equipmentRouter);
 app.use('/api/warehouses', warehouseRouter);
 app.use('/api/equipment/inbounds', inboundRouter);
-app.use('/api/equipment/borrowings', borrowingRouter);
 app.use('/api/equipment/transfers', transferRouter);
 app.use('/api/equipment/repairs', repairsRouter);
+app.use('/api/equipment/scrap-sales', scrapSalesRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/work-time', workTimeRouter);
 app.use('/api/notifications', notificationsRouter);
@@ -97,32 +97,50 @@ app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 // 数据库迁移路由
 app.post('/api/migrate', async (req, res) => {
   try {
-    const migrationPath = path.join(__dirname, 'database', 'migrations', '008_workflow_tables_optimization.sql');
-    const sql = fs.readFileSync(migrationPath, 'utf8');
+    const migrationsDir = path.join(__dirname, 'database', 'migrations');
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort();
     
-    const statements = sql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+    const allResults = [];
     
-    const results = [];
-    
-    for (const statement of statements) {
-      if (statement.trim()) {
-        try {
-          await db.execute(statement);
-          results.push({ status: 'success', statement: statement.substring(0, 50) + '...' });
-        } catch (error: any) {
-          if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_DUP_FIELDNAME') {
-            results.push({ status: 'skipped', statement: statement.substring(0, 50) + '...', reason: 'Already exists' });
-          } else {
-            results.push({ status: 'error', statement: statement.substring(0, 50) + '...', error: error.message });
+    for (const file of files) {
+      try {
+        const migrationPath = path.join(migrationsDir, file);
+        const sql = fs.readFileSync(migrationPath, 'utf8');
+        
+        // 移除注释行
+        const cleanedSql = sql.replace(/^--.*$/gm, '').trim();
+        
+        const statements = cleanedSql
+          .split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        
+        const results = [];
+        
+        for (const statement of statements) {
+          if (statement.trim()) {
+            try {
+              await db.execute(statement);
+              results.push({ status: 'success', statement: statement.substring(0, 50) + '...' });
+            } catch (error: any) {
+              if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_DUP_FIELDNAME') {
+                results.push({ status: 'skipped', statement: statement.substring(0, 50) + '...', reason: 'Already exists' });
+              } else {
+                results.push({ status: 'error', statement: statement.substring(0, 50) + '...', error: error.message });
+              }
+            }
           }
         }
+        
+        allResults.push({ file, results });
+      } catch (error: any) {
+        allResults.push({ file, error: error.message });
       }
     }
     
-    res.json({ success: true, message: '数据库迁移完成', results });
+    res.json({ success: true, message: '数据库迁移完成', results: allResults });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

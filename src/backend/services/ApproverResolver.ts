@@ -57,6 +57,9 @@ export class ApproverResolver {
       case 'expression':
         return this.resolveByExpression(source.value, context);
       
+      case 'variable':
+        return this.resolveByVariable(source.value, context);
+      
       case 'previous_handler':
         return this.resolvePreviousHandler(context);
       
@@ -246,6 +249,57 @@ export class ApproverResolver {
    */
   private isDepartmentId(id: string): boolean {
     return id.startsWith('dept-') || id.startsWith('department-');
+  }
+
+  /**
+   * 从变量中解析审批人
+   */
+  private async resolveByVariable(value: string, context: ProcessContext): Promise<Approver[]> {
+    try {
+      console.log('[ApproverResolver] 解析变量:', value);
+      console.log('[ApproverResolver] context.formData:', context.formData);
+      console.log('[ApproverResolver] context.variables:', context.variables);
+      
+      // 从formData或variables中获取变量值
+      let variableValue = context.formData?.[value] || context.variables?.[value];
+      
+      console.log('[ApproverResolver] 变量值:', variableValue);
+      
+      if (!variableValue) {
+        return [];
+      }
+      
+      // 如果是数组，处理多个审批人
+      if (Array.isArray(variableValue)) {
+        const approvers: Approver[] = [];
+        for (const id of variableValue) {
+          const user = await this.getUserInfo(id);
+          if (user) {
+            approvers.push(user);
+          }
+        }
+        return approvers;
+      }
+      
+      // 如果是字符串，可能包含多个ID（逗号分隔）
+      if (typeof variableValue === 'string') {
+        if (variableValue.includes(',')) {
+          const userIds = variableValue.split(',').map((id: string) => id.trim());
+          return this.resolveFixed(userIds);
+        } else {
+          // 单个用户ID
+          const user = await this.getUserInfo(variableValue);
+          if (user) {
+            return [user];
+          }
+        }
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('解析变量失败:', error);
+      return [];
+    }
   }
 
   /**

@@ -13,6 +13,7 @@ import { instanceService } from './InstanceService.js';
 import { InboundOrderService } from './InboundOrderService.js';
 import { TransferOrderService } from './TransferOrderService.js';
 import { equipmentRepairService } from './EquipmentRepairService.js';
+import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
 import { db } from '../database/connection.js';
 
 interface ProcessFormPreset {
@@ -121,6 +122,18 @@ export class ProcessFormIntegrationService {
         formTemplateKey: 'equipment-repair-form',
         workflowTemplateId: 'equipment-repair',
         businessType: 'EquipmentRepair',
+        status: 'active',
+        defaultVariables: {},
+        version: '1.0.0'
+      },
+      {
+        id: 'preset-equipment-scrap-sale',
+        name: '设备报废/售出流程',
+        category: 'equipment',
+        description: '设备报废/售出审批流程',
+        formTemplateKey: 'equipment-scrap-sale-form',
+        workflowTemplateId: 'equipment-scrap-sale',
+        businessType: 'EquipmentScrapSale',
         status: 'active',
         defaultVariables: {},
         version: '1.0.0'
@@ -598,6 +611,20 @@ export class ProcessFormIntegrationService {
         console.log('[ProcessFormIntegrationService] 增强后的维修表单数据:', cleanedFormData);
       }
 
+      // 在启动流程之前，为设备报废/售出流程获取位置信息
+      if (preset.businessType === 'EquipmentScrapSale') {
+        const locationInfo = await this.getRepairLocationInfo(cleanedFormData);
+        console.log('[ProcessFormIntegrationService] 获取报废/售出位置信息:', locationInfo);
+        
+        // 将位置和负责人信息添加到表单数据中
+        cleanedFormData = {
+          ...cleanedFormData,
+          ...locationInfo
+        };
+        
+        console.log('[ProcessFormIntegrationService] 增强后的报废/售出表单数据:', cleanedFormData);
+      }
+
       if (!definition) {
         // 从模板创建流程定义
         const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
@@ -798,6 +825,50 @@ export class ProcessFormIntegrationService {
           console.log(`[ProcessFormIntegrationService] 维修单创建成功: ${order.id}, 已更新 business_id 和 repairOrderId`);
         } catch (error) {
           console.error(`[ProcessFormIntegrationService] 维修单创建失败:`, error);
+          console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
+          throw error;
+        }
+      } else if (preset.businessType === 'EquipmentScrapSale') {
+        // 在流程启动时创建报废/售出单
+        try {
+          console.log('[ProcessFormIntegrationService] 开始创建报废/售出单，formData:', cleanedFormData);
+          
+          let order;
+          if (cleanedFormData.equipment_data && Array.isArray(cleanedFormData.equipment_data)) {
+            // 批量报废/售出单
+            const orders = await equipmentScrapSaleService.createBatchScrapSaleOrders(
+              cleanedFormData,
+              params.initiator.id,
+              params.initiator.name
+            );
+            order = orders[0]; // 使用第一个报废/售出单作为主单
+            console.log('[ProcessFormIntegrationService] 批量报废/售出单创建成功:', orders);
+          } else {
+            // 单个报废/售出单
+            order = await equipmentScrapSaleService.createScrapSaleOrder(
+              cleanedFormData,
+              params.initiator.id,
+              params.initiator.name
+            );
+            console.log('[ProcessFormIntegrationService] 报废/售出单创建成功:', order);
+          }
+          
+          // 更新流程实例的 businessId 和 formData 中的 scrapSaleOrderId
+          const updatedVariables = {
+            ...instance.variables,
+            formData: {
+              ...instance.variables?.formData,
+              scrapSaleOrderId: order.id
+            }
+          };
+          await instanceService.updateInstance(instance.id, {
+            business_id: order.id,
+            variables: updatedVariables
+          });
+          
+          console.log(`[ProcessFormIntegrationService] 报废/售出单创建成功: ${order.id}, 已更新 business_id 和 scrapSaleOrderId`);
+        } catch (error) {
+          console.error(`[ProcessFormIntegrationService] 报废/售出单创建失败:`, error);
           console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
           throw error;
         }

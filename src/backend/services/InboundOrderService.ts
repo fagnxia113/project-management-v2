@@ -35,10 +35,13 @@ export interface InboundItem {
   purchase_price: number;
   total_price: number;
   serial_numbers: string;
-  factory_serial_no: string;
   certificate_no: string;
   certificate_issuer: string;
+  certificate_expiry_date: string;
   accessory_desc: string;
+  manufacturer: string;
+  technical_params: string;
+  item_notes: string;
   technical_doc: string;
   attachment: string;
   status: 'pending' | 'inbound' | 'rejected';
@@ -61,10 +64,13 @@ export interface CreateInboundOrderDto {
     purchase_price: number;
     total_price: number;
     serial_numbers?: string;
-    factory_serial_no?: string;
     certificate_no?: string;
     certificate_issuer?: string;
+    certificate_expiry_date?: string;
     accessory_desc?: string;
+    manufacturer?: string;
+    technical_params?: string;
+    item_notes?: string;
     technical_doc?: string;
     attachment?: string;
   }>;
@@ -138,21 +144,24 @@ export class InboundOrderService {
         
         const serialNumbers = item.serial_numbers === undefined || item.serial_numbers === '' ? null : item.serial_numbers;
         const accessoryDesc = item.accessory_desc === undefined || item.accessory_desc === '' ? null : item.accessory_desc;
-        const factorySerialNo = item.factory_serial_no === undefined || item.factory_serial_no === '' ? null : item.factory_serial_no;
         const certificateNo = item.certificate_no === undefined || item.certificate_no === '' ? null : item.certificate_no;
         const certificateIssuer = item.certificate_issuer === undefined || item.certificate_issuer === '' ? null : item.certificate_issuer;
+        const certificateExpiryDate = item.certificate_expiry_date === undefined || item.certificate_expiry_date === '' ? null : item.certificate_expiry_date;
+        const manufacturer = item.manufacturer === undefined || item.manufacturer === '' ? null : item.manufacturer;
+        const technicalParams = item.technical_params === undefined || item.technical_params === '' ? null : item.technical_params;
+        const itemNotes = item.item_notes === undefined || item.item_notes === '' ? null : item.item_notes;
         const attachment = item.attachment === undefined || item.attachment === '' ? null : item.attachment;
         
         await connection.execute(`
           INSERT INTO equipment_inbound_items 
           (id, order_id, equipment_name, model_no, brand, category, unit,
-           quantity, purchase_price, total_price, serial_numbers, factory_serial_no, certificate_no, certificate_issuer, accessory_desc, technical_doc, attachment, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           quantity, purchase_price, total_price, serial_numbers, certificate_no, certificate_issuer, certificate_expiry_date, accessory_desc, manufacturer, technical_params, item_notes, technical_doc, attachment, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           uuidv4(), orderId, item.equipment_name, item.model_no, null, item.category, 
           item.unit || '台',
           item.quantity, item.purchase_price, item.total_price, serialNumbers,
-          factorySerialNo, certificateNo, certificateIssuer, accessoryDesc, null, attachment, 'pending'
+          certificateNo, certificateIssuer, certificateExpiryDate, accessoryDesc, manufacturer, technicalParams, itemNotes, null, attachment, 'pending'
         ]);
       }
       
@@ -353,20 +362,21 @@ export class InboundOrderService {
         if (item.category === 'instrument') {
           await connection.execute(`
             INSERT INTO equipment_instances 
-            (id, equipment_name, model_no, brand, category, unit, serial_number, factory_serial_no, manage_code, 
+            (id, equipment_name, model_no, brand, manufacturer, technical_params, category, unit, serial_number, manage_code, 
              equipment_type, equipment_source, health_status, usage_status, location_status, location_id, 
              purchase_date, purchase_price, calibration_expiry, certificate_no, certificate_issuer, 
              accessory_desc, notes, technical_doc, attachment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             uuidv4(), 
             item.equipment_name, 
             item.model_no,
             item.brand,
+            item.manufacturer || null,
+            item.technical_params || null,
             item.category,
             '台',
             item.serial_numbers || null,
-            item.factory_serial_no || null,
             await this.generateManageCode(connection, item.equipment_name, item.model_no, item.category),
             item.category === 'instrument' ? 'instrument' : null,
             'owned',
@@ -376,27 +386,29 @@ export class InboundOrderService {
             order[0].warehouse_id || null,
             order[0].purchase_date || null, 
             item.purchase_price || 0, 
-            null, 
+            item.certificate_expiry_date || null, 
             item.certificate_no || null,
             item.certificate_issuer || null,
             item.accessory_desc || null,
-            null,
+            item.item_notes || null,
             item.technical_doc || null,
             item.attachment || null
           ]);
         } else {
           await connection.execute(`
             INSERT INTO equipment_instances 
-            (id, equipment_name, model_no, brand, category, unit, quantity, serial_number, manage_code, 
+            (id, equipment_name, model_no, brand, manufacturer, technical_params, category, unit, quantity, serial_number, manage_code, 
              equipment_type, equipment_source, health_status, usage_status, location_status, location_id, 
              purchase_date, purchase_price, calibration_expiry, certificate_no, certificate_issuer, 
              accessory_desc, notes, technical_doc, attachment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
             uuidv4(), 
             item.equipment_name, 
             item.model_no,
             item.brand,
+            item.manufacturer || null,
+            item.technical_params || null,
             item.category,
             item.unit || '台',
             item.quantity,
@@ -414,7 +426,7 @@ export class InboundOrderService {
             null,
             null,
             item.accessory_desc || null,
-            null,
+            item.item_notes || null,
             item.technical_doc || null,
             item.attachment || null
           ]);

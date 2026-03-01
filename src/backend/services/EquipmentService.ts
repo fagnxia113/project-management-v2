@@ -238,17 +238,25 @@ export class EquipmentService {
 
     // --- Statistics ---
     async getStatistics(): Promise<any> {
-        const totalRes = await db.queryOne<{ total: number }>('SELECT COUNT(*) as total FROM equipment_instances');
+        const totalRes = await db.queryOne<{ total: number }>(`
+            SELECT 
+                SUM(CASE WHEN category = 'instrument' THEN 1 WHEN category = 'fake_load' THEN quantity WHEN category = 'cable' THEN quantity ELSE 1 END) as total 
+            FROM equipment_instances
+        `);
         const total = totalRes?.total || 0;
 
         const categoryStats = await db.query(`
             SELECT 
                 category,
-                equipment_name as category_name,
                 CASE WHEN category = 'instrument' THEN '仪器类' WHEN category = 'fake_load' THEN '假负载类' WHEN category = 'cable' THEN '线材类' ELSE category END as category_label,
-                COUNT(*) as count
+                CASE 
+                    WHEN category = 'instrument' THEN COUNT(*)
+                    WHEN category = 'fake_load' THEN SUM(quantity)
+                    WHEN category = 'cable' THEN SUM(quantity)
+                    ELSE COUNT(*)
+                END as count
             FROM equipment_instances
-            GROUP BY category, equipment_name
+            GROUP BY category
         `);
 
         const healthStats = await db.query(`
@@ -262,7 +270,7 @@ export class EquipmentService {
                     WHEN health_status = 'scrapped' THEN '已报废'
                     ELSE health_status
                 END as health_status_label,
-                COUNT(*) as count
+                SUM(CASE WHEN category = 'instrument' THEN 1 WHEN category = 'fake_load' THEN quantity WHEN category = 'cable' THEN quantity ELSE 1 END) as count
             FROM equipment_instances
             GROUP BY health_status
         `);
@@ -275,7 +283,7 @@ export class EquipmentService {
                     WHEN usage_status = 'in_use' THEN '使用中'
                     ELSE usage_status
                 END as usage_status_label,
-                COUNT(*) as count
+                SUM(CASE WHEN category = 'instrument' THEN 1 WHEN category = 'fake_load' THEN quantity WHEN category = 'cable' THEN quantity ELSE 1 END) as count
             FROM equipment_instances
             GROUP BY usage_status
         `);
@@ -290,7 +298,7 @@ export class EquipmentService {
                     WHEN location_status = 'transferring' THEN '调拨中'
                     ELSE location_status
                 END as location_status_label,
-                COUNT(*) as count
+                SUM(CASE WHEN category = 'instrument' THEN 1 WHEN category = 'fake_load' THEN quantity WHEN category = 'cable' THEN quantity ELSE 1 END) as count
             FROM equipment_instances
             GROUP BY location_status
         `);
@@ -303,7 +311,7 @@ export class EquipmentService {
                     WHEN i.location_status = 'in_project' THEN '项目'
                     ELSE '其他'
                 END as location_type,
-                COUNT(*) as count
+                SUM(CASE WHEN i.category = 'instrument' THEN 1 WHEN i.category = 'fake_load' THEN i.quantity WHEN i.category = 'cable' THEN i.quantity ELSE 1 END) as count
             FROM equipment_instances i
             LEFT JOIN warehouses w ON i.location_id = w.id AND i.location_status = 'warehouse'
             LEFT JOIN projects p ON i.location_id = p.id AND i.location_status = 'in_project'
@@ -333,8 +341,8 @@ export class EquipmentService {
                 model_no,
                 brand,
                 category,
-                COUNT(*) as total_count,
-                SUM(CASE WHEN health_status = 'normal' AND usage_status = 'idle' THEN 1 ELSE 0 END) as available_count
+                SUM(CASE WHEN category = 'instrument' THEN 1 WHEN category = 'fake_load' THEN quantity WHEN category = 'cable' THEN quantity ELSE 1 END) as total_count,
+                SUM(CASE WHEN health_status = 'normal' AND usage_status = 'idle' AND category = 'instrument' THEN 1 WHEN health_status = 'normal' AND usage_status = 'idle' AND category = 'fake_load' THEN quantity WHEN health_status = 'normal' AND usage_status = 'idle' AND category = 'cable' THEN quantity ELSE 0 END) as available_count
             FROM equipment_instances
             GROUP BY equipment_name, model_no, brand, category
             ORDER BY total_count DESC

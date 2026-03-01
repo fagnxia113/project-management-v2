@@ -7,6 +7,8 @@ interface Equipment {
   equipment_name: string
   model_no: string
   brand: string
+  manufacturer: string | null
+  technical_params: string | null
   category: 'instrument' | 'fake_load' | 'cable'
   unit: string
   quantity: number
@@ -15,7 +17,22 @@ interface Equipment {
   location_status: string
   location_id: string
   location_name?: string
+  health_status: string
+  usage_status: string
+  purchase_date: string | null
+  purchase_price: number | null
+  calibration_expiry: string | null
+  certificate_no: string | null
+  certificate_issuer: string | null
+  accessory_desc: string | null
+  notes: string | null
+  attachment: string | null
+  created_at: string
+  updated_at: string
+  keeper_id: string | null
 }
+
+interface EquipmentInstance extends Equipment {}
 
 interface SelectedEquipment extends Equipment {
   repair_quantity: number
@@ -691,8 +708,34 @@ export default function EquipmentDetailPage() {
                     <div className="text-sm font-medium text-gray-900">{equipment?.brand || '-'}</div>
                   </div>
                   <div>
+                    <label className="text-sm text-gray-500">生产厂家</label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editForm.manufacturer || ''}
+                        onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                      />
+                    ) : (
+                      <div className="text-sm font-medium text-gray-900">{equipment.manufacturer || '-'}</div>
+                    )}
+                  </div>
+                  <div>
                     <label className="text-sm text-gray-500">类别</label>
                     <div className="text-sm font-medium text-gray-900">{equipment ? getCategoryLabel(equipment.category) : '-'}</div>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500">技术参数</label>
+                    {isEditing ? (
+                      <textarea
+                        value={editForm.technical_params || ''}
+                        onChange={(e) => setEditForm({ ...editForm, technical_params: e.target.value })}
+                        rows={2}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                      />
+                    ) : (
+                      <div className="text-sm font-medium text-gray-900">{equipment.technical_params || '-'}</div>
+                    )}
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">序列号</label>
@@ -707,21 +750,6 @@ export default function EquipmentDetailPage() {
                       <div className="text-sm font-medium text-gray-900">{equipment.serial_number || '-'}</div>
                     )}
                   </div>
-                  {equipment.category === 'instrument' && (
-                    <div>
-                      <label className="text-sm text-gray-500">仪器出厂编号</label>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editForm.factory_serial_no || ''}
-                          onChange={(e) => setEditForm({ ...editForm, factory_serial_no: e.target.value })}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        />
-                      ) : (
-                        <div className="text-sm font-medium text-gray-900">{equipment.factory_serial_no || '-'}</div>
-                      )}
-                    </div>
-                  )}
                   <div>
                     <label className="text-sm text-gray-500">管理编号</label>
                     {isEditing ? (

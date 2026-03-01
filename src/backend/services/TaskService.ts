@@ -229,6 +229,8 @@ export class TaskService {
     const now = new Date();
     const duration = task.started_at ? Math.floor((now.getTime() - task.started_at.getTime()) / 1000) : null;
 
+    const result = params.action === 'approve' ? 'approved' : params.action === 'reject' ? 'rejected' : params.action;
+
     await db.update(
       `UPDATE workflow_tasks SET 
         status = 'completed', 
@@ -237,7 +239,7 @@ export class TaskService {
         completed_at = ?, 
         duration = ? 
       WHERE id = ?`,
-      [params.action, params.comment, now, duration, taskId]
+      [result, params.comment, now, duration, taskId]
     );
 
     // 记录任务完成历史
@@ -251,6 +253,9 @@ export class TaskService {
 
     // 更新流程变量，合并表单数据
     let variablesToUpdate = params.variables || {};
+    
+    // 添加 action 变量，供网关条件评估使用
+    variablesToUpdate.action = params.action;
     
     // 如果有表单数据，合并到formData中
     if (params.formData) {
@@ -271,6 +276,7 @@ export class TaskService {
     }
     
     if (Object.keys(variablesToUpdate).length > 0) {
+      console.log('Updating instance variables:', variablesToUpdate);
       await instanceService.updateVariables(task.instance_id, variablesToUpdate);
     }
   }
