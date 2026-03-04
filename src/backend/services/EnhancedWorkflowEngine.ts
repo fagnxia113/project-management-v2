@@ -7,7 +7,6 @@ import {
   WorkflowTask,
   StartProcessParams,
   CompleteTaskParams,
-  DelegateTaskParams,
   TransferTaskParams,
   ProcessContext,
   WorkflowNode,
@@ -20,6 +19,7 @@ import { approverResolver } from './ApproverResolver.js';
 import { gatewayHandler } from './GatewayHandler.js';
 import { executionLogger } from './ExecutionLogger.js';
 import { performanceMonitor } from './PerformanceMonitor.js';
+import { logger } from '../utils/logger.js';
 import { db } from '../database/connection.js';
 
 // 流程引擎配置
@@ -226,9 +226,9 @@ export class EnhancedWorkflowEngine {
           timestamp: new Date()
         });
         
-        // 如果驳回，结束流程；如果通过，继续执行下一个节点
+        // 如果驳回，将流程实例状态设置为rejected，但不结束流程
         if (params.action === 'rejected') {
-          await this.endInstance(instance.id, 'rejected');
+          await instanceService.updateInstanceStatus(instance.id, 'rejected', params.operator, params.comment);
         } else {
           const definition = await this.getCachedDefinitionById(instance.definition_id);
           // 找到下一个节点并执行，而不是重新执行当前节点
@@ -302,7 +302,7 @@ export class EnhancedWorkflowEngine {
     }
 
     if (rejectCount > 0) {
-      await this.endInstance(instance.id, 'rejected');
+      await instanceService.updateInstanceStatus(instance.id, 'rejected');
       return;
     }
 
@@ -314,14 +314,44 @@ export class EnhancedWorkflowEngine {
 
   // ==================== 任务操作 ====================
 
-  async delegateTask(taskId: string, params: DelegateTaskParams): Promise<void> {
-    await taskService.delegateTask(taskId, params);
-    this.eventBus.emit('task.delegated', { taskId, params, timestamp: new Date() });
-  }
-
   async transferTask(taskId: string, params: TransferTaskParams): Promise<void> {
     await taskService.transferTask(taskId, params);
     this.eventBus.emit('task.transferred', { taskId, params, timestamp: new Date() });
+  }
+
+  async rollbackTask(taskId: string, targetNodeId: string, operator: { id: string; name: string }, comment?: string): Promise<void> {
+    const task = await taskService.getTask(taskId);
+    if (!task) {
+      throw new Error('任务不存在');
+    }
+
+    const instance = await instanceService.getInstance(task.instance_id);
+    if (!instance) {
+      throw new Error('流程实例不存在');
+    }
+
+    if (this.config.enableExecutionLog) {
+      await executionLogger.log({
+        executionId: uuidv4(),
+        action: 'task_rollback',
+        taskId,
+        instanceId: instance.id,
+        targetNodeId,
+        operator,
+        comment,
+        timestamp: new Date()
+      });
+    }
+
+    await taskService.rollbackTask(taskId, targetNodeId, operator, comment);
+
+    this.eventBus.emit('task.rolledback', { 
+      taskId, 
+      targetNodeId, 
+      operator, 
+      comment,
+      timestamp: new Date() 
+    });
   }
 
   async claimTask(taskId: string, userId: string, userName: string): Promise<void> {
@@ -329,8 +359,43 @@ export class EnhancedWorkflowEngine {
     this.eventBus.emit('task.claimed', { taskId, userId, userName, timestamp: new Date() });
   }
 
+  async addSigner(taskId: string, operator: { id: string; name: string }, newSigners: { id: string; name: string }[], comment?: string): Promise<void> {
+    const task = await taskService.getTask(taskId);
+    if (!task) {
+      throw new Error('任务不存在');
+    }
+
+    const instance = await instanceService.getInstance(task.instance_id);
+    if (!instance) {
+      throw new Error('流程实例不存在');
+    }
+
+    if (this.config.enableExecutionLog) {
+      await executionLogger.log({
+        executionId: uuidv4(),
+        action: 'task_add_signer',
+        taskId,
+        instanceId: instance.id,
+        operator,
+        newSigners,
+        comment,
+        timestamp: new Date()
+      });
+    }
+
+    await taskService.addSigner(taskId, operator, newSigners, comment);
+
+    this.eventBus.emit('task.signer_added', { 
+      taskId, 
+      operator, 
+      newSigners, 
+      comment,
+      timestamp: new Date() 
+    });
+  }
+
   async terminateProcess(instanceId: string, reason?: string, operator?: { id: string; name: string }): Promise<void> {
-    await instanceService.terminateInstance(instanceId);
+    await instanceService.endInstance(instanceId, 'terminated', operator, reason);
     
     if (this.config.enableExecutionLog) {
       await executionLogger.log({
@@ -431,7 +496,7 @@ export class EnhancedWorkflowEngine {
       
       case 'endEvent':
         // 结束节点 - 直接结束流程
-        console.log(`[EnhancedWorkflowEngine] 执行结束节点: ${currentNode.name}`);
+        logger.debug(`执行结束节点: ${currentNode.name}`, { nodeName: currentNode.name })
         await this.endInstance(instance.id, 'approved');
         break;
       
@@ -456,7 +521,7 @@ export class EnhancedWorkflowEngine {
         break;
       
       default:
-        console.warn(`未处理的节点类型: ${currentNode.type}`);
+        logger.warn(`未处理的节点类型: ${currentNode.type}`, { nodeType: currentNode.type })
     }
   }
 
@@ -488,8 +553,7 @@ export class EnhancedWorkflowEngine {
     }
     
     if (!approvalConfig) {
-      console.error(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 缺少审批配置，自动跳过`);
-      console.error(`[EnhancedWorkflowEngine] 节点完整配置:`, JSON.stringify(node.config, null, 2));
+      logger.error(`节点 ${node.name} (${node.id}) 缺少审批配置，自动跳过`, undefined, { nodeConfig: node.config })
       
       // 自动跳过该节点
       await this.updateCurrentNode(instance.id, node.id, node.name);
@@ -515,18 +579,48 @@ export class EnhancedWorkflowEngine {
     try {
       approvers = await this.resolveApproversWithCache(node, approvalConfig.approverSource, context);
     } catch (error) {
-      console.error(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 解析审批人失败:`, error);
-      console.error(`[EnhancedWorkflowEngine] 审批人来源配置:`, JSON.stringify(approvalConfig.approverSource, null, 2));
+      logger.error(`节点 ${node.name} (${node.id}) 解析审批人失败`, error as Error, { approverSource: approvalConfig.approverSource })
     }
 
     if (approvers.length === 0) {
-      console.log(`[EnhancedWorkflowEngine] 节点 ${node.name} (${node.id}) 无法解析审批人，创建任务给发起人`);
-      console.log(`[EnhancedWorkflowEngine] 审批人来源:`, JSON.stringify(approvalConfig.approverSource, null, 2));
+      logger.debug(`节点 ${node.name} (${node.id}) 无法解析审批人`, { approverSource: approvalConfig.approverSource, skipIfNoApprover: (approvalConfig as any).skipIfNoApprover })
       
-      // 更新当前节点为正在处理的节点
+      // 如果配置了无审批人跳过，则跳过该节点
+      if ((approvalConfig as any).skipIfNoApprover) {
+        logger.info(`节点 ${node.name} (${node.id}) 配置了无审批人跳过，跳过该节点`)
+        
+        // 记录节点跳过日志
+        if (this.config.enableExecutionLog) {
+          await executionLogger.log({
+            executionId: uuidv4(),
+            action: 'node_skip',
+            instanceId: instance.id,
+            nodeId: node.id,
+            nodeType: node.type,
+            nodeName: node.name,
+            initiator: { id: instance.initiator_id, name: instance.initiator_name },
+            operator: { id: instance.initiator_id, name: instance.initiator_name },
+            reason: '无审批人，自动跳过',
+            timestamp: new Date()
+          });
+        }
+        
+        // 更新当前节点为正在处理的节点
+        await this.updateCurrentNode(instance.id, node.id, node.name);
+        // 获取下一个节点并继续执行
+        const nextNodes = await this.findNextNodes(definition, node.id);
+        if (nextNodes.length > 0) {
+          await this.continueExecution(instance, definition, nextNodes[0]);
+        } else {
+          await this.endInstance(instance.id, 'completed');
+        }
+        return;
+      }
+      
+      // 否则创建任务给流程发起人
+      logger.debug(`节点 ${node.name} (${node.id}) 未配置无审批人跳过，创建任务给发起人`)
       await this.updateCurrentNode(instance.id, node.id, node.name);
       
-      // 创建任务给流程发起人
       await taskService.createTask({
         instanceId: instance.id,
         nodeId: node.id,
@@ -691,7 +785,7 @@ export class EnhancedWorkflowEngine {
     const serviceType = node.config?.serviceType;
     const serviceConfig = node.config?.serviceConfig;
 
-    console.log(`[EnhancedWorkflowEngine] 服务类型: ${serviceType}, 节点ID: ${node.id}`);
+    logger.debug(`服务类型: ${serviceType}, 节点ID: ${node.id}`, { serviceType, nodeId: node.id })
 
     try {
       // 如果serviceType未定义，根据节点ID判断服务类型
@@ -701,7 +795,7 @@ export class EnhancedWorkflowEngine {
 
       await this.executeGatewayOrUserTask(instance, definition, node);
     } catch (error) {
-      console.error(`[EnhancedWorkflowEngine] 服务任务执行失败:`, error);
+      logger.error('服务任务执行失败', error as Error)
       throw error;
     }
   }
@@ -718,7 +812,7 @@ export class EnhancedWorkflowEngine {
       
       const formData = instance.variables?.formData || {};
       
-      console.log('[EnhancedWorkflowEngine] formData:', JSON.stringify(formData));
+      logger.debug('创建员工服务 - formData', { formData })
       
       // 直接从表单数据提取员工信息（不再依赖dataMapping）
       const employeeName = formData.employee_name;
@@ -729,17 +823,27 @@ export class EnhancedWorkflowEngine {
       const email = formData.email || '';
       const phone = formData.phone || '';
       
-      console.log('[EnhancedWorkflowEngine] 解析后的数据:', { employeeName, employeeNo, departmentId, positionId, hireDate });
+      logger.debug('创建员工服务 - 解析后的数据', { employeeName, employeeNo, departmentId, positionId, hireDate })
       
       if (!employeeName) {
-        console.error('[EnhancedWorkflowEngine] 员工姓名为空，无法创建员工记录');
+        logger.error('员工姓名为空，无法创建员工记录')
         return;
       }
       
       // 生成拼音用户名
-      console.log('[EnhancedWorkflowEngine] 开始生成拼音用户名');
+      logger.debug('开始生成拼音用户名')
       const username = await this.generatePinyinUsername(employeeName);
-      console.log('[EnhancedWorkflowEngine] 生成的用户名:', username);
+      logger.debug('生成的用户名', { username })
+      
+      // 获取岗位名称
+      let positionName = '';
+      if (positionId) {
+        const position = await db.queryOne<any>(
+          'SELECT name FROM positions WHERE id = ?',
+          [positionId]
+        );
+        positionName = position?.name || '';
+      }
       
       // 1. 创建员工记录
       // 注意：employees表使用position字段存储岗位名称，不是position_id
@@ -747,9 +851,9 @@ export class EnhancedWorkflowEngine {
       await db.execute(
         `INSERT INTO employees (id, name, employee_no, department_id, position, email, phone, hire_date, status, created_at) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [employeeId, employeeName, employeeNo, departmentId, positionId, email, phone, hireDate, 'active']
+        [employeeId, employeeName, employeeNo, departmentId, positionName, email, phone, hireDate, 'active']
       );
-      console.log(`[EnhancedWorkflowEngine] 员工记录创建成功: ${employeeName} (${employeeId})`);
+      logger.info(`员工记录创建成功: ${employeeName} (${employeeId})`)
       
       // 2. 创建用户账号
       const userId = uuidv4();
@@ -759,14 +863,14 @@ export class EnhancedWorkflowEngine {
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
         [userId, username, defaultPassword, employeeName, email, 'user', 'active']
       );
-      console.log(`[EnhancedWorkflowEngine] 用户账号创建成功: ${username} (${userId})`);
+      logger.info(`用户账号创建成功: ${username} (${userId})`)
       
       // 3. 关联用户账号到员工记录
       await db.execute(
         `UPDATE employees SET user_id = ? WHERE id = ?`,
         [userId, employeeId]
       );
-      console.log(`[EnhancedWorkflowEngine] 员工记录已关联用户账号: ${employeeId} -> ${userId}`);
+      logger.info(`员工记录已关联用户账号: ${employeeId} -> ${userId}`)
       
       // 记录执行日志
       if (this.config.enableExecutionLog) {
@@ -780,7 +884,7 @@ export class EnhancedWorkflowEngine {
       }
       
     } catch (error) {
-      console.error('[EnhancedWorkflowEngine] 创建员工和用户失败:', error);
+      logger.error('创建员工和用户失败', error as Error)
       throw error;
     }
   }
@@ -988,7 +1092,7 @@ export class EnhancedWorkflowEngine {
           throw error;
         }
         
-        console.log(`[EnhancedWorkflowEngine] ${operation} 失败，第 ${attempts} 次重试...`);
+        logger.warn(`${operation} 失败，第 ${attempts} 次重试...`, { operation, attempts })
         await this.delay(this.config.retryDelay * attempts);
       }
     }
@@ -1006,9 +1110,9 @@ export class EnhancedWorkflowEngine {
     console.log(`[EnhancedWorkflowEngine] endInstance 被调用: instanceId=${instanceId}, result=${result}`);
     await this.clearCurrentNode(instanceId);
     await instanceService.endInstance(instanceId, result as any);
-    console.log(`[EnhancedWorkflowEngine] 准备触发 process.ended 事件: instanceId=${instanceId}, result=${result}`);
+    logger.debug(`准备触发 process.ended 事件: instanceId=${instanceId}, result=${result}`)
     this.eventBus.emit('process.ended', { instanceId, result, timestamp: new Date() });
-    console.log(`[EnhancedWorkflowEngine] process.ended 事件已触发`);
+    logger.debug('process.ended 事件已触发')
   }
 
   private async updateCurrentNode(instanceId: string, nodeId: string, nodeName: string): Promise<void> {
@@ -1217,7 +1321,7 @@ export class EnhancedWorkflowEngine {
 
     // 继续流程执行
     if (result === 'rejected') {
-      await this.endInstance(instance.id, 'rejected');
+      await instanceService.updateInstanceStatus(instance.id, 'rejected', operator, comment);
     } else {
       const definition = await this.getCachedDefinitionById(instance.definition_id);
       await this.continueExecution(instance, definition, task.node_id);

@@ -103,8 +103,15 @@ export class InstanceService {
     }
 
     if (params?.status) {
-      whereClause += ' AND status = ?';
-      queryParams.push(params.status);
+      const statuses = params.status.split(',').map(s => s.trim());
+      if (statuses.length > 1) {
+        const placeholders = statuses.map(() => '?').join(',');
+        whereClause += ` AND status IN (${placeholders})`;
+        queryParams.push(...statuses);
+      } else {
+        whereClause += ' AND status = ?';
+        queryParams.push(params.status);
+      }
     }
 
     if (params?.initiatorId) {

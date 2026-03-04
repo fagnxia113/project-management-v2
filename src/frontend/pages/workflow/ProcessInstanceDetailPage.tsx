@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config/api'
+import { API_URL, parseJWTToken } from '../../config/api'
 import {
   ArrowLeft,
   Clock,
@@ -108,9 +108,7 @@ const FORM_GROUP_CONFIG: Record<string, { title: string; fields: string[] }[]> =
   'employee-onboard': [
     { title: '基本信息', fields: ['employee_name', 'employee_id', 'gender', 'phone', 'email'] },
     { title: '岗位信息', fields: ['department_id', 'position_id', 'employee_type', 'start_date'] },
-    { title: '个人信息', fields: ['id_card', 'address', 'emergency_contact', 'emergency_phone'] },
-    { title: '教育背景', fields: ['education', 'major', 'graduation_school', 'graduation_date'] },
-    { title: '银行信息', fields: ['bank_account', 'bank_name'] }
+    { title: '其他信息', fields: ['salary', 'notes'] }
   ],
   'equipment-transfer': [
     { title: '调拨信息', fields: ['fromLocationType', 'toLocationType', 'transferReason', 'estimatedArrivalDate'] },
@@ -173,10 +171,30 @@ export default function ProcessInstanceDetailPage() {
       })
       const definitionData = await definitionRes.json()
       
-      if (definitionData.success && definitionData.data?.form_schema) {
-        setFormFields(definitionData.data.form_schema)
-        // 加载动态选项
-        await loadDynamicOptions(definitionData.data.form_schema)
+      console.log('[ProcessInstanceDetailPage] definitionData:', definitionData.data)
+      
+      if (definitionData.success && definitionData.data) {
+        // 优先使用 form_template_id 加载表单模板
+        if (definitionData.data.form_template_id) {
+          console.log('[ProcessInstanceDetailPage] 使用 form_template_id 加载表单:', definitionData.data.form_template_id)
+          const templateRes = await fetch(`${API_URL.BASE}/api/workflow/form-templates/${definitionData.data.form_template_id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (templateRes.ok) {
+            const templateData = await templateRes.json()
+            const template = templateData.data || templateData
+            console.log('[ProcessInstanceDetailPage] template:', template)
+            if (template.fields) {
+              console.log('[ProcessInstanceDetailPage] 设置表单字段:', template.fields)
+              setFormFields(template.fields)
+              await loadDynamicOptions(template.fields)
+            }
+          }
+        } else if (definitionData.data.form_schema) {
+          console.log('[ProcessInstanceDetailPage] 使用 form_schema 加载表单')
+          setFormFields(definitionData.data.form_schema)
+          await loadDynamicOptions(definitionData.data.form_schema)
+        }
       }
       
       // 3. 加载任务列表
@@ -192,9 +210,8 @@ export default function ProcessInstanceDetailPage() {
         let userId = 'current-user'
         if (token) {
           try {
-            const base64Payload = token.split('.')[1]
-            if (base64Payload) {
-              const payload = JSON.parse(atob(base64Payload))
+            const payload = parseJWTToken(token)
+            if (payload) {
               userId = payload.userId || payload.id || 'current-user'
             }
           } catch (e) {

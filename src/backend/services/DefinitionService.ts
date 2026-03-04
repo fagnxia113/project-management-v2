@@ -12,6 +12,7 @@ export class DefinitionService {
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     form_schema?: any[];
+    form_template_id?: string;
     variables?: any[];
     created_by?: string;
   }): Promise<WorkflowDefinition> {
@@ -33,6 +34,7 @@ export class DefinitionService {
         edges: params.edges
       },
       form_schema: params.form_schema,
+      form_template_id: params.form_template_id,
       variables: params.variables,
       status: 'active',
       created_by: params.created_by,
@@ -43,9 +45,9 @@ export class DefinitionService {
     await db.insert(
       `INSERT INTO workflow_definitions (
         id, \`key\`, name, version, category, entity_type, bpmn_xml, 
-        node_config, form_schema, variables, status, created_by, 
+        node_config, form_schema, form_template_id, variables, status, created_by, 
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         definition.id,
         definition.key,
@@ -56,6 +58,7 @@ export class DefinitionService {
         definition.bpmn_xml ?? null,
         JSON.stringify(definition.node_config),
         JSON.stringify(definition.form_schema),
+        definition.form_template_id ?? null,
         JSON.stringify(definition.variables),
         definition.status,
         definition.created_by ?? null,
@@ -74,6 +77,21 @@ export class DefinitionService {
     const row = await db.queryOne<any>(
       `SELECT * FROM workflow_definitions WHERE id = ?`,
       [id]
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    return this.parseDefinitionRow(row);
+  }
+
+  async getDefinitionByKey(key: string): Promise<WorkflowDefinition | null> {
+    const row = await db.queryOne<any>(
+      `SELECT * FROM workflow_definitions 
+       WHERE \`key\` = ? AND status = 'active' 
+       ORDER BY version DESC LIMIT 1`,
+      [key]
     );
 
     if (!row) {
@@ -177,6 +195,11 @@ export class DefinitionService {
       updateParams.push(JSON.stringify(updates.form_schema));
     }
 
+    if (updates.form_template_id !== undefined) {
+      updateFields.push('form_template_id = ?');
+      updateParams.push(updates.form_template_id);
+    }
+
     if (updates.variables !== undefined) {
       updateFields.push('variables = ?');
       updateParams.push(JSON.stringify(updates.variables));
@@ -200,11 +223,24 @@ export class DefinitionService {
   }
 
   async deleteDefinition(id: string): Promise<boolean> {
-    const result = await db.update(
-      `UPDATE workflow_definitions SET status = 'archived' WHERE id = ?`,
-      [id]
-    );
-    return !!result;
+    const definition = await this.getDefinition(id);
+    if (!definition) {
+      return false;
+    }
+
+    if (definition.status === 'archived') {
+      const result = await db.delete(
+        `DELETE FROM workflow_definitions WHERE id = ?`,
+        [id]
+      );
+      return !!result;
+    } else {
+      const result = await db.update(
+        `UPDATE workflow_definitions SET status = 'archived' WHERE id = ?`,
+        [id]
+      );
+      return !!result;
+    }
   }
 
   async activateDefinition(id: string): Promise<boolean> {
@@ -274,6 +310,22 @@ export class DefinitionService {
     const formSchema = parseJSON(row.form_schema);
     const variables = parseJSON(row.variables);
 
+    // 节点类型映射：数据库类型 -> 引擎类型
+    const typeMap: Record<string, string> = {
+      'start': 'startEvent',
+      'end': 'endEvent',
+      'approval': 'userTask',
+      'service': 'serviceTask',
+      'exclusive': 'exclusiveGateway',
+      'parallel': 'parallelGateway'
+    };
+
+    // 转换节点类型
+    const nodes = (nodeConfig.nodes || []).map((node: any) => ({
+      ...node,
+      type: typeMap[node.type] || node.type
+    }));
+
     return {
       id: row.id,
       key: row.key,
@@ -283,10 +335,11 @@ export class DefinitionService {
       entity_type: row.entity_type,
       bpmn_xml: row.bpmn_xml,
       node_config: {
-        nodes: nodeConfig.nodes || [],
+        nodes,
         edges: nodeConfig.edges || []
       },
       form_schema: formSchema,
+      form_template_id: row.form_template_id,
       variables: variables,
       status: row.status,
       created_by: row.created_by,

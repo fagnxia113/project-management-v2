@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config/api'
+import { API_URL, parseJWTToken } from '../../config/api'
 import {
   GitBranch,
   History,
@@ -20,7 +20,22 @@ import {
   Phone,
   Mail,
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  Zap,
+  Wind,
+  Snowflake,
+  Battery,
+  Shield,
+  Cable,
+  Lock,
+  Camera,
+  Thermometer,
+  Activity,
+  Server,
+  Users,
+  Leaf,
+  Save,
+  UserPlus
 } from 'lucide-react'
 
 interface WorkflowInstance {
@@ -95,114 +110,27 @@ const PROCESS_TYPE_LABELS: Record<string, string> = {
   'project-approval': '项目审批'
 }
 
-const FORM_FIELD_LABELS: Record<string, { label: string; icon?: any }> = {
-  'employee_name': { label: '员工姓名', icon: User },
-  'employee_id': { label: '员工编号' },
-  'department_id': { label: '部门', icon: Building2 },
-  'position_id': { label: '职位' },
-  'phone': { label: '联系电话', icon: Phone },
-  'gender': { label: '性别' },
-  'start_date': { label: '入职日期', icon: Calendar },
-  'employee_type': { label: '员工类型' },
-  'email': { label: '邮箱', icon: Mail },
-  'address': { label: '地址', icon: MapPin },
-  'id_card': { label: '身份证号' },
-  'emergency_contact': { label: '紧急联系人' },
-  'emergency_phone': { label: '紧急联系电话', icon: Phone },
-  'education': { label: '学历' },
-  'major': { label: '专业' },
-  'graduation_school': { label: '毕业院校' },
-  'graduation_date': { label: '毕业日期', icon: Calendar },
-  'bank_account': { label: '银行卡号' },
-  'bank_name': { label: '开户银行' },
-  'remark': { label: '备注' },
-  'code': { label: '编号' },
-  'name': { label: '名称' },
-  'type': { label: '类型' },
-  'manager_id': { label: '负责人', icon: User },
-  'status': { label: '状态' },
-  'end_date': { label: '结束日期', icon: Calendar },
-  'country': { label: '国家' },
-  'description': { label: '描述' },
-  'budget': { label: '预算', icon: DollarSign },
-  'warehouse_id': { label: '仓库', icon: Building2 },
-  'supplier': { label: '供应商' },
-  'purchase_date': { label: '采购日期', icon: Calendar },
-  'total_price': { label: '总金额', icon: DollarSign },
-  'inbound_type': { label: '入库类型' },
-  'items': { label: '设备明细', icon: FileText },
-  'equipment_type': { label: '设备类型' },
-  'equipment_name': { label: '设备名称' },
-  'equipment_model': { label: '设备型号' },
-  'quantity': { label: '数量' },
-  'serial_numbers': { label: '序列号' },
-  'from_location': { label: '来源位置' },
-  'to_location': { label: '目标位置', icon: MapPin },
-  'transfer_reason': { label: '调拨原因' },
-  'repair_type': { label: '维修类型' },
-  'estimated_cost': { label: '预估费用', icon: DollarSign },
-  // 设备调拨相关字段
-  'fromLocationType': { label: '调出位置类型', icon: MapPin },
-  'fromLocationId': { label: '调出位置', icon: Building2 },
-  'fromManagerId': { label: '调出负责人', icon: User },
-  'fromManagerName': { label: '调出负责人' },
-  'fromLocationName': { label: '调出位置名称' },
-  'toLocationType': { label: '调入位置类型', icon: MapPin },
-  'toLocationId': { label: '调入位置', icon: Building2 },
-  'toManagerId': { label: '调入负责人', icon: User },
-  'toManagerName': { label: '调入负责人' },
-  'toLocationName': { label: '调入位置名称' },
-  'estimatedArrivalDate': { label: '预计到达日期', icon: Calendar },
-  'transferItems': { label: '调拨设备明细', icon: FileText },
-  // 发货信息字段
-  'shipping_date': { label: '发货时间', icon: Calendar },
-  'shipping_no': { label: '物流单号' },
-  'shipping_notes': { label: '发货备注' },
-  // 收货信息字段
-  'receive_status': { label: '收货状态' },
-  'receive_comment': { label: '收货备注' },
-  // 设备维修相关字段
-  'equipment_data': { label: '设备信息', icon: FileText },
-  'equipment_id': { label: '设备ID' },
-  'equipment_name': { label: '设备名称' },
-  'equipment_category': { label: '设备类别' },
-  'repair_quantity': { label: '维修数量' },
-  'fault_description': { label: '故障描述', icon: AlertTriangle },
-  'original_location_type': { label: '原始位置类型', icon: MapPin },
-  'original_location_id': { label: '原始位置', icon: Building2 },
-  'location_manager_id': { label: '位置管理员', icon: User },
-  'repair_service_provider': { label: '维修服务商' }
-}
-
-const GENDER_LABELS: Record<string, string> = {
-  'male': '男',
-  'female': '女',
-  'other': '其他'
-}
-
-const EMPLOYEE_TYPE_LABELS: Record<string, string> = {
-  'regular': '正式员工',
-  'probation': '试用期',
-  'intern': '实习生',
-  'contract': '合同工',
-  'part_time': '兼职'
-}
-
 export default function WorkflowDetailPage() {
   const { instanceId } = useParams<{ instanceId: string }>()
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
   const [instance, setInstance] = useState<WorkflowInstance | null>(null)
+  const [definition, setDefinition] = useState<any>(null)
   const [tasks, setTasks] = useState<WorkflowTask[]>([])
   const [logs, setLogs] = useState<WorkflowLog[]>([])
   const [currentTask, setCurrentTask] = useState<WorkflowTask | null>(null)
   const [showAllLogs, setShowAllLogs] = useState(false)
 
-  const [actionType, setActionType] = useState<'approve' | 'reject' | ''>('')
+  const [actionType, setActionType] = useState<'approve' | 'reject' | 'return' | 'addSigner' | ''>('')
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [targetNodeId, setTargetNodeId] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string>('')
+  
+  // 加签相关状态
+  const [selectedSigners, setSelectedSigners] = useState<string[]>([])
+  const [showSignerDialog, setShowSignerDialog] = useState(false)
 
   // 设备调拨相关状态
   const [shippingNo, setShippingNo] = useState('')
@@ -240,9 +168,8 @@ export default function WorkflowDetailPage() {
       let userId = 'current-user'
       if (token) {
         try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
+          const payload = parseJWTToken(token)
+          if (payload) {
             userId = payload.userId || payload.id || 'current-user'
             setCurrentUserId(userId)
           }
@@ -251,7 +178,14 @@ export default function WorkflowDetailPage() {
         }
       }
 
-      const instanceRes = await fetch(`${API_URL.BASE}/api/workflow/processes/${instanceId}`, {
+      const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout: number = 5000) => {
+        return Promise.race([
+          fetch(url, options),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeout))
+        ])
+      }
+
+      const instanceRes = await fetchWithTimeout(`${API_URL.BASE}/api/workflow/processes/${instanceId}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
@@ -263,30 +197,65 @@ export default function WorkflowDetailPage() {
         if (instanceResult.success && instanceResult.data) {
           setInstance(instanceResult.data)
 
-          // 加载表单字段
-          const formKey = instanceResult.data.definition_key + '-form'
-          const formRes = await fetch(`${API_URL.BASE}/api/form-templates/key/${formKey}`, {
+          const definitionRes = await fetchWithTimeout(`${API_URL.BASE}/api/workflow/definitions/${instanceResult.data.definition_id}`, {
             headers: {
               'Content-Type': 'application/json',
               ...(token && { 'Authorization': `Bearer ${token}` })
             }
           })
-          if (formRes.ok) {
-            const formResult = await formRes.json()
-            if (formResult.success && formResult.data) {
-              setFormFields(formResult.data.fields || [])
+          if (definitionRes.ok) {
+            const definitionResult = await definitionRes.json()
+            if (definitionResult.success && definitionResult.data) {
+              setDefinition(definitionResult.data)
+              
+              console.log('[WorkflowDetailPage] definitionResult.data:', definitionResult.data)
+              console.log('[WorkflowDetailPage] form_template_id:', definitionResult.data.form_template_id)
+              
+              if (definitionResult.data.form_template_id) {
+                const templateRes = await fetchWithTimeout(`${API_URL.BASE}/api/workflow/form-templates/${definitionResult.data.form_template_id}`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`
+                  }
+                })
+                console.log('[WorkflowDetailPage] templateRes.ok:', templateRes.ok)
+                if (templateRes.ok) {
+                  const templateData = await templateRes.json()
+                  console.log('[WorkflowDetailPage] templateData:', templateData)
+                  const template = templateData.data || templateData
+                  console.log('[WorkflowDetailPage] template:', template)
+                  if (template.fields) {
+                    console.log('[WorkflowDetailPage] setting formFields:', template.fields)
+                    setFormFields(template.fields)
+                  }
+                }
+              } else {
+                const formSchema = definitionResult.data.form_schema
+                if (formSchema && formSchema.fields) {
+                  setFormFields(formSchema.fields)
+                } else if (Array.isArray(formSchema)) {
+                  setFormFields(formSchema)
+                }
+              }
             }
           }
 
-          const tasksRes = await fetch(`${API_URL.BASE}/api/workflow/v2/process/instance/${instanceId}/tasks`, {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token && { 'Authorization': `Bearer ${token}` })
-            }
-          })
+          const [tasksRes, logsRes] = await Promise.allSettled([
+            fetchWithTimeout(`${API_URL.BASE}/api/workflow/v2/process/instance/${instanceId}/tasks`, {
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+              }
+            }),
+            fetchWithTimeout(`${API_URL.BASE}/api/workflow/v2/process/instance/${instanceId}/logs`, {
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+              }
+            })
+          ])
 
-          if (tasksRes.ok) {
-            const tasksResult = await tasksRes.json()
+          if (tasksRes.status === 'fulfilled' && tasksRes.value instanceof Response && tasksRes.value.ok) {
+            const tasksResult = await tasksRes.value.json()
             if (tasksResult.success && tasksResult.data) {
               setTasks(tasksResult.data)
 
@@ -297,17 +266,21 @@ export default function WorkflowDetailPage() {
             }
           }
 
-          const logsRes = await fetch(`${API_URL.BASE}/api/workflow/v2/process/instance/${instanceId}/logs`, {
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token && { 'Authorization': `Bearer ${token}` })
-            }
-          })
-
-          if (logsRes.ok) {
-            const logsResult = await logsRes.json()
+          if (logsRes.status === 'fulfilled' && logsRes.value instanceof Response && logsRes.value.ok) {
+            const logsResult = await logsRes.value.json()
             if (logsResult.success && logsResult.data) {
-              setLogs(logsResult.data)
+              const mappedLogs = logsResult.data.map((log: any) => ({
+                id: log.id,
+                action: log.action,
+                node_id: log.nodeId,
+                node_name: log.nodeType,
+                status: log.result || 'completed',
+                operator_id: log.operator?.id || log.initiator?.id,
+                operator_name: log.operator?.name || log.initiator?.name || '系统',
+                comment: log.reason || log.result,
+                created_at: log.timestamp
+              }))
+              setLogs(mappedLogs)
             }
           }
 
@@ -366,7 +339,7 @@ export default function WorkflowDetailPage() {
           
           if (deptIds.length > 0) {
             loadPromises.push(
-              fetch(`${API_URL.BASE}/api/departments`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/departments`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -381,7 +354,7 @@ export default function WorkflowDetailPage() {
           
           if (posIds.length > 0) {
             loadPromises.push(
-              fetch(`${API_URL.BASE}/api/positions`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/positions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -396,7 +369,7 @@ export default function WorkflowDetailPage() {
           
           if (warehouseIds.length > 0) {
             loadPromises.push(
-              fetch(`${API_URL.BASE}/api/warehouses`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/warehouses`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -411,7 +384,7 @@ export default function WorkflowDetailPage() {
           
           if (projectIds.length > 0) {
             loadPromises.push(
-              fetch(`${API_URL.BASE}/api/projects`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/projects`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -426,7 +399,7 @@ export default function WorkflowDetailPage() {
           
           if (userIds.length > 0) {
             loadPromises.push(
-              fetch(`${API_URL.BASE}/api/personnel`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/personnel`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -440,7 +413,7 @@ export default function WorkflowDetailPage() {
           }
           
           // 并行加载所有数据
-          await Promise.all(loadPromises)
+          await Promise.allSettled(loadPromises)
           
           // 设备调拨 - 如果是调入方审批节点，加载调拨单详情获取发货信息
           const isEquipmentTransfer = instanceResult.data.definition_key === 'equipment_transfer' || instanceResult.data.definition_key === 'equipment-transfer'
@@ -453,7 +426,7 @@ export default function WorkflowDetailPage() {
           console.log('[WorkflowDetailPage] 加载调拨单 - transferOrderId:', transferOrderId)
           if (isEquipmentTransfer && transferOrderId) {
             try {
-              const transferRes = await fetch(`${API_URL.BASE}/api/equipment/transfers/${transferOrderId}`, {
+              const transferRes = await fetchWithTimeout(`${API_URL.BASE}/api/equipment/transfers/${transferOrderId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               })
               if (transferRes.ok) {
@@ -472,7 +445,7 @@ export default function WorkflowDetailPage() {
           const repairOrderId = instanceResult.data.business_id || formData.repairOrderId
           if (isEquipmentRepair && repairOrderId) {
             try {
-              const repairRes = await fetch(`${API_URL.BASE}/api/equipment/repairs/${repairOrderId}`, {
+              const repairRes = await fetchWithTimeout(`${API_URL.BASE}/api/equipment/repairs/${repairOrderId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               })
               if (repairRes.ok) {
@@ -556,9 +529,8 @@ export default function WorkflowDetailPage() {
       let userName = '当前用户'
       if (token) {
         try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
+          const payload = parseJWTToken(token)
+          if (payload) {
             userId = payload.userId || payload.id || 'current-user'
             userName = payload.name || payload.username || payload.sub || '当前用户'
           }
@@ -738,9 +710,8 @@ export default function WorkflowDetailPage() {
       let userName = '当前用户'
       if (token) {
         try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
+          const payload = parseJWTToken(token)
+          if (payload) {
             userId = payload.userId || payload.id || 'current-user'
             userName = payload.name || payload.username || payload.sub || '当前用户'
           }
@@ -778,6 +749,61 @@ export default function WorkflowDetailPage() {
     }
   }
 
+  const handleReturn = async () => {
+    if (!currentTask) return
+    if (!targetNodeId) {
+      alert('请选择回退节点')
+      return
+    }
+    if (!confirm('确定要回退此申请吗？')) return
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      let userId = 'current-user'
+      let userName = '当前用户'
+      if (token) {
+        try {
+          const payload = parseJWTToken(token)
+          if (payload) {
+            userId = payload.userId || payload.id || 'current-user'
+            userName = payload.name || payload.username || payload.sub || '当前用户'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
+
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${currentTask.id}/rollback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetNodeId,
+          operator: { id: userId, name: userName },
+          comment: comment
+        })
+      })
+
+      if (res.ok) {
+        alert('已回退')
+        setActionType('')
+        setComment('')
+        setTargetNodeId('')
+        loadInstanceData()
+      } else {
+        throw new Error('回退失败')
+      }
+    } catch (error: any) {
+      console.error('回退失败:', error)
+      alert(error.message || '回退失败，请重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleWithdraw = async () => {
     if (!instance) return
     if (!confirm('确定要撤回此申请吗？')) return
@@ -801,8 +827,72 @@ export default function WorkflowDetailPage() {
     }
   }
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
+  const handleAddSigner = async () => {
+    if (!currentTask) return
+    if (selectedSigners.length === 0) {
+      alert('请选择加签人')
+      return
+    }
+    if (!confirm(`确定要添加 ${selectedSigners.length} 个加签人吗？`)) return
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      let userId = 'current-user'
+      let userName = '当前用户'
+      if (token) {
+        try {
+          const payload = parseJWTToken(token)
+          if (payload) {
+            userId = payload.userId || payload.id || 'current-user'
+            userName = payload.name || payload.username || payload.sub || '当前用户'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
+
+      const newSigners = selectedSigners.map(id => {
+        const user = userMap[id]
+        return { id, name: user || id }
+      })
+
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${currentTask.id}/add-signer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          newSigners,
+          operator: { id: userId, name: userName },
+          comment: comment
+        })
+      })
+
+      if (res.ok) {
+        alert('已添加加签人')
+        setActionType('')
+        setComment('')
+        setSelectedSigners([])
+        setShowSignerDialog(false)
+        loadInstanceData()
+      } else {
+        throw new Error('添加加签人失败')
+      }
+    } catch (error: any) {
+      console.error('添加加签人失败:', error)
+      alert(error.message || '添加加签人失败，请重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const formatDate = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    if (isNaN(date.getTime())) {
+      return '-'
+    }
     return date.toLocaleString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
@@ -812,151 +902,15 @@ export default function WorkflowDetailPage() {
     })
   }
 
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr)
+  const formatTime = (dateStr: string | Date) => {
+    const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    if (isNaN(date.getTime())) {
+      return '-'
+    }
     return date.toLocaleString('zh-CN', {
       hour: '2-digit',
       minute: '2-digit'
     })
-  }
-
-  const formatFieldValue = (key: string, value: any, formData?: Record<string, any>): string => {
-    if (value === null || value === undefined || value === '') {
-      return '-'
-    }
-
-    if (key === 'gender' && GENDER_LABELS[value]) {
-      return GENDER_LABELS[value]
-    }
-
-    if (key === 'employee_type' && EMPLOYEE_TYPE_LABELS[value]) {
-      return EMPLOYEE_TYPE_LABELS[value]
-    }
-
-    if (key === 'department_id' && deptMap[value]) {
-      return deptMap[value]
-    }
-
-    if (key === 'position_id' && posMap[value]) {
-      return posMap[value]
-    }
-
-    if (key === 'warehouse_id' && warehouseMap[value]) {
-      return warehouseMap[value]
-    }
-
-    if (key === 'inbound_type') {
-      const typeLabels: Record<string, string> = {
-        'purchase': '采购入库',
-        'other': '其他入库'
-      }
-      return typeLabels[value] || value
-    }
-
-    // 设备调拨相关字段转换
-    if (key === 'fromLocationType' || key === 'toLocationType') {
-      const typeLabels: Record<string, string> = {
-        'warehouse': '仓库',
-        'project': '项目'
-      }
-      return typeLabels[value] || value
-    }
-
-    if (key === 'fromLocationId' && formData) {
-      if (formData.fromLocationType === 'warehouse' && warehouseMap[value]) {
-        return warehouseMap[value]
-      } else if (formData.fromLocationType === 'project' && projectMap[value]) {
-        return projectMap[value]
-      }
-    }
-
-    if (key === 'toLocationId' && formData) {
-      if (formData.toLocationType === 'warehouse' && warehouseMap[value]) {
-        return warehouseMap[value]
-      } else if (formData.toLocationType === 'project' && projectMap[value]) {
-        return projectMap[value]
-      }
-    }
-
-    if (key === 'fromManagerId' && userMap[value]) {
-      return userMap[value]
-    }
-
-    if (key === 'toManagerId' && userMap[value]) {
-      return userMap[value]
-    }
-
-    if (key === 'items' && Array.isArray(value)) {
-      return `${value.length} 项设备`
-    }
-
-    if (key === 'transferItems' && Array.isArray(value)) {
-      return `${value.length} 项设备`
-    }
-
-    // 设备维修相关字段转换
-    if (key === 'equipment_category') {
-      const categoryLabels: Record<string, string> = {
-        'instrument': '仪器类',
-        'fake_load': '假负载类',
-        'cable': '线材类'
-      }
-      return categoryLabels[value] || value
-    }
-
-    if (key === 'original_location_type') {
-      const typeLabels: Record<string, string> = {
-        'warehouse': '仓库',
-        'project': '项目'
-      }
-      return typeLabels[value] || value
-    }
-
-    if (key === 'original_location_id' && formData) {
-      if (formData.original_location_type === 'warehouse' && warehouseMap[value]) {
-        return warehouseMap[value]
-      } else if (formData.original_location_type === 'project' && projectMap[value]) {
-        return projectMap[value]
-      }
-    }
-
-    if (key === 'location_manager_id' && userMap[value]) {
-      return userMap[value]
-    }
-
-    if (key === 'equipment_data' && Array.isArray(value)) {
-      return `${value.length} 项设备`
-    }
-
-    // 发货和收货字段格式化
-    if (key === 'shippingDate' || key === 'receiveDate') {
-      try {
-        return new Date(value).toLocaleDateString('zh-CN')
-      } catch {
-        return value
-      }
-    }
-
-    if (key === 'receiveStatus') {
-      const statusLabels: Record<string, string> = {
-        'normal': '正常',
-        'exception': '异常',
-        'damaged': '损坏',
-        'missing': '缺失',
-        'partial': '部分'
-      }
-      return statusLabels[value] || value
-    }
-
-    if (Array.isArray(value)) {
-      return value.join(', ')
-    }
-
-    if (typeof value === 'object') {
-      return JSON.stringify(value)
-    }
-
-    return String(value)
   }
 
   // 检查字段是否在当前节点可见
@@ -982,97 +936,105 @@ export default function WorkflowDetailPage() {
     return true
   }
 
-  // 隐藏原始ID字段，只显示转换后的名称
-  const HIDDEN_FIELDS = ['fromManagerId', 'toManagerId', 'fromLocationId', 'toLocationId']
+  const getNodeActions = () => {
+    if (!currentTask || !definition) {
+      return []
+    }
+
+    const currentNode = definition.node_config?.nodes?.find((node: any) => node.id === currentTask.node_id)
+    const allowedActions = currentNode?.actions?.allowed || ['approve', 'reject']
+
+    const actionConfig: Record<string, any> = {
+      approve: {
+        type: 'approve',
+        label: '通过',
+        icon: <CheckCircle className="w-4 h-4" />,
+        className: 'bg-green-600 hover:bg-green-700'
+      },
+      reject: {
+        type: 'reject',
+        label: '驳回',
+        icon: <XCircle className="w-4 h-4" />,
+        className: 'bg-red-600 hover:bg-red-700'
+      },
+      return: {
+        type: 'return',
+        label: '回退',
+        icon: <RotateCcw className="w-4 h-4" />,
+        className: 'bg-orange-600 hover:bg-orange-700'
+      },
+      transfer: {
+        type: 'transfer',
+        label: '移交',
+        icon: <User className="w-4 h-4" />,
+        className: 'bg-purple-600 hover:bg-purple-700'
+      },
+      saveDraft: {
+        type: 'saveDraft',
+        label: '保存草稿',
+        icon: <Save className="w-4 h-4" />,
+        className: 'bg-gray-600 hover:bg-gray-700'
+      },
+      addSigner: {
+        type: 'addSigner',
+        label: '加签',
+        icon: <UserPlus className="w-4 h-4" />,
+        className: 'bg-teal-600 hover:bg-teal-700'
+      }
+    }
+
+    return allowedActions
+      .filter((action: string) => actionConfig[action])
+      .map((action: string) => actionConfig[action])
+  }
 
   const renderFormField = (key: string, value: any, formData?: Record<string, any>) => {
-    // 如果是隐藏字段，不渲染
-    if (HIDDEN_FIELDS.includes(key)) {
+    const fieldConfig = formFields.find((field: any) => field.name === key)
+    
+    if (!fieldConfig) {
       return null
     }
 
-    const fieldConfig = FORM_FIELD_LABELS[key] || { label: key }
-    const Icon = fieldConfig.icon
-    const displayValue = formatFieldValue(key, value, formData)
+    const currentNodeId = currentTask?.node_id || instance?.current_node_id || 'start'
 
-    // 处理设备调拨的items数组
-    if (key === 'items' && Array.isArray(value)) {
-      return (
-        <div key={key} className="col-span-1 md:col-span-2 p-3 bg-white rounded-lg border border-gray-100">
-          <div className="text-sm text-gray-500 mb-3 flex items-center gap-2">
-            {Icon && <Icon className="w-4 h-4 text-blue-600" />}
-            {fieldConfig.label}
-          </div>
-          <div className="space-y-2">
-            {value.map((item: any, index: number) => (
-              <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                  <div>
-                    <div className="text-gray-500 mb-1">设备名称</div>
-                    <div className="text-gray-900">{item.equipment_name || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">设备型号</div>
-                    <div className="text-gray-900">{item.model_no || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">数量</div>
-                    <div className="text-gray-900">{item.quantity || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">单价</div>
-                    <div className="text-gray-900">{item.purchase_price || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">小计</div>
-                    <div className="text-gray-900">{item.total_price || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">序列号</div>
-                    <div className="text-gray-900 break-all">{item.serial_numbers || '-'}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )
+    let isVisible = true
+    if (fieldConfig.permissions) {
+      if (fieldConfig.permissions.nodePermissions && fieldConfig.permissions.nodePermissions[currentNodeId]) {
+        isVisible = fieldConfig.permissions.nodePermissions[currentNodeId].visible
+      } else if (fieldConfig.permissions.default) {
+        isVisible = fieldConfig.permissions.default.visible
+      }
+    } else if (fieldConfig.visibleOn) {
+      isVisible = fieldConfig.visibleOn.includes(currentNodeId)
+    }
+    
+    if (!isVisible) {
+      return null
     }
 
-    // 处理设备维修的equipment_data数组
-    if (key === 'equipment_data' && Array.isArray(value)) {
-      const categoryLabels: Record<string, string> = {
-        'instrument': '仪器类',
-        'fake_load': '假负载类',
-        'cable': '线材类'
+    const label = fieldConfig.label || key
+    const fieldType = fieldConfig.type
+
+    // 处理数组类型字段（如设备明细）
+    if (fieldType === 'array' && Array.isArray(value)) {
+      const arrayFields = fieldConfig.arrayFields || fieldConfig.arrayConfig?.fields
+      if (!arrayFields || arrayFields.length === 0) {
+        return null
       }
 
       return (
         <div key={key} className="col-span-1 md:col-span-2 p-3 bg-white rounded-lg border border-gray-100">
-          <div className="text-sm text-gray-500 mb-3 flex items-center gap-2">
-            {Icon && <Icon className="w-4 h-4 text-blue-600" />}
-            {fieldConfig.label}
-          </div>
+          <div className="text-sm text-gray-500 mb-3">{label}</div>
           <div className="space-y-2">
             {value.map((item: any, index: number) => (
               <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                  <div>
-                    <div className="text-gray-500 mb-1">设备名称</div>
-                    <div className="text-gray-900">{item.equipment_name || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">设备类别</div>
-                    <div className="text-gray-900">{categoryLabels[item.equipment_category] || item.equipment_category || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">维修数量</div>
-                    <div className="text-gray-900">{item.repair_quantity || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500 mb-1">设备ID</div>
-                    <div className="text-gray-900 break-all">{item.equipment_id || '-'}</div>
-                  </div>
+                  {arrayFields.map((arrayField: any) => (
+                    <div key={arrayField.name}>
+                      <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                      <div className="text-gray-900">{item[arrayField.name] || '-'}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -1081,15 +1043,45 @@ export default function WorkflowDetailPage() {
       )
     }
 
+    // 根据字段配置格式化显示值
+    let displayValue = value
+    if (value === null || value === undefined || value === '') {
+      displayValue = '-'
+    } else if (fieldConfig.display) {
+      // 使用字段配置的 display 配置
+      const displayType = fieldConfig.display.type
+      const displayFormat = fieldConfig.display.format
+
+      if (displayType === 'user' && displayFormat === 'name' && userMap[value]) {
+        displayValue = userMap[value]
+      } else if (displayType === 'lookup' && displayFormat === 'name') {
+        displayValue = typeof value === 'object' ? value.name : value
+      }
+    } else if (fieldType === 'date') {
+      // date 类型：格式化日期
+      try {
+        displayValue = new Date(value).toLocaleDateString('zh-CN')
+      } catch {
+        displayValue = value
+      }
+    } else if (fieldType === 'select' && fieldConfig.options) {
+      // select 类型：将值转换为标签
+      const option = fieldConfig.options.find((opt: any) => opt.value === value)
+      displayValue = option?.label || value
+    } else if (Array.isArray(value)) {
+      // 数组类型：显示数量
+      displayValue = `${value.length} 项`
+    } else if (typeof value === 'object') {
+      // 对象类型：转换为 JSON 字符串
+      displayValue = JSON.stringify(value)
+    } else {
+      displayValue = String(value)
+    }
+
     return (
       <div key={key} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
-        {Icon && (
-          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <Icon className="w-4 h-4 text-blue-600" />
-          </div>
-        )}
         <div className="flex-1 min-w-0">
-          <div className="text-sm text-gray-500 mb-1">{fieldConfig.label}</div>
+          <div className="text-sm text-gray-500 mb-1">{label}</div>
           <div className="text-sm text-gray-900 break-words">{displayValue}</div>
         </div>
       </div>
@@ -1100,11 +1092,16 @@ export default function WorkflowDetailPage() {
     if (!instance) return null
 
     const formData = instance.variables?.formData || {}
-    const entries = Object.entries(formData).filter(([key, value]) => {
-      // 过滤掉隐藏的ID字段
-      if (HIDDEN_FIELDS.includes(key)) return false
-      return value !== null && value !== undefined && value !== ''
-    })
+    
+    console.log('[WorkflowDetailPage] renderFormTab - formFields:', formFields)
+    console.log('[WorkflowDetailPage] renderFormTab - formData:', formData)
+    
+    // 只渲染在 formFields 中定义的字段
+    const entries = formFields
+      .map((field: any) => [field.name, formData[field.name]])
+      .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+
+    console.log('[WorkflowDetailPage] renderFormTab - entries:', entries)
 
     const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer'
     const isInboundApproval = currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to'))
@@ -1317,6 +1314,7 @@ export default function WorkflowDetailPage() {
                       {log.action === 'started' && '发起了申请'}
                       {log.action === 'completed' && '完成了审批'}
                       {log.action === 'terminated' && '终止了流程'}
+                      {log.action === 'node_skip' && '自动跳过了该节点'}
                     </div>
                     {log.comment && (
                       <div className="text-sm text-gray-600 bg-white p-2 rounded border border-gray-200">
@@ -1421,20 +1419,16 @@ export default function WorkflowDetailPage() {
 
               {currentTask && (
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setActionType('approve')}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    通过
-                  </button>
-                  <button
-                    onClick={() => setActionType('reject')}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    驳回
-                  </button>
+                  {getNodeActions().map(action => (
+                    <button
+                      key={action.type}
+                      onClick={() => setActionType(action.type)}
+                      className={`px-4 py-2 text-white rounded-lg hover:opacity-90 flex items-center gap-2 ${action.className}`}
+                    >
+                      {action.icon}
+                      {action.label}
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -1454,8 +1448,63 @@ export default function WorkflowDetailPage() {
         {actionType && (
           <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900 mb-4">
-              {actionType === 'approve' ? '审批通过' : '审批驳回'}
+              {actionType === 'approve' ? '审批通过' : 
+               actionType === 'reject' ? '审批驳回' : 
+               actionType === 'return' ? '回退' :
+               actionType === 'addSigner' ? '加签' :
+               '减签'}
             </h3>
+            
+            {/* 回退节点选择 */}
+            {actionType === 'return' && definition && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择回退节点 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={targetNodeId}
+                  onChange={(e) => setTargetNodeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">请选择回退节点</option>
+                  {definition.node_config?.nodes
+                    ?.filter((node: any) => node.type === 'userTask' && node.id !== currentTask?.node_id)
+                    ?.map((node: any) => (
+                      <option key={node.id} value={node.id}>
+                        {node.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+            
+            {/* 加签人选择 */}
+            {actionType === 'addSigner' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择加签人 <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                  {Object.entries(userMap).map(([userId, userName]) => (
+                    <label key={userId} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedSigners.includes(userId)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSigners([...selectedSigners, userId])
+                          } else {
+                            setSelectedSigners(selectedSigners.filter(id => id !== userId))
+                          }
+                        }}
+                        className="text-teal-600"
+                      />
+                      <span className="text-sm">{userName}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {/* 设备调拨 - 调出方审批时显示发货信息 */}
             {actionType === 'approve' && (instance?.definition_key === 'equipment_transfer' || instance?.definition_key === 'equipment-transfer') && 
@@ -1695,19 +1744,31 @@ export default function WorkflowDetailPage() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                审批意见
+                {actionType === 'return' ? '回退意见' : 
+                 actionType === 'addSigner' ? '加签意见' :
+                 '审批意见'}
               </label>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder={actionType === 'approve' ? '请输入审批意见（可选）' : '请输入驳回原因（必填）'}
+                placeholder={
+                  actionType === 'approve' ? '请输入审批意见（可选）' :
+                  actionType === 'reject' ? '请输入驳回原因（必填）' :
+                  actionType === 'addSigner' ? '请输入加签意见（可选）' :
+                  '请输入回退意见（可选）'
+                }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 rows={3}
               />
             </div>
             <div className="flex gap-2 mt-4">
               <button
-                onClick={actionType === 'approve' ? handleApprove : handleReject}
+                onClick={
+                  actionType === 'approve' ? handleApprove :
+                  actionType === 'reject' ? handleReject :
+                  actionType === 'return' ? handleReturn :
+                  handleAddSigner
+                }
                 disabled={submitting || (actionType === 'reject' && !comment.trim())}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
               >
@@ -1718,6 +1779,8 @@ export default function WorkflowDetailPage() {
                 onClick={() => { 
                   setActionType(''); 
                   setComment('');
+                  setTargetNodeId('');
+                  setSelectedSigners([]);
                   setShippingNo('');
                   setShippedAt('');
                   setReceiveStatus('normal');
