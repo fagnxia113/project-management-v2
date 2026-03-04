@@ -1,7 +1,9 @@
 import { db } from '../database/connection.js';
 import { v4 as uuidv4 } from 'uuid';
-import { WorkflowTask, CompleteTaskParams, DelegateTaskParams, TransferTaskParams } from '../types/workflow.js';
+import { WorkflowTask, CompleteTaskParams, TransferTaskParams } from '../types/workflow.js';
 import { instanceService } from './InstanceService.js';
+import { taskLockManager } from './DistributedLock.js';
+import { logger } from '../utils/logger.js';
 
 export class TaskService {
   async createTask(params: {
@@ -217,95 +219,99 @@ export class TaskService {
   }
 
   async completeTask(taskId: string, params: CompleteTaskParams): Promise<void> {
-    const task = await this.getTask(taskId);
-    if (!task) {
-      throw new Error('任务不存在');
-    }
+    return taskLockManager.completeTask(taskId, params.operator.id, async () => {
+      const task = await this.getTask(taskId);
+      if (!task) {
+        throw new Error('任务不存在');
+      }
 
-    if (task.status !== 'assigned' && task.status !== 'in_progress') {
-      throw new Error('任务状态不允许完成');
-    }
+      if (task.status !== 'assigned' && task.status !== 'in_progress') {
+        throw new Error('任务状态不允许完成');
+      }
 
-    const now = new Date();
-    const duration = task.started_at ? Math.floor((now.getTime() - task.started_at.getTime()) / 1000) : null;
+      const now = new Date();
+      const duration = task.started_at ? Math.floor((now.getTime() - task.started_at.getTime()) / 1000) : null;
 
-    const result = params.action === 'approve' ? 'approved' : params.action === 'reject' ? 'rejected' : params.action;
+      const result = params.action === 'approve' ? 'approved' : params.action === 'reject' ? 'rejected' : params.action;
 
-    await db.update(
-      `UPDATE workflow_tasks SET 
-        status = 'completed', 
-        result = ?, 
-        comment = ?, 
-        completed_at = ?, 
-        duration = ? 
-      WHERE id = ?`,
-      [result, params.comment, now, duration, taskId]
-    );
+      await db.update(
+        `UPDATE workflow_tasks SET 
+          status = 'completed', 
+          result = ?, 
+          comment = ?, 
+          completed_at = ?, 
+          duration = ? 
+        WHERE id = ?`,
+        [result, params.comment, now, duration, taskId]
+      );
 
-    // 记录任务完成历史
-    await this.recordTaskHistory(taskId, {
-      action: 'complete',
-      operator: params.operator,
-      comment: params.comment,
-      result: params.action,
-      formData: params.formData
-    }, task.instance_id, task.node_id);
+      // 记录任务完成历史
+      await this.recordTaskHistory(taskId, {
+        action: 'complete',
+        operator: params.operator,
+        comment: params.comment,
+        result: params.action,
+        formData: params.formData
+      }, task.instance_id, task.node_id);
 
-    // 更新流程变量，合并表单数据
-    let variablesToUpdate = params.variables || {};
-    
-    // 添加 action 变量，供网关条件评估使用
-    variablesToUpdate.action = params.action;
-    
-    // 如果有表单数据，合并到formData中
-    if (params.formData) {
-      const instance = await instanceService.getInstance(task.instance_id);
-      const currentFormData = instance.variables?.formData || {};
-      const mergedFormData = {
-        ...currentFormData,
-        ...params.formData
-      };
+      // 更新流程变量，合并表单数据
+      let variablesToUpdate = params.variables || {};
       
-      console.log('Merging form data:', {
-        current: currentFormData,
-        new: params.formData,
-        merged: mergedFormData
-      });
+      // 添加 action 变量，供网关条件评估使用
+      variablesToUpdate.action = params.action;
       
-      variablesToUpdate.formData = mergedFormData;
-    }
-    
-    if (Object.keys(variablesToUpdate).length > 0) {
-      console.log('Updating instance variables:', variablesToUpdate);
-      await instanceService.updateVariables(task.instance_id, variablesToUpdate);
-    }
+      // 如果有表单数据，合并到formData中
+      if (params.formData) {
+        const instance = await instanceService.getInstance(task.instance_id);
+        const currentFormData = instance.variables?.formData || {};
+        const mergedFormData = {
+          ...currentFormData,
+          ...params.formData
+        };
+        
+        logger.debug('Merging form data', {
+          current: currentFormData,
+          new: params.formData,
+          merged: mergedFormData
+        })
+        
+        variablesToUpdate.formData = mergedFormData;
+      }
+      
+      if (Object.keys(variablesToUpdate).length > 0) {
+        logger.debug('Updating instance variables', variablesToUpdate)
+        await instanceService.updateVariables(task.instance_id, variablesToUpdate);
+      }
+    });
   }
 
   async claimTask(taskId: string, userId: string, userName: string): Promise<void> {
-    const task = await this.getTask(taskId);
-    if (!task) {
-      throw new Error('任务不存在');
-    }
+    return taskLockManager.claimTask(taskId, userId, async () => {
+      const task = await this.getTask(taskId);
+      if (!task) {
+        throw new Error('任务不存在');
+      }
 
-    if (task.status !== 'created') {
-      throw new Error('任务状态不允许认领');
-    }
+      if (task.status !== 'created') {
+        throw new Error('任务状态不允许认领');
+      }
 
-    await db.update(
-      `UPDATE workflow_tasks SET 
-        status = 'assigned', 
-        assignee_id = ?, 
-        assignee_name = ?, 
-        claim_time = ? 
-      WHERE id = ?`,
-      [userId, userName, new Date(), taskId]
-    );
+      await db.update(
+        `UPDATE workflow_tasks SET 
+          status = 'assigned', 
+          assignee_id = ?, 
+          assignee_name = ?, 
+          claim_time = ? 
+        WHERE id = ?`,
+        [userId, userName, new Date(), taskId]
+      );
 
-    // 记录任务认领历史
-    await this.recordTaskHistory(taskId, {
-      action: 'claim',
-      operator: { id: userId, name: userName }
-    }, task.instance_id, task.node_id);
+      // 记录任务认领历史
+      await this.recordTaskHistory(taskId, {
+        action: 'claim',
+        operator: { id: userId, name: userName }
+      }, task.instance_id, task.node_id);
+    });
   }
 
   async startTask(taskId: string, userId: string): Promise<void> {
@@ -329,30 +335,6 @@ export class TaskService {
       WHERE id = ?`,
       [new Date(), taskId]
     );
-  }
-
-  async delegateTask(taskId: string, params: DelegateTaskParams): Promise<void> {
-    const task = await this.getTask(taskId);
-    if (!task) {
-      throw new Error('任务不存在');
-    }
-
-    await db.update(
-      `UPDATE workflow_tasks SET 
-        assignee_id = ?, 
-        assignee_name = ?, 
-        status = 'assigned' 
-      WHERE id = ?`,
-      [params.targetUser.id, params.targetUser.name, taskId]
-    );
-
-    // 记录任务委托历史
-    await this.recordTaskHistory(taskId, {
-      action: 'delegate',
-      operator: params.operator,
-      targetUser: params.targetUser,
-      comment: params.comment
-    }, task.instance_id, task.node_id);
   }
 
   async transferTask(taskId: string, params: TransferTaskParams): Promise<void> {
@@ -467,21 +449,108 @@ export class TaskService {
     }, task.instance_id, task.node_id);
   }
 
-  async getTasksByInstance(instanceId: string, status?: string[]): Promise<WorkflowTask[]> {
-    let whereClause = 'instance_id = ?';
-    const params = [instanceId];
-
-    if (status && status.length > 0) {
-      whereClause += ` AND status IN (${status.map(() => '?').join(', ')})`;
-      params.push(...status);
+  async rollbackTask(
+    taskId: string, 
+    targetNodeId: string, 
+    operator: { id: string; name: string }, 
+    comment?: string
+  ): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) {
+      throw new Error('任务不存在');
     }
 
-    const rows = await db.query<any>(
-      `SELECT * FROM workflow_tasks WHERE ${whereClause} ORDER BY created_at DESC`,
-      params
+    const instance = await instanceService.getInstance(task.instance_id);
+    if (!instance) {
+      throw new Error('流程实例不存在');
+    }
+
+    const definition = await db.queryOne<any>(
+      `SELECT node_config FROM workflow_definitions WHERE id = ?`,
+      [instance.definition_id]
     );
 
-    return rows.map((row: any) => this.parseTaskRow(row));
+    if (!definition) {
+      throw new Error('流程定义不存在');
+    }
+
+    const nodeConfig = JSON.parse(definition.node_config);
+    const targetNode = nodeConfig.nodes.find((n: any) => n.id === targetNodeId);
+
+    if (!targetNode) {
+      throw new Error('目标节点不存在');
+    }
+
+    await db.update(
+      `UPDATE workflow_tasks SET 
+        status = 'completed', 
+        result = 'returned', 
+        comment = ?, 
+        completed_at = ? 
+      WHERE id = ?`,
+      [comment, new Date(), taskId]
+    );
+
+    await this.recordTaskHistory(taskId, {
+      action: 'return',
+      operator,
+      comment: comment || `回退到 ${targetNode.name}`
+    }, task.instance_id, task.node_id);
+
+    await db.update(
+      `UPDATE workflow_instances SET 
+        current_node_id = ?, 
+        current_node_name = ?,
+        status = 'running',
+        updated_at = ?
+      WHERE id = ?`,
+      [targetNodeId, targetNode.name, new Date(), instance.id]
+    );
+
+    const newNodeTask = await this.createTask({
+      instanceId: instance.id,
+      nodeId: targetNodeId,
+      taskDefKey: targetNode.id,
+      name: targetNode.name,
+      description: targetNode.description,
+      variables: instance.variables
+    });
+
+    await this.recordTaskHistory(newNodeTask.id, {
+      action: 'create',
+      operator: { id: 'system', name: '系统' },
+      comment: '回退创建任务'
+    }, instance.id, targetNodeId);
+  }
+
+  async addSigner(taskId: string, operator: { id: string; name: string }, newSigners: { id: string; name: string }[], comment?: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) {
+      throw new Error('任务不存在');
+    }
+
+    const instance = await instanceService.getInstance(task.instance_id);
+    if (!instance) {
+      throw new Error('流程实例不存在');
+    }
+
+    const existingCandidateUsers = task.candidate_users || [];
+    const updatedCandidateUsers = [...existingCandidateUsers, ...newSigners.map(s => s.id)];
+
+    await db.update(
+      `UPDATE workflow_tasks SET 
+        candidate_users = ?,
+        status = 'assigned'
+      WHERE id = ?`,
+      [updatedCandidateUsers, taskId]
+    );
+
+    await this.recordTaskHistory(taskId, {
+      action: 'add_signer',
+      operator,
+      targetUser: newSigners[0],
+      comment: comment || `添加了 ${newSigners.length} 个加签人`
+    }, task.instance_id, task.node_id);
   }
 
   async getOverdueTasks(timeLimit: number): Promise<WorkflowTask[]> {
@@ -496,7 +565,7 @@ export class TaskService {
   }
 
   private async recordTaskHistory(taskId: string, params: {
-    action: 'create' | 'assign' | 'claim' | 'complete' | 'delegate' | 'transfer' | 'withdraw' | 'cancel' | 'skip';
+    action: 'create' | 'assign' | 'claim' | 'complete' | 'transfer' | 'withdraw' | 'cancel' | 'skip' | 'add_signer';
     operator: { id: string; name: string };
     targetUser?: { id: string; name: string };
     comment?: string;

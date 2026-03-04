@@ -6,8 +6,18 @@ import { taskService } from '../services/TaskService.js';
 import { processFormIntegrationService } from '../services/ProcessFormIntegrationService.js';
 import { unifiedFormService } from '../services/UnifiedFormService.js';
 import { db } from '../database/connection.js';
+import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
+import { 
+  checkWorkflowPermission, 
+  checkTaskPermission, 
+  validateOperator,
+  auditLog 
+} from '../middleware/workflowAuthMiddleware.js';
 
 const router = Router();
+
+// 所有工作流路由都需要认证
+router.use(authenticate);
 
 // 流程定义相关路由
 
@@ -37,9 +47,12 @@ router.get('/definitions', async (req: Request, res: Response) => {
  * 创建流程定义
  * POST /api/workflow/definitions
  */
-router.post('/definitions', async (req: Request, res: Response) => {
+router.post('/definitions',
+  requireAdmin,
+  auditLog('create_definition'),
+  async (req: Request, res: Response) => {
   try {
-    const { key, name, category, entity_type, bpmn_xml, nodes, edges, form_schema, variables, created_by } = req.body;
+    const { key, name, category, entity_type, bpmn_xml, nodes, edges, form_schema, form_template_id, variables, created_by } = req.body;
     
     const definition = await definitionService.createDefinition({
       key,
@@ -50,11 +63,31 @@ router.post('/definitions', async (req: Request, res: Response) => {
       nodes,
       edges,
       form_schema,
+      form_template_id,
       variables,
       created_by
     });
     
     res.status(201).json({ success: true, data: definition });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 根据Key获取流程定义
+ * GET /api/workflow/definitions/key/:key
+ */
+router.get('/definitions/key/:key', async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    const definition = await definitionService.getDefinitionByKey(key);
+    
+    if (!definition) {
+      return res.status(404).json({ error: '流程定义不存在' });
+    }
+    
+    res.json({ success: true, data: definition });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -83,10 +116,13 @@ router.get('/definitions/:id', async (req: Request, res: Response) => {
  * 更新流程定义
  * PUT /api/workflow/definitions/:id
  */
-router.put('/definitions/:id', async (req: Request, res: Response) => {
+router.put('/definitions/:id',
+  requireAdmin,
+  auditLog('update_definition'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { key, name, category, entity_type, nodes, edges, variables } = req.body;
+    const { key, name, category, entity_type, nodes, edges, variables, form_template_id } = req.body;
     
     // 构建node_config
     const node_config = {
@@ -100,7 +136,8 @@ router.put('/definitions/:id', async (req: Request, res: Response) => {
       category,
       entity_type,
       node_config,
-      variables
+      variables,
+      form_template_id
     });
     
     if (!success) {
@@ -119,7 +156,10 @@ router.put('/definitions/:id', async (req: Request, res: Response) => {
  * 激活流程定义
  * POST /api/workflow/definitions/:id/activate
  */
-router.post('/definitions/:id/activate', async (req: Request, res: Response) => {
+router.post('/definitions/:id/activate',
+  requireAdmin,
+  auditLog('activate_definition'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const result = await definitionService.activateDefinition(id);
@@ -134,13 +174,37 @@ router.post('/definitions/:id/activate', async (req: Request, res: Response) => 
   }
 });
 
+/**
+ * 删除流程定义
+ * DELETE /api/workflow/definitions/:id
+ */
+router.delete('/definitions/:id',
+  requireAdmin,
+  auditLog('delete_definition'),
+  async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await definitionService.deleteDefinition(id);
+    
+    if (!result) {
+      return res.status(404).json({ error: '流程定义不存在' });
+    }
+    
+    res.json({ success: true, message: '流程定义已删除' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 流程实例相关路由
 
 /**
  * 启动流程实例
  * POST /api/workflow/processes
  */
-router.post('/processes', async (req: Request, res: Response) => {
+router.post('/processes',
+  auditLog('start_process'),
+  async (req: Request, res: Response) => {
   try {
     const { processKey, businessKey, businessId, title, variables, initiator } = req.body;
     
@@ -268,7 +332,11 @@ router.get('/processes/business/:businessId', async (req: Request, res: Response
  * 终止流程实例
  * POST /api/workflow/processes/:id/terminate
  */
-router.post('/processes/:id/terminate', async (req: Request, res: Response) => {
+router.post('/processes/:id/terminate', 
+  checkWorkflowPermission({ requireInitiator: true, allowAdmin: true }),
+  validateOperator,
+  auditLog('terminate_process'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -285,7 +353,11 @@ router.post('/processes/:id/terminate', async (req: Request, res: Response) => {
  * 撤回流程实例
  * POST /api/workflow/processes/:id/withdraw
  */
-router.post('/processes/:id/withdraw', async (req: Request, res: Response) => {
+router.post('/processes/:id/withdraw',
+  checkWorkflowPermission({ requireInitiator: true, allowAdmin: true }),
+  validateOperator,
+  auditLog('withdraw_process'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { reason, operator } = req.body;
@@ -322,6 +394,76 @@ router.post('/processes/:id/withdraw', async (req: Request, res: Response) => {
 // 任务相关路由
 
 /**
+ * 获取我的任务列表
+ * GET /api/workflow/my-tasks
+ */
+router.get('/my-tasks', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { status } = req.query;
+    const userId = req.user!.userId;
+    
+    const tasks = await enhancedWorkflowEngine.getTasksByAssignee(userId);
+    
+    let filteredTasks = tasks;
+    if (status) {
+      const statusArray = Array.isArray(status) ? status : [status];
+      filteredTasks = tasks.filter(task => statusArray.includes(task.status));
+    }
+    
+    res.json({ success: true, data: filteredTasks });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 获取我已完成的任务列表
+ * GET /api/workflow/my-completed-tasks
+ */
+router.get('/my-completed-tasks', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.query;
+    const authenticatedUserId = req.user!.userId;
+    
+    const tasks = await taskService.getTasksByAssignee(authenticatedUserId);
+    const completedTasks = tasks.filter(task => 
+      task.status === 'completed' || task.status === 'approved' || task.status === 'rejected'
+    );
+    
+    const completedTasksWithDetails = await Promise.all(
+      completedTasks.map(async (task) => {
+        const instance = await instanceService.getInstance(task.instance_id);
+        const taskHistory = await db.queryOne(
+          `SELECT action, comment, created_at 
+           FROM workflow_task_history 
+           WHERE task_id = ? AND action IN ('approve', 'reject') 
+           ORDER BY created_at DESC 
+           LIMIT 1`,
+          [task.id]
+        );
+        
+        return {
+          task_id: task.id,
+          process_id: task.instance_id,
+          process_title: instance?.title || '',
+          process_type: instance?.definition_key || '',
+          node_name: task.name,
+          initiator_name: instance?.initiator_name || '',
+          action: taskHistory?.action || 'approved',
+          comment: taskHistory?.comment || '',
+          completed_at: task.completed_at || task.updated_at,
+          form_data: instance?.variables?.formData || {}
+        };
+      })
+    );
+    
+    res.json({ success: true, data: completedTasksWithDetails });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * 获取任务列表
  * GET /api/workflow/tasks
  */
@@ -348,7 +490,11 @@ router.get('/tasks', async (req: Request, res: Response) => {
  * 完成任务
  * POST /api/workflow/tasks/:id/complete
  */
-router.post('/tasks/:id/complete', async (req: Request, res: Response) => {
+router.post('/tasks/:id/complete',
+  checkTaskPermission({ requireAssignee: true, allowAdmin: true }),
+  validateOperator,
+  auditLog('complete_task'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { action, comment, variables, operator } = req.body;
@@ -370,7 +516,10 @@ router.post('/tasks/:id/complete', async (req: Request, res: Response) => {
  * 认领任务
  * POST /api/workflow/tasks/:id/claim
  */
-router.post('/tasks/:id/claim', async (req: Request, res: Response) => {
+router.post('/tasks/:id/claim',
+  checkTaskPermission({ requireAssignee: false, allowAdmin: true }),
+  auditLog('claim_task'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { userId, userName } = req.body;
@@ -387,7 +536,11 @@ router.post('/tasks/:id/claim', async (req: Request, res: Response) => {
  * 委托任务
  * POST /api/workflow/tasks/:id/delegate
  */
-router.post('/tasks/:id/delegate', async (req: Request, res: Response) => {
+router.post('/tasks/:id/delegate',
+  checkTaskPermission({ requireAssignee: true, allowAdmin: true }),
+  validateOperator,
+  auditLog('delegate_task'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { targetUser, comment, operator } = req.body;
@@ -408,7 +561,11 @@ router.post('/tasks/:id/delegate', async (req: Request, res: Response) => {
  * 转办任务
  * POST /api/workflow/tasks/:id/transfer
  */
-router.post('/tasks/:id/transfer', async (req: Request, res: Response) => {
+router.post('/tasks/:id/transfer',
+  checkTaskPermission({ requireAssignee: true, allowAdmin: true }),
+  validateOperator,
+  auditLog('transfer_task'),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { targetUser, comment, operator } = req.body;
@@ -491,7 +648,10 @@ router.get('/form-presets/:id', async (req: Request, res: Response) => {
  * 创建流程表单预设
  * POST /api/workflow/form-presets
  */
-router.post('/form-presets', async (req: Request, res: Response) => {
+router.post('/form-presets',
+  requireAdmin,
+  auditLog('create_form_preset'),
+  async (req: Request, res: Response) => {
   try {
     const { name, category, description, formTemplateKey, workflowTemplateId, businessType, status, defaultVariables } = req.body;
     

@@ -4,8 +4,8 @@
 -- 说明: 初始化测试员工数据，包括各类角色
 -- ============================================
 
--- 插入员工数据
-INSERT INTO employees (
+-- 插入员工数据（使用 INSERT IGNORE 避免重复插入）
+INSERT IGNORE INTO employees (
   id, employee_no, name, gender, phone, email,
   department_id, position, status, current_status,
   hire_date, role, daily_cost, skills, avatar_color

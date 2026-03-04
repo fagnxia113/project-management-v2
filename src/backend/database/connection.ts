@@ -26,7 +26,8 @@ class Database {
         timezone: '+08:00',
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
-        connectTimeout: 60000
+        connectTimeout: 60000,
+        charset: 'utf8mb4'
       });
 
       // 测试连接

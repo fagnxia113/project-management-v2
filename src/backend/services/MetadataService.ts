@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { db } from '../database/connection.js';
 
@@ -66,12 +66,18 @@ export class MetadataService {
   async load(): Promise<void> {
     try {
       // 加载实体元数据
-      const entityPath = join(process.cwd(), 'src/core/metadata/EntityMeta.json');
+      let entityPath = join(process.cwd(), 'src/core/metadata/EntityMeta.json');
+      if (!existsSync(entityPath)) {
+        entityPath = join(process.cwd(), '../core/metadata/EntityMeta.json');
+      }
       const entityData = JSON.parse(readFileSync(entityPath, 'utf-8'));
       this.entities = entityData.entities;
 
       // 加载枚举元数据
-      const enumPath = join(process.cwd(), 'src/core/metadata/EnumConfig.json');
+      let enumPath = join(process.cwd(), 'src/core/metadata/EnumConfig.json');
+      if (!existsSync(enumPath)) {
+        enumPath = join(process.cwd(), '../core/metadata/EnumConfig.json');
+      }
       const enumData = JSON.parse(readFileSync(enumPath, 'utf-8'));
       this.enums = enumData.enums;
 

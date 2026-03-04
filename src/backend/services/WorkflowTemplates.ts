@@ -47,6 +47,10 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
             type: 'role',
             value: 'department_manager'
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -75,6 +79,10 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
             type: 'role',
             value: 'general_manager'
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -131,7 +139,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'text',
       required: true,
       placeholder: '请输入项目名称',
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'code',
@@ -140,7 +150,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '系统自动生成',
       disabled: true,
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: []
     },
     {
       name: 'manager_id',
@@ -148,21 +160,31 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'user',
       required: true,
       placeholder: '请选择项目经理',
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start'],
+      display: {
+        type: 'user',
+        format: 'name'
+      }
     },
     {
       name: 'start_date',
       label: '项目开始日期',
       type: 'date',
       required: true,
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'end_date',
       label: '项目结束日期',
       type: 'date',
       required: false,
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'country',
@@ -187,7 +209,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
         { label: '英国', value: '英国' },
         { label: '其他', value: '其他' }
       ],
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'address',
@@ -195,7 +219,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'text',
       required: false,
       placeholder: '请输入项目地址',
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'status',
@@ -209,7 +235,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
         { label: '已完成', value: 'completed' },
         { label: '暂停', value: 'paused' }
       ],
-      group: '基本信息'
+      group: '基本信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     // ========== 项目规模 ==========
     {
@@ -219,7 +247,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '请输入项目描述信息',
       rows: 3,
-      group: '项目规模'
+      group: '项目规模',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'building_area',
@@ -227,7 +257,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'number',
       required: false,
       min: 0,
-      group: '项目规模'
+      group: '项目规模',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'it_capacity',
@@ -235,7 +267,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'number',
       required: false,
       min: 0,
-      group: '项目规模'
+      group: '项目规模',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'cabinet_count',
@@ -243,7 +277,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'number',
       required: false,
       min: 0,
-      group: '项目规模'
+      group: '项目规模',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'cabinet_power',
@@ -251,7 +287,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       type: 'number',
       required: false,
       min: 0,
-      group: '项目规模'
+      group: '项目规模',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     // ========== 技术架构 ==========
     {
@@ -261,7 +299,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '供电系统架构描述',
       rows: 2,
-      group: '技术架构'
+      group: '技术架构',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'hvac_architecture',
@@ -270,7 +310,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '暖通系统架构描述',
       rows: 2,
-      group: '技术架构'
+      group: '技术架构',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'fire_architecture',
@@ -279,7 +321,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '消防系统架构描述',
       rows: 2,
-      group: '技术架构'
+      group: '技术架构',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'weak_electric_architecture',
@@ -288,7 +332,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '弱电系统架构描述',
       rows: 2,
-      group: '技术架构'
+      group: '技术架构',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     },
     // ========== 商务信息 ==========
     {
@@ -302,7 +348,13 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
         lookupField: 'id',
         displayField: 'name'
       },
-      group: '商务信息'
+      group: '商务信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start'],
+      display: {
+        type: 'lookup',
+        format: 'name'
+      }
     },
     {
       name: 'budget',
@@ -311,7 +363,9 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '请输入预算金额',
       min: 0,
-      group: '商务信息'
+      group: '商务信息',
+      visibleOn: ['start', 'dept-manager', 'gm'],
+      editableOn: ['start']
     }
   ]
 };
@@ -349,6 +403,10 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
             }
           },
           formKey: 'equipment-transfer-shipping-form'
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -367,6 +425,10 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
             returnTarget: 'from-location-manager'
           },
           formKey: 'equipment-transfer-receiving-form'
+        },
+        actions: {
+          allowed: ['approve', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -407,42 +469,62 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       label: '调出位置类型',
       type: 'select',
       required: true,
-      placeholder: '请选择调出位置类型'
+      placeholder: '请选择调出位置类型',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start']
     },
     {
       name: 'fromLocationId',
       label: '调出位置',
       type: 'select',
       required: true,
-      placeholder: '请选择调出位置'
+      placeholder: '请选择调出位置',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start']
     },
     {
       name: 'fromManagerId',
       label: '调出位置负责人',
       type: 'user',
       required: true,
-      placeholder: '请选择调出位置负责人'
+      placeholder: '请选择调出位置负责人',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start'],
+      display: {
+        type: 'user',
+        format: 'name'
+      }
     },
     {
       name: 'toLocationType',
       label: '调入位置类型',
       type: 'select',
       required: true,
-      placeholder: '请选择调入位置类型'
+      placeholder: '请选择调入位置类型',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start']
     },
     {
       name: 'toLocationId',
       label: '调入位置',
       type: 'select',
       required: true,
-      placeholder: '请选择调入位置'
+      placeholder: '请选择调入位置',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start']
     },
     {
       name: 'toManagerId',
       label: '调入位置负责人',
       type: 'user',
       required: true,
-      placeholder: '请选择调入位置负责人'
+      placeholder: '请选择调入位置负责人',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start'],
+      display: {
+        type: 'user',
+        format: 'name'
+      }
     },
     {
       name: 'transferReason',
@@ -450,14 +532,18 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       type: 'textarea',
       required: true,
       placeholder: '请输入调拨原因',
-      rows: 3
+      rows: 3,
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start']
     },
     {
       name: 'estimatedArrivalDate',
       label: '期望到达时间',
       type: 'date',
       required: true,
-      placeholder: '请选择期望到达时间'
+      placeholder: '请选择期望到达时间',
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      editableOn: ['start']
     }
   ]
 };
@@ -783,6 +869,10 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
               value: 'warehouse_manager'
             }
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -797,6 +887,10 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
               value: 'equipment_manager'
             }
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -839,7 +933,9 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '系统自动生成',
       disabled: true,
-      readonly: true
+      readonly: true,
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: []
     },
     {
       name: 'warehouse_id',
@@ -852,6 +948,12 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
         source: '/api/warehouses',
         labelField: 'name',
         valueField: 'id'
+      },
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: ['start'],
+      display: {
+        type: 'select',
+        format: 'label'
       }
     },
     {
@@ -859,26 +961,34 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
       label: '供应商',
       type: 'text',
       required: false,
-      placeholder: '请输入供应商名称'
+      placeholder: '请输入供应商名称',
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: ['start']
     },
     {
       name: 'purchase_date',
       label: '采购日期',
       type: 'date',
-      required: false
+      required: false,
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: ['start']
     },
     {
       name: 'total_price',
       label: '总金额',
       type: 'number',
       required: false,
-      placeholder: '请输入总金额'
+      placeholder: '请输入总金额',
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: ['start']
     },
     {
       name: 'items',
       label: '设备明细',
       type: 'array',
       required: true,
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: ['start'],
       arrayConfig: {
         fields: [
           {
@@ -937,7 +1047,9 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
       type: 'textarea',
       required: false,
       placeholder: '请输入备注信息',
-      rows: 2
+      rows: 2,
+      visibleOn: ['start', 'warehouse-manager', 'equipment-manager'],
+      editableOn: ['start']
     }
   ]
 };
@@ -974,6 +1086,10 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
               value: 'hr_manager'
             }
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -989,6 +1105,10 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
             },
             skipCondition: 'no_department_manager'
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -1003,6 +1123,10 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
               value: 'admin'
             }
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -1074,7 +1198,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       required: false,
       placeholder: '系统自动生成',
       disabled: true,
-      readonly: true
+      readonly: true,
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: []
     },
     {
       name: 'employee_name',
@@ -1083,7 +1209,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       required: true,
       placeholder: '请输入姓名',
       minLength: 2,
-      maxLength: 50
+      maxLength: 50,
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'gender',
@@ -1094,7 +1222,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       options: [
         { label: '男', value: 'male' },
         { label: '女', value: 'female' }
-      ]
+      ],
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'phone',
@@ -1105,7 +1235,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       pattern: '^1[3-9]\\d{9}$',
       validation: {
         message: '手机号格式不正确'
-      }
+      },
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'email',
@@ -1116,7 +1248,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$',
       validation: {
         message: '邮箱格式不正确'
-      }
+      },
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'id_card',
@@ -1127,7 +1261,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       pattern: '^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$',
       validation: {
         message: '身份证号格式不正确'
-      }
+      },
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'department_id',
@@ -1140,6 +1276,12 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
         source: '/api/organization/departments',
         labelField: 'name',
         valueField: 'id'
+      },
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start'],
+      display: {
+        type: 'select',
+        format: 'label'
       }
     },
     {
@@ -1158,13 +1300,21 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       cascadeField: 'department_id',
       refEntity: 'positions',
       refLabel: 'name',
-      refValue: 'id'
+      refValue: 'id',
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start'],
+      display: {
+        type: 'select',
+        format: 'label'
+      }
     },
     {
       name: 'start_date',
       label: '入职日期',
       type: 'date',
-      required: true
+      required: true,
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'employee_type',
@@ -1176,7 +1326,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
         { label: '正式', value: 'regular' },
         { label: '实习', value: 'intern' },
         { label: '外包', value: 'outsourced' }
-      ]
+      ],
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     },
     {
       name: 'notes',
@@ -1184,7 +1336,9 @@ export const EMPLOYEE_ONBOARD_TEMPLATE: WorkflowTemplate = {
       type: 'textarea',
       required: false,
       placeholder: '请输入备注信息',
-      rows: 2
+      rows: 2,
+      visibleOn: ['start', 'hr-manager', 'department-manager', 'gm'],
+      editableOn: ['start']
     }
   ]
 };
@@ -1221,6 +1375,10 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
               value: '${formData.location_manager_id}'
             }
           }
+        },
+        actions: {
+          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -1236,6 +1394,10 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
             }
           },
           formKey: 'equipment-repair-shipping-form'
+        },
+        actions: {
+          allowed: ['approve', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -1251,6 +1413,10 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
             }
           },
           formKey: 'equipment-repair-receiving-form'
+        },
+        actions: {
+          allowed: ['approve', 'saveDraft'],
+          defaultAction: 'approve'
         }
       },
       {
@@ -1297,6 +1463,8 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
       label: '设备数据',
       type: 'array',
       required: true,
+      visibleOn: ['start', 'location-manager', 'shipping', 'receiving'],
+      editableOn: ['start'],
       arrayFields: [
         {
           name: 'equipmentId',
@@ -1338,19 +1506,29 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
       options: [
         { label: '仓库', value: 'warehouse' },
         { label: '项目', value: 'project' }
-      ]
+      ],
+      visibleOn: ['start', 'location-manager', 'shipping', 'receiving'],
+      editableOn: ['start']
     },
     {
       name: 'originalLocationId',
       label: '原始位置ID',
       type: 'text',
-      required: true
+      required: true,
+      visibleOn: ['start', 'location-manager', 'shipping', 'receiving'],
+      editableOn: ['start']
     },
     {
       name: 'locationManagerId',
       label: '位置管理员',
       type: 'user',
-      required: true
+      required: true,
+      visibleOn: ['start', 'location-manager', 'shipping', 'receiving'],
+      editableOn: ['start'],
+      display: {
+        type: 'user',
+        format: 'name'
+      }
     },
     {
       name: 'faultDescription',
@@ -1358,14 +1536,18 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
       type: 'textarea',
       required: true,
       placeholder: '请输入故障描述',
-      rows: 3
+      rows: 3,
+      visibleOn: ['start', 'location-manager', 'shipping', 'receiving'],
+      editableOn: ['start']
     },
     {
       name: 'repairServiceProvider',
       label: '维修服务商',
       type: 'text',
       required: false,
-      placeholder: '请输入维修服务商'
+      placeholder: '请输入维修服务商',
+      visibleOn: ['start', 'location-manager', 'shipping', 'receiving'],
+      editableOn: ['start']
     }
   ]
 };
@@ -1379,8 +1561,6 @@ export class WorkflowTemplatesService {
     EQUIPMENT_TRANSFER_TEMPLATE,
     EQUIPMENT_INBOUND_TEMPLATE,
     EQUIPMENT_REPAIR_TEMPLATE,
-    TASK_APPROVAL_TEMPLATE,
-    PURCHASE_APPROVAL_TEMPLATE,
     EMPLOYEE_ONBOARD_TEMPLATE
   ];
 

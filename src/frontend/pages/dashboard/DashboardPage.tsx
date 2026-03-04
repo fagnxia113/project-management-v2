@@ -28,16 +28,26 @@ export default function DashboardPage() {
   const loadDashboardData = async () => {
     setLoading(true)
     try {
-      // Parallel loading for better performance
-      const [projRes, equipRes, alertsRes, reportsRes] = await Promise.all([
-        fetch(API_URL.PROJECTS.LIST + '?pageSize=5'),
-        fetch(API_URL.BASE + '/api/equipment/instances?pageSize=1'),
-        fetch(API_URL.NOTIFICATIONS.ALERTS + '?status=active'),
-        fetch(API_URL.NOTIFICATIONS.DAILY_REPORT_STATISTICS)
+      const token = localStorage.getItem('token')
+      
+      const fetchWithTimeout = async (url: string, timeout: number = 3000) => {
+        return Promise.race([
+          fetch(url, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeout))
+        ])
+      }
+      
+      const [projRes, equipRes, alertsRes, reportsRes] = await Promise.allSettled([
+        fetchWithTimeout(API_URL.PROJECTS.LIST + '?pageSize=5'),
+        fetchWithTimeout(API_URL.BASE + '/api/equipment/instances?pageSize=1'),
+        fetchWithTimeout(API_URL.NOTIFICATIONS.ALERTS + '?status=active'),
+        fetchWithTimeout(API_URL.NOTIFICATIONS.DAILY_REPORT_STATISTICS)
       ])
 
-      if (projRes.ok) {
-        const data = await projRes.json()
+      if (projRes.status === 'fulfilled' && projRes.value instanceof Response && projRes.value.ok) {
+        const data = await projRes.value.json()
         setRecentProjects(data.data || [])
         setStats(prev => ({
           ...prev,
@@ -50,26 +60,26 @@ export default function DashboardPage() {
         }))
       }
 
-      if (equipRes.ok) {
-        const data = await equipRes.json()
+      if (equipRes.status === 'fulfilled' && equipRes.value instanceof Response && equipRes.value.ok) {
+        const data = await equipRes.value.json()
         setStats(prev => ({
           ...prev,
           equipment: {
             total: data.total || 0,
-            inWarehouse: 0, // Simplified for now
+            inWarehouse: 0,
             inProject: 0,
             repairing: 0
           }
         }))
       }
 
-      if (alertsRes.ok) {
-        const data = await alertsRes.json()
+      if (alertsRes.status === 'fulfilled' && alertsRes.value instanceof Response && alertsRes.value.ok) {
+        const data = await alertsRes.value.json()
         setWarnings(data.data || [])
       }
 
-      if (reportsRes.ok) {
-        const data = await reportsRes.json()
+      if (reportsRes.status === 'fulfilled' && reportsRes.value instanceof Response && reportsRes.value.ok) {
+        const data = await reportsRes.value.json()
         if (data.success) {
           setStats(prev => ({
             ...prev,

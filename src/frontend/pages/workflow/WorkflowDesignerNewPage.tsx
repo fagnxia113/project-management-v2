@@ -14,6 +14,14 @@ interface WorkflowDefinition {
   node_config: any
   variables?: WorkflowVariable[]
   form_schema?: any[]
+  form_template_id?: string
+}
+
+interface FormTemplate {
+  id: string
+  name: string
+  version: number
+  fields: any[]
 }
 
 export default function WorkflowDesignerNewPage() {
@@ -25,14 +33,37 @@ export default function WorkflowDesignerNewPage() {
   const [workflowName, setWorkflowName] = useState('')
   const [workflowKey, setWorkflowKey] = useState('')
   const [workflowCategory, setWorkflowCategory] = useState('hr')
+  const [formTemplateId, setFormTemplateId] = useState<string>('')
+  const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([])
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [workflowData, setWorkflowData] = useState<UnifiedWorkflowData | null>(null)
 
   useEffect(() => {
+    loadFormTemplates()
     if (id) {
       loadDefinition(id)
     }
   }, [id])
+
+  const loadFormTemplates = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL.BASE}/api/form-templates/templates`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success) {
+          setFormTemplates(data.data || [])
+        }
+      }
+    } catch (error) {
+      console.error('加载表单模板失败:', error)
+    }
+  }
 
   const loadDefinition = async (definitionId: string) => {
     try {
@@ -51,6 +82,7 @@ export default function WorkflowDesignerNewPage() {
           setWorkflowName(data.data.name)
           setWorkflowKey(data.data.key)
           setWorkflowCategory(data.data.category || 'hr')
+          setFormTemplateId(data.data.form_template_id || '')
         }
       }
     } catch (error) {
@@ -84,15 +116,32 @@ export default function WorkflowDesignerNewPage() {
       setSaving(true)
       const token = localStorage.getItem('token')
       
+      const typeMap: Record<string, string> = {
+        'startEvent': 'start',
+        'endEvent': 'end',
+        'userTask': 'approval',
+        'serviceTask': 'service',
+        'exclusiveGateway': 'exclusive',
+        'parallelGateway': 'parallel'
+      }
+      
       const payload = {
         key: workflowKey,
         name: workflowName,
         category: workflowCategory,
         entity_type: workflowCategory,
-        nodes: workflowData.nodes,
+        nodes: workflowData.nodes.map(node => ({
+          id: node.id,
+          type: typeMap[node.type] || node.type,
+          name: node.name,
+          position: node.position,
+          config: node.approvalConfig || node.gatewayConfig || node.serviceConfig,
+          formKey: node.formKey
+        })),
         edges: workflowData.edges,
         variables: workflowData.variables,
         form_schema: workflowData.formSchema,
+        form_template_id: formTemplateId || null,
         created_by: 'admin'
       }
 
@@ -129,19 +178,29 @@ export default function WorkflowDesignerNewPage() {
   }
 
   // 转换节点数据格式
-  const initialNodes = definition?.node_config?.nodes?.map((node: any) => ({
-    id: node.id,
-    type: node.type,
-    position: node.position || { x: 100 + Math.random() * 300, y: 100 + Math.random() * 200 },
-    data: {
-      label: node.name || node.data?.label,
-      description: node.description || node.data?.description,
-      approvalConfig: node.approvalConfig || node.data?.approvalConfig,
-      gatewayConfig: node.gatewayConfig || node.data?.gatewayConfig,
-      serviceConfig: node.serviceConfig || node.data?.serviceConfig,
-      formKey: node.formKey || node.data?.formKey
+  const initialNodes = definition?.node_config?.nodes?.map((node: any) => {
+    const typeMap: Record<string, string> = {
+      'start': 'startEvent',
+      'end': 'endEvent',
+      'approval': 'userTask',
+      'service': 'serviceTask',
+      'exclusive': 'exclusiveGateway',
+      'parallel': 'parallelGateway'
     }
-  })) || [
+    return {
+      id: node.id,
+      type: typeMap[node.type] || node.type || 'userTask',
+      position: node.position || { x: 100 + Math.random() * 300, y: 100 + Math.random() * 200 },
+      data: {
+        label: node.name || node.data?.label,
+        description: node.description || node.data?.description,
+        approvalConfig: node.approvalConfig || node.config || node.data?.approvalConfig,
+        gatewayConfig: node.gatewayConfig || node.data?.gatewayConfig,
+        serviceConfig: node.serviceConfig || node.data?.serviceConfig,
+        formKey: node.formKey || node.data?.formKey
+      }
+    }
+  }) || [
     {
       id: 'start',
       type: 'startEvent',
@@ -258,6 +317,27 @@ export default function WorkflowDesignerNewPage() {
                   <option value="finance">财务管理</option>
                   <option value="general">通用流程</option>
                 </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  绑定表单模板
+                </label>
+                <select
+                  value={formTemplateId}
+                  onChange={(e) => setFormTemplateId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">不绑定表单模板</option>
+                  {formTemplates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} (v{template.version}) - {template.fields.length}个字段
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  绑定表单模板后，发起流程时将自动加载该表单
+                </p>
               </div>
               
               {/* 流程统计信息 */}

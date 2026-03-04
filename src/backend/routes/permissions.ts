@@ -4,7 +4,7 @@ import { authenticate, requireAdmin } from '../middleware/authMiddleware.js'
 
 const router = Router()
 
-router.get('/permissions', authenticate, async (req: Request, res: Response) => {
+router.get('/', authenticate, async (req: Request, res: Response) => {
   try {
     const permissions = await permissionService.getUserPermissions(req.user!.userId)
     res.json({ success: true, data: permissions })
@@ -13,7 +13,7 @@ router.get('/permissions', authenticate, async (req: Request, res: Response) => 
   }
 })
 
-router.get('/permissions/check', authenticate, async (req: Request, res: Response) => {
+router.get('/check', authenticate, async (req: Request, res: Response) => {
   try {
     const { code } = req.query
     
@@ -32,7 +32,7 @@ router.get('/permissions/check', authenticate, async (req: Request, res: Respons
   }
 })
 
-router.get('/permissions/menus', authenticate, async (req: Request, res: Response) => {
+router.get('/menus', authenticate, async (req: Request, res: Response) => {
   try {
     const menus = await permissionService.getUserMenus(req.user!.userId)
     res.json({ success: true, data: menus })

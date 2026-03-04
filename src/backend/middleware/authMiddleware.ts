@@ -1,15 +1,17 @@
 import { Request, Response, NextFunction } from 'express'
-import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'siweixinwang-secret-key-2026'
+import { jwtService } from '../utils/jwt.js'
+import { AuthenticationError, AuthorizationError } from '../errors/AppError.js'
 
 declare global {
   namespace Express {
     interface Request {
       user?: {
-        userId: string
+        id: string
         username: string
+        name: string
         role: string
+        departmentId?: string
+        positionId?: string
       }
     }
   }
@@ -19,32 +21,28 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   const authHeader = req.headers.authorization
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: '未认证，请先登录' })
+    throw new AuthenticationError('未认证，请先登录')
   }
   
   const token = authHeader.substring(7)
   
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string
-      username: string
-      role: string
-    }
+    const decoded = jwtService.verifyToken(token)
     req.user = decoded
     next()
   } catch (error) {
-    return res.status(401).json({ error: '令牌无效或已过期' })
+    throw error
   }
 }
 
 export const requireRole = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ error: '未认证' })
+      throw new AuthenticationError('未认证')
     }
     
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: '权限不足，需要角色: ' + roles.join(' 或 ') })
+      throw new AuthorizationError('权限不足，需要角色: ' + roles.join(' 或 '))
     }
     
     next()
@@ -61,11 +59,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7)
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as {
-        userId: string
-        username: string
-        role: string
-      }
+      const decoded = jwtService.verifyToken(token)
       req.user = decoded
     } catch (error) {
       // Token无效，但继续执行
@@ -78,7 +72,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
 export const checkResourceAccess = (resourceType: 'project' | 'employee' | 'equipment') => {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ error: '未认证' })
+      throw new AuthenticationError('未认证')
     }
 
     // 管理员可以访问所有资源
@@ -107,7 +101,7 @@ export const rateLimit = (maxRequests: number = 100, windowMs: number = 60000) =
     }
     
     if (record.count >= maxRequests) {
-      return res.status(429).json({ error: '请求过于频繁，请稍后再试' })
+      throw new AuthorizationError('请求过于频繁，请稍后再试')
     }
     
     record.count++

@@ -5,8 +5,13 @@ import { performanceMonitor } from '../services/PerformanceMonitor.js';
 import { instanceService } from '../services/InstanceService.js';
 import { taskService } from '../services/TaskService.js';
 import { definitionService } from '../services/DefinitionService.js';
+import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = Router();
+
+// 管理员路由需要认证和管理员权限
+router.use('/admin', authenticate);
+router.use('/admin', requireAdmin);
 
 // ==================== 流程实例管理 ====================
 
@@ -181,31 +186,6 @@ router.post('/task/:taskId/claim', async (req, res) => {
   }
 });
 
-// 委托任务
-router.post('/task/:taskId/delegate', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { targetUser, operator, comment } = req.body;
-
-    await enhancedWorkflowEngine.delegateTask(taskId, {
-      targetUser,
-      operator,
-      comment
-    });
-
-    res.json({
-      success: true,
-      message: '任务已委托'
-    });
-  } catch (error) {
-    console.error('委托任务失败:', error);
-    res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : '委托任务失败'
-    });
-  }
-});
-
 // 转办任务
 router.post('/task/:taskId/transfer', async (req, res) => {
   try {
@@ -231,7 +211,46 @@ router.post('/task/:taskId/transfer', async (req, res) => {
   }
 });
 
-// 获取用户任务列表
+router.post('/task/:taskId/rollback', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { targetNodeId, operator, comment } = req.body;
+
+    await enhancedWorkflowEngine.rollbackTask(taskId, targetNodeId, operator, comment);
+
+    res.json({
+      success: true,
+      message: '任务已回退'
+    });
+  } catch (error) {
+    console.error('回退任务失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '回退任务失败'
+    });
+  }
+});
+
+router.post('/task/:taskId/add-signer', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { newSigners, operator, comment } = req.body;
+
+    await enhancedWorkflowEngine.addSigner(taskId, operator, newSigners, comment);
+
+    res.json({
+      success: true,
+      message: '已添加加签人'
+    });
+  } catch (error) {
+    console.error('添加加签人失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '添加加签人失败'
+    });
+  }
+});
+
 router.get('/tasks/assignee/:userId', async (req, res) => {
   try {
     const { userId } = req.params;

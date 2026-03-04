@@ -7,90 +7,101 @@ import {
   Trash2,
   FileText,
   Search,
-  Filter,
-  MoreVertical,
+  Eye,
   Copy,
-  Eye
+  Layout,
+  Layers
 } from 'lucide-react'
 
 interface FormTemplate {
   id: string
-  key: string
   name: string
-  category: string
-  description: string
-  form_schema: any
-  status: 'active' | 'inactive'
   version: number
+  layout: {
+    type: 'single' | 'tabs' | 'steps'
+    columns: number
+    labelPosition?: 'left' | 'right' | 'top'
+  }
+  fields: any[]
+  sections?: any[]
+  style?: any
   created_at: string
   updated_at: string
+}
+
+interface WorkflowDefinition {
+  id: string
+  key: string
+  name: string
+  form_template_id?: string
 }
 
 const FormTemplatesPage: React.FC = () => {
   const navigate = useNavigate()
   const [templates, setTemplates] = useState<FormTemplate[]>([])
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([])
   const [loading, setLoading] = useState(true)
   const [searchKeyword, setSearchKeyword] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [selectedStatus, setSelectedStatus] = useState('all')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<FormTemplate | null>(null)
 
-  const categories = ['hr', 'equipment', 'project', 'purchase', 'finance', 'general']
-  const categoryLabels: Record<string, string> = {
-    hr: '人事管理',
-    equipment: '设备管理',
-    project: '项目管理',
-    purchase: '采购管理',
-    finance: '财务管理',
-    general: '通用表单'
-  }
-
   useEffect(() => {
-    loadTemplates()
+    loadData()
   }, [])
 
-  const loadTemplates = async () => {
+  const loadData = async () => {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL.BASE}/api/forms/templates`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
       
-      if (res.ok) {
-        const data = await res.json()
+      const [templatesRes, definitionsRes] = await Promise.all([
+        fetch(`${API_URL.BASE}/api/form-templates/templates`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }),
+        fetch(`${API_URL.BASE}/api/workflow/definitions?pageSize=100`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+      ])
+      
+      if (templatesRes.ok) {
+        const data = await templatesRes.json()
         if (data.success) {
           setTemplates(data.data || [])
         }
       }
+      
+      if (definitionsRes.ok) {
+        const data = await definitionsRes.json()
+        if (data.success) {
+          setWorkflowDefinitions(data.data || [])
+        }
+      }
     } catch (error) {
-      console.error('加载表单模板失败:', error)
+      console.error('加载数据失败:', error)
     } finally {
       setLoading(false)
     }
   }
 
   const filteredTemplates = templates.filter(template => {
-    const matchesSearch = searchKeyword === '' || 
-      template.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-      template.key.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-      template.description.toLowerCase().includes(searchKeyword.toLowerCase())
-    
-    const matchesCategory = selectedCategory === 'all' || template.category === selectedCategory
-    const matchesStatus = selectedStatus === 'all' || template.status === selectedStatus
-    
-    return matchesSearch && matchesCategory && matchesStatus
+    return searchKeyword === '' || 
+      template.name.toLowerCase().includes(searchKeyword.toLowerCase())
   })
+
+  const getBoundWorkflows = (templateId: string): WorkflowDefinition[] => {
+    return workflowDefinitions.filter(def => def.form_template_id === templateId)
+  }
 
   const handleDelete = async () => {
     if (!deleteTarget) return
 
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL.BASE}/api/forms/templates/${deleteTarget.id}`, {
+      const res = await fetch(`${API_URL.BASE}/api/form-templates/templates/${deleteTarget.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -98,56 +109,56 @@ const FormTemplatesPage: React.FC = () => {
       })
       
       if (res.ok) {
+        await loadData()
+        setShowDeleteDialog(false)
+        setDeleteTarget(null)
+      } else {
         const data = await res.json()
-        if (data.success) {
-          alert('删除成功')
-          setShowDeleteDialog(false)
-          setDeleteTarget(null)
-          loadTemplates()
-        } else {
-          alert('删除失败: ' + (data.error || '未知错误'))
-        }
+        alert(data.error || '删除失败')
       }
     } catch (error) {
       console.error('删除表单模板失败:', error)
-      alert('删除失败，请重试')
+      alert('删除失败')
     }
   }
 
   const handleDuplicate = async (template: FormTemplate) => {
     try {
       const token = localStorage.getItem('token')
-      const payload = {
-        key: `${template.key}_copy_${Date.now()}`,
-        name: `${template.name} (副本)`,
-        category: template.category,
-        description: template.description,
-        form_schema: template.form_schema,
-        created_by: 'admin'
-      }
-
-      const res = await fetch(`${API_URL.BASE}/api/forms/templates`, {
+      const res = await fetch(`${API_URL.BASE}/api/form-templates/templates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          name: `${template.name} (副本)`,
+          layout: template.layout,
+          fields: template.fields,
+          sections: template.sections,
+          style: template.style
+        })
       })
-
+      
       if (res.ok) {
+        await loadData()
+      } else {
         const data = await res.json()
-        if (data.success) {
-          alert('复制成功')
-          loadTemplates()
-        } else {
-          alert('复制失败: ' + (data.error || '未知错误'))
-        }
+        alert(data.error || '复制失败')
       }
     } catch (error) {
       console.error('复制表单模板失败:', error)
-      alert('复制失败，请重试')
+      alert('复制失败')
     }
+  }
+
+  const getLayoutTypeLabel = (type: string): string => {
+    const labels: Record<string, string> = {
+      'single': '单页',
+      'tabs': '标签页',
+      'steps': '分步'
+    }
+    return labels[type] || type
   }
 
   if (loading) {
@@ -159,170 +170,158 @@ const FormTemplatesPage: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex-1 overflow-auto p-6">
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">表单管理</h1>
-              <p className="text-gray-500 mt-1">管理表单模板和设计业务表单</p>
-            </div>
-            <button
-              onClick={() => navigate('/forms/designer/new')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              新建表单
-            </button>
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">表单模板管理</h1>
+            <p className="text-gray-500 mt-1">共 {templates.length} 个表单模板</p>
           </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex gap-4 mb-6">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
-                  placeholder="搜索表单名称、标识或描述..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">全部分类</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{categoryLabels[cat]}</option>
-                ))}
-              </select>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">全部状态</option>
-                <option value="active">启用</option>
-                <option value="inactive">停用</option>
-              </select>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">表单名称</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">表单标识</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">分类</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">描述</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">状态</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">版本</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">更新时间</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTemplates.map(template => (
-                    <tr key={template.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-500" />
-                          <span className="font-medium text-gray-900">{template.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600 text-sm">{template.key}</td>
-                      <td className="py-3 px-4 text-gray-600">{categoryLabels[template.category]}</td>
-                      <td className="py-3 px-4 text-gray-600 text-sm max-w-xs truncate">{template.description}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          template.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {template.status === 'active' ? '启用' : '停用'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">v{template.version}</td>
-                      <td className="py-3 px-4 text-gray-600 text-sm">
-                        {new Date(template.updated_at).toLocaleDateString('zh-CN')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => navigate(`/forms/designer/${template.id}`)}
-                            className="p-2 hover:bg-blue-50 rounded-lg text-blue-600"
-                            title="编辑"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDuplicate(template)}
-                            className="p-2 hover:bg-green-50 rounded-lg text-green-600"
-                            title="复制"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDeleteTarget(template)
-                              setShowDeleteDialog(true)
-                            }}
-                            className="p-2 hover:bg-red-50 rounded-lg text-red-600"
-                            title="删除"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {filteredTemplates.length === 0 && (
-                <div className="text-center py-12">
-                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">暂无表单模板</p>
-                  <p className="text-sm text-gray-400 mt-1">点击"新建表单"开始创建</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {showDeleteDialog && deleteTarget && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl shadow-xl max-w-md w-full m-4">
-                <div className="p-6 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900">确认删除</h3>
-                </div>
-                <div className="p-6">
-                  <p className="text-gray-600">
-                    确定要删除表单模板 <span className="font-semibold text-gray-900">{deleteTarget.name}</span> 吗？
-                  </p>
-                  <p className="text-sm text-red-500 mt-2">此操作不可恢复</p>
-                </div>
-                <div className="p-6 border-t border-gray-200 flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setShowDeleteDialog(false)
-                      setDeleteTarget(null)
-                    }}
-                    className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                  >
-                    确认删除
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={() => navigate('/forms/designer/new')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            新建模板
+          </button>
         </div>
       </div>
+
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="搜索表单模板..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        </div>
+
+        {filteredTemplates.length === 0 ? (
+          <div className="text-center py-12">
+            <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <p className="text-gray-500 mb-4">暂无表单模板</p>
+            <button
+              onClick={() => navigate('/forms/designer/new')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              创建第一个表单模板
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {filteredTemplates.map(template => {
+              const boundWorkflows = getBoundWorkflows(template.id)
+              
+              return (
+                <div key={template.id} className="p-4 hover:bg-gray-50">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-medium text-gray-900">{template.name}</h3>
+                        <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">
+                          v{template.version}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                        <div className="flex items-center gap-1">
+                          <Layout className="w-4 h-4" />
+                          <span>{getLayoutTypeLabel(template.layout.type)}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Layers className="w-4 h-4" />
+                          <span>{template.fields.length} 个字段</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <FileText className="w-4 h-4" />
+                          <span>{template.layout.columns} 列布局</span>
+                        </div>
+                      </div>
+
+                      {boundWorkflows.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500">已绑定流程:</span>
+                          {boundWorkflows.map(wf => (
+                            <span
+                              key={wf.id}
+                              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded"
+                            >
+                              {wf.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/forms/designer/${template.id}`)}
+                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        title="编辑"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicate(template)}
+                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        title="复制"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteTarget(template)
+                          setShowDeleteDialog(true)
+                        }}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        title="删除"
+                        disabled={boundWorkflows.length > 0}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">确认删除</h3>
+            <p className="text-gray-600 mb-6">
+              确定要删除表单模板 "{deleteTarget?.name}" 吗？此操作不可恢复。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteDialog(false)
+                  setDeleteTarget(null)
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { API_URL } from '../../config/api'
+import { API_URL, parseJWTToken } from '../../config/api'
 
 interface InboundItem {
   id: string
@@ -262,10 +262,12 @@ export default function InboundCreatePage() {
       let userInfo = { id: '', name: '' }
       
       try {
-        const tokenPayload = JSON.parse(atob(token.split('.')[1]))
-        userInfo = {
-          id: tokenPayload.userId || tokenPayload.sub || '',
-          name: tokenPayload.name || tokenPayload.username || ''
+        const tokenPayload = parseJWTToken(token)
+        if (tokenPayload) {
+          userInfo = {
+            id: tokenPayload.userId || tokenPayload.sub || '',
+            name: tokenPayload.name || tokenPayload.username || ''
+          }
         }
       } catch (e) {
         console.warn('Token解析失败，使用默认用户信息')

@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { API_URL } from '../config/api'
+import { useUser } from '../contexts/UserContext'
+import { API_URL, parseJWTToken } from '../config/api'
 
 interface MenuItem {
   label: string
@@ -65,7 +66,9 @@ const getMenus = (role: string): MenuItem[] => {
       children: [
         { label: '发起审批', path: '/approvals/new' },
         { label: '待我处理', path: '/approvals/pending', badge: 3 },
+        { label: '我已审批', path: '/approvals/completed' },
         { label: '我已发起', path: '/approvals/mine' },
+        { label: '我的草稿', path: '/approvals/draft' },
       ]
     },
     
@@ -128,25 +131,24 @@ const getMenus = (role: string): MenuItem[] => {
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
+  const { user } = useUser()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 
     '项目管理': true,
     '审批中心': true 
   })
   const [menuConfig, setMenuConfig] = useState<MenuItem[]>([])
-  const [user, setUser] = useState<any>(null)
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
-    const u = localStorage.getItem('user')
-    if (u) {
-      const parsed = JSON.parse(u)
-      setUser(parsed)
-      setMenuConfig(getMenus(parsed.role))
+    if (user) {
+      setMenuConfig(getMenus(user.role))
+    } else {
+      setMenuConfig([])
     }
     
     // 获取待办数量
     fetchPendingCount()
-  }, [])
+  }, [user])
   
   const fetchPendingCount = async () => {
     try {
@@ -155,9 +157,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       
       let userId = 'current-user'
       try {
-        const base64Payload = token.split('.')[1]
-        if (base64Payload) {
-          const payload = JSON.parse(atob(base64Payload))
+        const payload = parseJWTToken(token)
+        if (payload) {
           userId = payload.userId || payload.id || 'current-user'
         }
       } catch (e) {

@@ -10,6 +10,16 @@ interface ProcessPreset {
   status: string
 }
 
+interface WorkflowDefinition {
+  id: string
+  key: string
+  name: string
+  version: number
+  category?: string
+  status: 'draft' | 'active' | 'suspended' | 'archived'
+  form_template_id?: string
+}
+
 const categoryLabels: Record<string, string> = {
   'hr': '人事管理',
   'project': '项目管理',
@@ -47,49 +57,86 @@ const categoryIcons: Record<string, React.ReactNode> = {
   )
 }
 
+const presetToWorkflowKey: Record<string, string> = {
+  'preset-employee-onboard': 'employee-onboard',
+  'preset-equipment-inbound': 'equipment-inbound',
+  'preset-equipment-repair': 'equipment-repair',
+  'preset-equipment-scrap-sale': 'equipment-scrap-sale',
+  'preset-project-approval': 'project-approval',
+}
+
 const presetRoutes: Record<string, string> = {
-  'preset-employee-onboard': '/personnel/onboard',
-  'preset-equipment-inbound': '/equipment/inbounds/create',
   'preset-equipment-transfer': '/equipment/transfers/create',
-  'preset-equipment-repair': '/equipment/repairs/create',
-  'preset-equipment-scrap-sale': '/equipment/scrap-sales/create',
-  'preset-project-approval': '/projects/create',
 }
 
 export default function NewProcessPage() {
   const navigate = useNavigate()
   const [presets, setPresets] = useState<ProcessPreset[]>([])
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
   useEffect(() => {
-    loadPresets()
+    loadData()
   }, [])
 
-  const loadPresets = async () => {
+  const loadData = async () => {
+    const defaultPresets = [
+      { id: 'preset-employee-onboard', name: '人员入职', category: 'hr', description: '新员工入职审批流程', status: 'active' },
+      { id: 'preset-equipment-inbound', name: '设备入库', category: 'equipment', description: '设备入库审批流程', status: 'active' },
+      { id: 'preset-equipment-transfer', name: '设备调拨', category: 'equipment', description: '设备跨位置调拨审批流程', status: 'active' },
+      { id: 'preset-equipment-repair', name: '设备维修', category: 'equipment', description: '设备维修审批流程', status: 'active' },
+      { id: 'preset-equipment-scrap-sale', name: '设备报废/售出', category: 'equipment', description: '设备报废/售出审批流程', status: 'active' },
+      { id: 'preset-project-approval', name: '项目立项', category: 'project', description: '项目立项审批流程', status: 'active' },
+    ]
+    
     try {
-      const res = await fetch(API_URL.PROCESS_PRESETS)
-      if (res.ok) {
-        const data = await res.json()
+      const token = localStorage.getItem('token')
+      
+      const fetchWithTimeout = async (url: string, timeout: number = 3000) => {
+        return Promise.race([
+          fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeout))
+        ])
+      }
+      
+      const [presetsRes, definitionsRes] = await Promise.allSettled([
+        fetchWithTimeout(API_URL.PROCESS_PRESETS).catch(() => null),
+        fetchWithTimeout(`${API_URL.BASE}/api/workflow/definitions?status=active&pageSize=100`).catch(() => null)
+      ])
+
+      if (presetsRes.status === 'fulfilled' && presetsRes.value && presetsRes.value instanceof Response && presetsRes.value.ok) {
+        const data = await presetsRes.value.json()
         console.log('[NewProcessPage] Loaded presets:', data.data || data)
-        setPresets(data.data || data || [])
+        setPresets(data.data || data || defaultPresets)
+      } else {
+        console.log('[NewProcessPage] Using default presets')
+        setPresets(defaultPresets)
+      }
+
+      if (definitionsRes.status === 'fulfilled' && definitionsRes.value && definitionsRes.value instanceof Response && definitionsRes.value.ok) {
+        const data = await definitionsRes.value.json()
+        console.log('[NewProcessPage] Loaded workflow definitions:', data.data || data)
+        const definitions = (data.data || data || []).filter((def: WorkflowDefinition) => def.status === 'active')
+        setWorkflowDefinitions(definitions)
       }
     } catch (error) {
-      console.error('加载流程预设失败:', error)
-      setPresets([
-        { id: 'preset-employee-onboard', name: '人员入职', category: 'hr', description: '新员工入职审批流程', status: 'active' },
-        { id: 'preset-equipment-inbound', name: '设备入库', category: 'equipment', description: '设备入库审批流程', status: 'active' },
-        { id: 'preset-equipment-transfer', name: '设备调拨', category: 'equipment', description: '设备跨位置调拨审批流程', status: 'active' },
-        { id: 'preset-equipment-repair', name: '设备维修', category: 'equipment', description: '设备维修审批流程', status: 'active' },
-        { id: 'preset-equipment-scrap-sale', name: '设备报废/售出', category: 'equipment', description: '设备报废/售出审批流程', status: 'active' },
-        { id: 'preset-project-approval', name: '项目立项', category: 'project', description: '项目立项审批流程', status: 'active' },
-      ])
+      console.error('加载数据失败:', error)
+      setPresets(defaultPresets)
     } finally {
       setLoading(false)
     }
   }
 
   const handleSelectPreset = (preset: ProcessPreset) => {
+    const workflowKey = presetToWorkflowKey[preset.id]
+    if (workflowKey) {
+      navigate(`/approvals/workflow/${workflowKey}`)
+      return
+    }
+    
     const route = presetRoutes[preset.id]
     if (route) {
       navigate(route)
@@ -98,10 +145,18 @@ export default function NewProcessPage() {
     }
   }
 
-  const categories = [...new Set(presets.map(p => p.category))]
+  const handleSelectWorkflow = (definition: WorkflowDefinition) => {
+    navigate(`/approvals/workflow/${definition.key}`)
+  }
+
+  const categories = [...new Set([...presets.map(p => p.category), ...workflowDefinitions.map(d => d.category || 'general')])]
   const filteredPresets = selectedCategory 
     ? presets.filter(p => p.category === selectedCategory)
     : presets
+  
+  const filteredWorkflows = selectedCategory
+    ? workflowDefinitions.filter(d => (d.category || 'general') === selectedCategory)
+    : workflowDefinitions
 
   const groupedPresets = filteredPresets.reduce((acc, preset) => {
     if (!acc[preset.category]) {
@@ -184,6 +239,38 @@ export default function NewProcessPage() {
                   }`}>
                     {preset.status === 'active' ? '可用' : '停用'}
                   </span>
+                </div>
+              </div>
+            ))}
+            
+            {filteredWorkflows.filter(w => (w.category || 'general') === category).map(definition => (
+              <div
+                key={definition.id}
+                onClick={() => handleSelectWorkflow(definition)}
+                className="bg-white border border-blue-200 rounded-xl p-5 hover:shadow-lg hover:border-blue-400 cursor-pointer transition-all group"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {definition.name}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">版本: v{definition.version}</p>
+                  </div>
+                  <div className="ml-4 text-gray-400 group-hover:text-blue-600 transition-colors">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-700">
+                    工作流
+                  </span>
+                  {definition.form_template_id && (
+                    <span className="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-700">
+                      已绑定表单
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

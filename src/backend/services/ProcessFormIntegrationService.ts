@@ -14,6 +14,7 @@ import { InboundOrderService } from './InboundOrderService.js';
 import { TransferOrderService } from './TransferOrderService.js';
 import { equipmentRepairService } from './EquipmentRepairService.js';
 import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
+import { formDataValidator } from './FormDataValidator.js';
 import { db } from '../database/connection.js';
 
 interface ProcessFormPreset {
@@ -591,6 +592,26 @@ export class ProcessFormIntegrationService {
             }
           };
         }
+
+        // 额外的安全验证 - 防止注入攻击
+        const sanitizeResult = formDataValidator.sanitizeFormData(
+          businessLinkResult.data,
+          formTemplate.fields
+        );
+
+        if (!sanitizeResult.isValid) {
+          console.error('Form sanitization failed:', sanitizeResult.errors);
+          return {
+            success: false,
+            message: '表单数据包含非法内容',
+            data: {
+              formValidation: sanitizeResult
+            }
+          };
+        }
+
+        // 使用清理后的数据
+        businessLinkResult.data = sanitizeResult.sanitizedData;
 
         // 清理表单数据（移除不可见字段的值）
         cleanedFormData = unifiedFormService.cleanFormData(formTemplate.id, businessLinkResult.data);

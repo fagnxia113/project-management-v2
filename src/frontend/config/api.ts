@@ -2,6 +2,39 @@
 // 使用空字符串让请求走相对路径，通过Vite代理转发到后端
 export const API_BASE_URL = ''
 
+// JWT Token 解析函数 - 仅用于解码，不验证签名
+// 注意：此函数仅用于前端显示，不用于安全验证
+export function parseJWTToken(token: string): any {
+  try {
+    const base64Url = token.split('.')[1]
+    if (!base64Url) {
+      return null
+    }
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+    }).join(''))
+    return JSON.parse(jsonPayload)
+  } catch (e) {
+    console.warn('Token解析失败', e)
+    return null
+  }
+}
+
+// 安全的Token验证函数（仅用于调试，生产环境不应在前端验证）
+export function isTokenExpired(token: string): boolean {
+  try {
+    const payload = parseJWTToken(token)
+    if (!payload || !payload.exp) {
+      return true
+    }
+    const now = Math.floor(Date.now() / 1000)
+    return payload.exp < now
+  } catch (e) {
+    return true
+  }
+}
+
 // 通用API路径
 export const API_PATHS = {
   DATA: '/api/data',
@@ -25,6 +58,7 @@ export const API_URL = {
     PROCESS_DETAIL: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/processes/${id}`,
     PROCESS_TERMINATE: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/processes/${id}/terminate`,
     TASKS: `${API_BASE_URL}${API_PATHS.WORKFLOW}/tasks`,
+    MY_TASKS: `${API_BASE_URL}${API_PATHS.WORKFLOW}/my-tasks`,
     TASK_DETAIL: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/tasks/${id}`,
     TASK_COMPLETE: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/tasks/${id}/complete`,
     TASK_CLAIM: (id: string) => `${API_BASE_URL}${API_PATHS.WORKFLOW}/tasks/${id}/claim`,
@@ -85,7 +119,7 @@ export const API_URL = {
     PURCHASE_REQUEST_STATUS: (id: string) => `${API_BASE_URL}/api/notifications/purchase/requests/${id}/status`,
   },
   PERMISSIONS: {
-    LIST: `${API_BASE_URL}/api/permissions/permissions`,
+    LIST: `${API_BASE_URL}/api/permissions`,
     CHECK: `${API_BASE_URL}/api/permissions/check`,
     MENUS: `${API_BASE_URL}/api/permissions/menus`,
     ROLES: `${API_BASE_URL}/api/permissions/roles`,
@@ -105,6 +139,8 @@ export const API_URL = {
     PROJECT_COST: (id: string) => `${API_BASE_URL}${API_PATHS.WORK_TIME}/projects/${id}/cost`,
   },
   AUTH: {
+    LOGIN: `${API_BASE_URL}${API_PATHS.AUTH}/login`,
+    VERIFY: `${API_BASE_URL}${API_PATHS.AUTH}/verify`,
     USERS: `${API_BASE_URL}${API_PATHS.AUTH}/users`,
     USER_DETAIL: (id: string) => `${API_BASE_URL}${API_PATHS.AUTH}/users/${id}`,
     USER_STATUS: (id: string) => `${API_BASE_URL}${API_PATHS.AUTH}/users/${id}/status`,

@@ -31,25 +31,14 @@ export default function LoginPage() {
       if (data.success) {
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))
+        // 触发storage事件，让UserContext更新
+        window.dispatchEvent(new Event('storage'))
         window.location.href = '/'
       } else {
         setError(data.error || '登录失败')
       }
-    } catch (err) {
-      // 如果后端不可用，使用模拟登录
-      const mockUsers = [
-        { username: 'admin', password: 'admin123', name: '管理员', role: 'admin' },
-        { username: 'manager', password: 'manager123', name: '项目经理', role: 'manager' },
-        { username: 'user', password: 'user123', name: '普通员工', role: 'user' }
-      ]
-      const user = mockUsers.find(u => u.username === username && u.password === password)
-      if (user) {
-        localStorage.setItem('token', 'mock-token')
-        localStorage.setItem('user', JSON.stringify({ ...user, id: user.username }))
-        window.location.href = '/'
-      } else {
-        setError('用户名或密码错误')
-      }
+    } catch (err: any) {
+      setError(err.message || '登录失败')
     } finally {
       setLoading(false)
     }

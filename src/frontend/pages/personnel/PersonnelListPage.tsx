@@ -56,8 +56,12 @@ const [total, setTotal] = useState(0)
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
-    if (userStr) {
-      setCurrentUser(JSON.parse(userStr))
+    if (userStr && userStr !== 'undefined') {
+      try {
+        setCurrentUser(JSON.parse(userStr))
+      } catch (e) {
+        console.warn('解析用户信息失败', e)
+      }
     }
     loadEmployees()
     loadPositions()
@@ -146,6 +150,7 @@ const handleSearch = () => {
     }
     setSubmitting(true)
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch(`${API_URL.DATA('Employee')}`, {
         method: 'POST',
         headers: {

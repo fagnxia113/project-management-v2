@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config/api'
+import { API_URL, parseJWTToken } from '../../config/api'
 import {
   LayoutGrid,
   List,
@@ -16,6 +16,8 @@ import {
   GitBranch,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Clock,
   AlertCircle,
   FileText,
@@ -120,8 +122,50 @@ export default function ApprovalPendingPageNew() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
+  const [formFieldsMap, setFormFieldsMap] = useState<Record<string, any[]>>({})
 
   useEffect(() => { loadTasks() }, [])
+
+  const getFieldLabel = (processType: string, fieldName: string): string => {
+    const formKey = processType + '-form'
+    const formFields = formFieldsMap[formKey]
+    if (formFields) {
+      const field = formFields.find((f: any) => f.name === fieldName)
+      if (field?.label) {
+        return field.label
+      }
+    }
+    return FORM_FIELD_LABELS[fieldName] || fieldName
+  }
+
+  const loadFormFields = async (processType: string) => {
+    const formKey = processType + '-form'
+    if (formFieldsMap[formKey]) {
+      return
+    }
+    
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL.BASE}/api/workflow/form-templates/key/${formKey}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.data) {
+          setFormFieldsMap(prev => ({
+            ...prev,
+            [formKey]: data.data.fields || []
+          }))
+        }
+      }
+    } catch (e) {
+      console.warn(`加载表单字段失败: ${formKey}`, e)
+    }
+  }
 
   const loadTasks = async () => {
     setLoading(true)
@@ -130,9 +174,8 @@ export default function ApprovalPendingPageNew() {
       let userId = 'current-user'
       if (token) {
         try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
+          const payload = parseJWTToken(token)
+          if (payload) {
             userId = payload.userId || payload.id || 'current-user'
           }
         } catch (e) {
@@ -170,6 +213,11 @@ export default function ApprovalPendingPageNew() {
             }
           })
           setTasks(mappedTasks)
+          
+          const uniqueProcessTypes = [...new Set(mappedTasks.map((task: any) => task.process_type))]
+          uniqueProcessTypes.forEach(processType => {
+            loadFormFields(processType)
+          })
         }
       }
     } catch (e) {
@@ -196,6 +244,18 @@ export default function ApprovalPendingPageNew() {
 
   const totalPages = Math.ceil(filteredTasks.length / pageSize)
   const paginatedTasks = filteredTasks.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  const toggleExpand = (taskId: string) => {
+    setExpandedTasks(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId)
+      } else {
+        newSet.add(taskId)
+      }
+      return newSet
+    })
+  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -231,12 +291,16 @@ export default function ApprovalPendingPageNew() {
       {paginatedTasks.map(task => {
         const typeConfig = PROCESS_TYPE_LABELS[task.process_type] || { label: task.process_type, color: 'gray', icon: FileText }
         const TypeIcon = typeConfig.icon
+        const isExpanded = expandedTasks.has(task.id)
+        const formData = task.form_data || {}
+        const summary = Object.entries(formData)
+          .filter(([key, value]) => value && !key.startsWith('_'))
+          .slice(0, isExpanded ? undefined : 3)
         
         return (
           <div 
             key={task.id} 
             className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group"
-            onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
           >
             <div className="p-5">
               <div className="flex items-start justify-between mb-4">
@@ -267,7 +331,7 @@ export default function ApprovalPendingPageNew() {
                 </span>
               </div>
               
-              <div className="space-y-2 text-sm text-gray-600">
+              <div className="space-y-2 text-sm text-gray-600 mb-4">
                 <div className="flex items-center gap-2">
                   <GitBranch className="w-4 h-4 text-gray-400" />
                   <span className="truncate">{task.node_name}</span>
@@ -277,6 +341,43 @@ export default function ApprovalPendingPageNew() {
                   <span>{formatDate(task.created_at)}</span>
                 </div>
               </div>
+              
+              {summary.length > 0 && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="text-xs text-gray-500 mb-2">申请内容</div>
+                  <div className="space-y-1.5">
+                    {summary.map(([key, value]) => {
+                      const label = getFieldLabel(task.process_type, key)
+                      let displayValue = value
+                      
+                      if (key === 'department_id' && task.dept_map?.[value]) {
+                        displayValue = task.dept_map[value]
+                      }
+                      if (key === 'position_id' && task.pos_map?.[value]) {
+                        displayValue = task.pos_map[value]
+                      }
+                      
+                      return (
+                        <div key={key} className="flex justify-between text-xs">
+                          <span className="text-gray-500">{label}:</span>
+                          <span className="text-gray-900 font-medium truncate ml-2">{String(displayValue)}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {Object.entries(formData).filter(([k, v]) => v && !k.startsWith('_')).length > 3 && !isExpanded && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleExpand(task.id)
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 mt-2"
+                    >
+                      查看更多
+                    </button>
+                  )}
+                </div>
+              )}
               
               <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
                 <button
@@ -324,46 +425,89 @@ export default function ApprovalPendingPageNew() {
         <tbody className="divide-y divide-gray-200">
           {paginatedTasks.map(task => {
             const typeConfig = PROCESS_TYPE_LABELS[task.process_type] || { label: task.process_type, color: 'gray', icon: FileText }
+            const isExpanded = expandedTasks.has(task.id)
+            const formData = task.form_data || {}
+            const summary = Object.entries(formData)
+              .filter(([key, value]) => value && !key.startsWith('_'))
+              .slice(0, isExpanded ? undefined : 3)
             
             return (
-              <tr key={task.id} className="hover:bg-gray-50 transition-colors">
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg bg-${typeConfig.color}-100 flex items-center justify-center`}>
-                      <typeConfig.icon className={`w-5 h-5 text-${typeConfig.color}-600`} />
+              <>
+                <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg bg-${typeConfig.color}-100 flex items-center justify-center`}>
+                        <typeConfig.icon className={`w-5 h-5 text-${typeConfig.color}-600`} />
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{task.process_title}</div>
+                        <div className="text-xs text-gray-500 font-mono">{task.task_id.slice(0, 8)}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-medium text-gray-900">{task.process_title}</div>
-                      <div className="text-xs text-gray-500 font-mono">{task.task_id.slice(0, 8)}</div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <span className="px-2 py-1 bg-gray-100 rounded text-xs">{typeConfig.label}</span>
+                  </td>
+                  <td className="py-4 px-4 text-sm text-gray-600">{task.initiator_name}</td>
+                  <td className="py-4 px-4 text-sm text-gray-600">{task.node_name}</td>
+                  <td className="py-4 px-4">{getPriorityBadge(task.priority)}</td>
+                  <td className="py-4 px-4 text-sm text-gray-600">{formatDate(task.created_at)}</td>
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="查看流程"
+                      >
+                        <GitBranch className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
+                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        审批
+                      </button>
+                      {Object.entries(formData).filter(([k, v]) => v && !k.startsWith('_')).length > 0 && (
+                        <button
+                          onClick={() => toggleExpand(task.id)}
+                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                          title={isExpanded ? '收起' : '展开'}
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                      )}
                     </div>
-                  </div>
-                </td>
-                <td className="py-4 px-4">
-                  <span className="px-2 py-1 bg-gray-100 rounded text-xs">{typeConfig.label}</span>
-                </td>
-                <td className="py-4 px-4 text-sm text-gray-600">{task.initiator_name}</td>
-                <td className="py-4 px-4 text-sm text-gray-600">{task.node_name}</td>
-                <td className="py-4 px-4">{getPriorityBadge(task.priority)}</td>
-                <td className="py-4 px-4 text-sm text-gray-600">{formatDate(task.created_at)}</td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                      title="查看流程"
-                    >
-                      <GitBranch className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => navigate(`/workflow/detail/${task.process_id}`)}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-1"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      审批
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+                {isExpanded && summary.length > 0 && (
+                  <tr className="bg-gray-50">
+                    <td colSpan={7} className="py-4 px-4">
+                      <div className="text-xs text-gray-500 mb-2">申请内容</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {summary.map(([key, value]) => {
+                          const label = getFieldLabel(task.process_type, key)
+                          let displayValue = value
+                          
+                          if (key === 'department_id' && task.dept_map?.[value]) {
+                            displayValue = task.dept_map[value]
+                          }
+                          if (key === 'position_id' && task.pos_map?.[value]) {
+                            displayValue = task.pos_map[value]
+                          }
+                          
+                          return (
+                            <div key={key} className="flex justify-between text-xs">
+                              <span className="text-gray-500">{label}:</span>
+                              <span className="text-gray-900 font-medium truncate ml-2">{String(displayValue)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             )
           })}
         </tbody>

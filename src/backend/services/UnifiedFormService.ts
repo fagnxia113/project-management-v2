@@ -5,6 +5,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { formDependencyProcessor } from './FormDependencyProcessor.js';
 
 // 业务模块类型
 export type BusinessModule = 'project' | 'equipment' | 'personnel' | 'task' | 'purchase' | 'customer' | 'warehouse';
@@ -2205,30 +2206,59 @@ export class UnifiedFormService {
    * 检查字段是否可见
    */
   private isFieldVisible(field: UnifiedFormField, data: Record<string, any>): boolean {
-    if (!field.dependencies || field.dependencies.length === 0) {
-      return true;
+    return formDependencyProcessor.isFieldVisible(
+      field.name,
+      field.dependencies,
+      data
+    );
+  }
+
+  /**
+   * 获取字段的评估顺序
+   */
+  getFieldsByEvaluationOrder(
+    templateId: string,
+    data: Record<string, any>
+  ): Array<{ field: UnifiedFormField; visible: boolean }> {
+    const template = this.templates.get(templateId);
+    if (!template) {
+      return [];
     }
 
-    return field.dependencies.every(dep => {
-      const fieldValue = data[dep.field];
-      
-      switch (dep.operator) {
-        case 'equals':
-          return fieldValue === dep.value;
-        case 'notEquals':
-          return fieldValue !== dep.value;
-        case 'greaterThan':
-          return fieldValue > dep.value;
-        case 'lessThan':
-          return fieldValue < dep.value;
-        case 'contains':
-          return Array.isArray(fieldValue) ? fieldValue.includes(dep.value) : String(fieldValue).includes(String(dep.value));
-        case 'notContains':
-          return Array.isArray(fieldValue) ? !fieldValue.includes(dep.value) : !String(fieldValue).includes(String(dep.value));
-        default:
-          return true;
-      }
-    });
+    return formDependencyProcessor.getFieldsByEvaluationOrder(
+      template.fields,
+      data
+    ).map(item => ({
+      field: item.field,
+      visible: item.visible
+    })).filter(item => item.field !== null);
+  }
+
+  /**
+   * 验证字段依赖关系
+   */
+  validateDependencies(templateId: string): { valid: boolean; errors: string[] } {
+    const template = this.templates.get(templateId);
+    if (!template) {
+      return {
+        valid: false,
+        errors: ['表单模板不存在']
+      };
+    }
+
+    return formDependencyProcessor.validateDependencies(template.fields);
+  }
+
+  /**
+   * 获取受影响的字段
+   */
+  getAffectedFields(templateId: string, changedField: string): string[] {
+    const template = this.templates.get(templateId);
+    if (!template) {
+      return [];
+    }
+
+    return formDependencyProcessor.getAffectedFields(changedField);
   }
 
   /**

@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import LoginPage from './pages/auth/LoginPage'
+import { useUser } from './contexts/UserContext'
 import { API_URL } from './config/api'
 
 // 页面组件懒加载
@@ -34,7 +35,10 @@ const WarehouseListPage = lazy(() => import('./pages/warehouses/WarehouseListPag
 const WarehouseDetailPage = lazy(() => import('./pages/warehouses/WarehouseDetailPage'))
 const ApprovalPendingPage = lazy(() => import('./pages/approvals/ApprovalPendingPageNew'))
 const ApprovalMinePage = lazy(() => import('./pages/approvals/ApprovalMinePageNew'))
+const ApprovalCompletedPage = lazy(() => import('./pages/approvals/ApprovalCompletedPage'))
+const ApprovalDraftPage = lazy(() => import('./pages/approvals/ApprovalDraftPage'))
 const NewProcessPage = lazy(() => import('./pages/approvals/NewProcessPage'))
+const WorkflowFormPage = lazy(() => import('./pages/approvals/WorkflowFormPage'))
 const DailyReportDashboard = lazy(() => import('./pages/reports/DailyReportDashboard'))
 const MetadataConfigPage = lazy(() => import('./pages/settings/MetadataConfigPage'))
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage'))
@@ -91,29 +95,27 @@ const HomeRedirect = () => {
 }
 
 function App() {
+  const { user, loading } = useUser()
   const [status, setStatus] = useState<'loading' | 'connected' | 'error'>('loading')
-  const [isAuthChecking, setIsAuthChecking] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    setIsAuthenticated(!!token)
-    setIsAuthChecking(false)
-
     fetch(API_URL.HEALTH)
       .then(res => res.json())
       .then(() => setStatus('connected'))
       .catch(() => setStatus('error'))
   }, [])
 
-  if (isAuthChecking) {
+  // 如果还在加载中，显示加载页面
+  if (loading) {
     return <LoadingFallback />
   }
 
-  if (!isAuthenticated) {
+  // 如果没有用户信息，显示登录页面
+  if (!user) {
     return <LoginPage />
   }
 
+  // 用户已登录，显示主应用
   return (
     <Layout>
       <Suspense fallback={<LoadingFallback />}>
@@ -143,8 +145,11 @@ function App() {
           <Route path="/warehouses" element={<WarehouseListPage />} />
           <Route path="/warehouses/:id" element={<WarehouseDetailPage />} />
           <Route path="/approvals/pending" element={<ApprovalPendingPage />} />
+          <Route path="/approvals/completed" element={<ApprovalCompletedPage />} />
           <Route path="/approvals/mine" element={<ApprovalMinePage />} />
+          <Route path="/approvals/draft" element={<ApprovalDraftPage />} />
           <Route path="/approvals/new" element={<NewProcessPage />} />
+          <Route path="/approvals/workflow/:definitionKey" element={<WorkflowFormPage />} />
           <Route path="/workflow/definitions" element={<WorkflowDefinitionListPage />} />
           <Route path="/workflow/designer/new" element={<WorkflowDesignerNewPage />} />
           <Route path="/workflow/designer/:id" element={<WorkflowDesignerNewPage />} />

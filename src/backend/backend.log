@@ -1,0 +1,37 @@
+✅ 元数据加载成功
+   - 实体数量: 26
+   - 枚举数量: 45
+❌ 数据库连接失败: Error: Access denied for user 'root'@'localhost' (using password: NO)
+    at Packet.asError (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/packets/packet.js:739:17)
+    at ClientHandshake.execute (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/commands/command.js:29:26)
+    at PoolConnection.handlePacket (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/base/connection.js:508:34)
+    at PacketParser.onPacket (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/base/connection.js:93:12)
+    at PacketParser.executeStart (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/packet_parser.js:75:16)
+    at Socket.<anonymous> (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/base/connection.js:100:25)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000',
+  sqlMessage: "Access denied for user 'root'@'localhost' (using password: NO)",
+  sql: undefined
+}
+启动服务器失败: Error: Access denied for user 'root'@'localhost' (using password: NO)
+    at Packet.asError (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/packets/packet.js:739:17)
+    at ClientHandshake.execute (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/commands/command.js:29:26)
+    at PoolConnection.handlePacket (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/base/connection.js:508:34)
+    at PacketParser.onPacket (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/base/connection.js:93:12)
+    at PacketParser.executeStart (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/packet_parser.js:75:16)
+    at Socket.<anonymous> (/home/devbox/project/project-management-v2/node_modules/mysql2/lib/base/connection.js:100:25)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5) {
+  code: 'ER_ACCESS_DENIED_ERROR',
+  errno: 1045,
+  sqlState: '28000',
+  sqlMessage: "Access denied for user 'root'@'localhost' (using password: NO)",
+  sql: undefined
+}

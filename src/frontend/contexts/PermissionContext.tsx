@@ -38,19 +38,29 @@ export const PermissionProvider: React.FC<{ children: ReactNode }> = ({ children
       ])
 
       if (permRes.ok) {
-        const data = await permRes.json()
-        setPermissions(data.data || [])
+        const text = await permRes.text()
+        if (text) {
+          const data = JSON.parse(text)
+          setPermissions(data.data || [])
+        }
       }
 
       if (menuRes.ok) {
-        const data = await menuRes.json()
-        setMenus(data.data || [])
+        const text = await menuRes.text()
+        if (text) {
+          const data = JSON.parse(text)
+          setMenus(data.data || [])
+        }
       }
 
       const userStr = localStorage.getItem('user')
-      if (userStr) {
-        const user = JSON.parse(userStr)
-        setRole(user.role || 'user')
+      if (userStr && userStr !== 'undefined') {
+        try {
+          const user = JSON.parse(userStr)
+          setRole(user.role || 'user')
+        } catch (e) {
+          console.warn('解析用户信息失败', e)
+        }
       }
     } catch (error) {
       console.error('加载权限失败:', error)

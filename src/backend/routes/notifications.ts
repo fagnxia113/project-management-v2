@@ -4,19 +4,19 @@ import { progressAlertService } from '../services/ProgressAlertService.js';
 import { dailyReportReminderService } from '../services/DailyReportReminderService.js';
 import { schedulerService } from '../services/SchedulerService.js';
 import { purchaseReminderService } from '../services/PurchaseReminderService.js';
+import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
+router.use(authenticate);
+
 router.get('/notifications', async (req: Request, res: Response) => {
   try {
-    const { user_id, is_read, type, limit } = req.query;
-    
-    if (!user_id) {
-      return res.status(400).json({ error: '缺少用户ID' });
-    }
+    const { is_read, type, limit } = req.query;
+    const userId = req.user!.userId;
     
     const notifications = await notificationService.getUserNotifications(
-      user_id as string,
+      userId,
       {
         is_read: is_read === 'true' ? true : is_read === 'false' ? false : undefined,
         type: type as any,
@@ -32,13 +32,9 @@ router.get('/notifications', async (req: Request, res: Response) => {
 
 router.get('/notifications/unread-count', async (req: Request, res: Response) => {
   try {
-    const { user_id } = req.query;
+    const userId = req.user!.userId;
     
-    if (!user_id) {
-      return res.status(400).json({ error: '缺少用户ID' });
-    }
-    
-    const count = await notificationService.getUnreadCount(user_id as string);
+    const count = await notificationService.getUnreadCount(userId);
     
     res.json({ success: true, data: { count } });
   } catch (error: any) {

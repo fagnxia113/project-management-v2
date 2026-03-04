@@ -64,7 +64,7 @@ export default function WorkflowDefinitionListPage() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL.BASE}/api/workflow/definitions`, {
+      const response = await fetch(`${API_URL.BASE}/api/workflow/definitions?pageSize=100`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -342,6 +342,8 @@ export default function WorkflowDefinitionListPage() {
             <p className="mt-1">
               • 只有状态为"已激活"的流程才能被用户发起<br/>
               • 修改流程定义后需要重新激活才能生效<br/>
+              • 删除流程定义会先将其归档（状态变为"已归档"）<br/>
+              • 已归档的流程定义再次点击删除会真正从数据库中删除<br/>
               • 已归档的流程无法恢复，请谨慎操作
             </p>
           </div>

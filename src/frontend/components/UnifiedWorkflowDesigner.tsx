@@ -405,7 +405,8 @@ const UnifiedWorkflowDesigner: React.FC<UnifiedWorkflowDesignerProps> = ({
           label: '审批节点',
           approvalConfig: {
             approvalMode: 'or_sign',
-            approverSource: { type: 'role', value: '' }
+            approverSource: { type: 'role', value: '' },
+            skipCondition: 'no_approvers'
           }
         }
       case 'serviceTask':
@@ -433,7 +434,6 @@ const UnifiedWorkflowDesigner: React.FC<UnifiedWorkflowDesignerProps> = ({
       setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id))
       setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id))
       setSelectedNode(null)
-      setShowConfig(false)
     }
   }, [selectedNode, setNodes, setEdges])
 

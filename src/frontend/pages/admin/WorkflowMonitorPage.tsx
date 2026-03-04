@@ -91,6 +91,11 @@ interface RealtimeMonitoring {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const WorkflowMonitorPage: React.FC = () => {
   // 状态
   const [instances, setInstances] = useState<ProcessInstance[]>([]);
@@ -116,7 +121,9 @@ const WorkflowMonitorPage: React.FC = () => {
       setLoading(true);
       
       // 获取实时监控数据
-      const realtimeRes = await fetch('/api/workflow/v2/admin/realtime-monitoring');
+      const realtimeRes = await fetch('/api/workflow/v2/admin/realtime-monitoring', {
+        headers: getAuthHeaders()
+      });
       if (realtimeRes.ok) {
         const realtimeResult = await realtimeRes.json();
         if (realtimeResult.success) {
@@ -125,7 +132,9 @@ const WorkflowMonitorPage: React.FC = () => {
       }
 
       // 获取统计
-      const statsRes = await fetch('/api/workflow/v2/admin/statistics');
+      const statsRes = await fetch('/api/workflow/v2/admin/statistics', {
+        headers: getAuthHeaders()
+      });
       if (statsRes.ok) {
         const statsResult = await statsRes.json();
         if (statsResult.success) {
@@ -134,7 +143,9 @@ const WorkflowMonitorPage: React.FC = () => {
       }
 
       // 获取实例列表
-      const instancesRes = await fetch(`/api/workflow/v2/admin/instances?${filterStatus ? `status=${filterStatus}&` : ''}pageSize=50`);
+      const instancesRes = await fetch(`/api/workflow/v2/admin/instances?${filterStatus ? `status=${filterStatus}&` : ''}pageSize=50`, {
+        headers: getAuthHeaders()
+      });
       if (instancesRes.ok) {
         const instancesResult = await instancesRes.json();
         if (instancesResult.success) {
@@ -152,9 +163,15 @@ const WorkflowMonitorPage: React.FC = () => {
   const fetchInstanceDetail = async (instanceId: string) => {
     try {
       const [instanceRes, tasksRes, historyRes] = await Promise.all([
-        fetch(`/api/workflow/v2/process/instance/${instanceId}`),
-        fetch(`/api/workflow/v2/process/instance/${instanceId}/tasks`),
-        fetch(`/api/workflow/v2/process/instance/${instanceId}/history`)
+        fetch(`/api/workflow/v2/process/instance/${instanceId}`, {
+          headers: getAuthHeaders()
+        }),
+        fetch(`/api/workflow/v2/process/instance/${instanceId}/tasks`, {
+          headers: getAuthHeaders()
+        }),
+        fetch(`/api/workflow/v2/process/instance/${instanceId}/history`, {
+          headers: getAuthHeaders()
+        })
       ]);
 
       if (instanceRes.ok) {
@@ -200,7 +217,10 @@ const WorkflowMonitorPage: React.FC = () => {
           }
           response = await fetch(`/api/workflow/v2/admin/instance/${selectedInstance.id}/jump`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
             body: JSON.stringify({ targetNodeId, operator, reason: interventionReason })
           });
           break;
@@ -208,7 +228,10 @@ const WorkflowMonitorPage: React.FC = () => {
         case 'rollback':
           response = await fetch(`/api/workflow/v2/admin/instance/${selectedInstance.id}/rollback`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
             body: JSON.stringify({ operator, reason: interventionReason })
           });
           break;
@@ -224,7 +247,10 @@ const WorkflowMonitorPage: React.FC = () => {
           }
           response = await fetch(`/api/workflow/v2/admin/task/${selectedTask.id}/force-complete`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
             body: JSON.stringify({ 
               result: forceResult ? 'approved' : 'rejected', 
               operator, 
@@ -237,7 +263,10 @@ const WorkflowMonitorPage: React.FC = () => {
           if (!confirm('确定要强制关闭此流程吗？')) return;
           response = await fetch(`/api/workflow/v2/admin/instance/${selectedInstance.id}/force-close`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
             body: JSON.stringify({ operator, reason: interventionReason })
           });
           break;
@@ -249,7 +278,10 @@ const WorkflowMonitorPage: React.FC = () => {
           }
           response = await fetch(`/api/workflow/v2/admin/task/${selectedTask.id}/reassign`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
             body: JSON.stringify({ newAssignee, operator, reason: interventionReason })
           });
           break;

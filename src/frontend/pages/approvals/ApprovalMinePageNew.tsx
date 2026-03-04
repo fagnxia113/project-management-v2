@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config/api'
+import { API_URL, parseJWTToken } from '../../config/api'
 import {
   LayoutGrid,
   List,
@@ -205,9 +205,8 @@ export default function ApprovalMinePageNew() {
       let userId = 'current-user'
       if (token) {
         try {
-          const base64Payload = token.split('.')[1]
-          if (base64Payload) {
-            const payload = JSON.parse(atob(base64Payload))
+          const payload = parseJWTToken(token)
+          if (payload) {
             userId = payload.userId || payload.id || 'current-user'
           }
         } catch (e) {
