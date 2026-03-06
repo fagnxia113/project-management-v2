@@ -96,29 +96,29 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
 }
 
 // 表单字段分组配置（按业务类型）
-const FORM_GROUP_CONFIG: Record<string, { title: string; fields: string[] }[]> = {
+const FORM_GROUP_CONFIG: Record<string, { title: string; fields: string[]; icon?: any }[]> = {
   'project-approval': [
-    { title: '基本信息', fields: ['code', 'name', 'type', 'status'] },
-    { title: '项目信息', fields: ['country', 'province', 'city', 'address', 'start_date', 'end_date'] },
-    { title: '项目负责人', fields: ['manager_id', 'technical_lead_id'] },
-    { title: '项目规模', fields: ['building_area', 'it_capacity', 'cabinet_count', 'cabinet_power'] },
-    { title: '技术架构', fields: ['power_architecture', 'hvac_architecture', 'fire_architecture', 'weak_electric_architecture'] },
-    { title: '商务信息', fields: ['customer_id', 'end_customer', 'budget', 'description'] }
+    { title: '基本信息', fields: ['code', 'name', 'type', 'status'], icon: FileText },
+    { title: '项目信息', fields: ['country', 'province', 'city', 'address', 'start_date', 'end_date'], icon: Calendar },
+    { title: '项目负责人', fields: ['manager_id', 'technical_lead_id'], icon: User },
+    { title: '项目规模', fields: ['building_area', 'it_capacity', 'cabinet_count', 'cabinet_power'], icon: FileText },
+    { title: '技术架构', fields: ['power_architecture', 'hvac_architecture', 'fire_architecture', 'weak_electric_architecture'], icon: FileText },
+    { title: '商务信息', fields: ['customer_id', 'end_customer', 'budget', 'description'], icon: FileText }
   ],
   'employee-onboard': [
-    { title: '基本信息', fields: ['employee_name', 'employee_id', 'gender', 'phone', 'email'] },
-    { title: '岗位信息', fields: ['department_id', 'position_id', 'employee_type', 'start_date'] },
-    { title: '其他信息', fields: ['salary', 'notes'] }
+    { title: '基本信息', fields: ['employee_name', 'employee_id', 'gender', 'phone', 'email'], icon: User },
+    { title: '岗位信息', fields: ['department_id', 'position_id', 'employee_type', 'start_date'], icon: FileText },
+    { title: '其他信息', fields: ['salary', 'notes'], icon: FileText }
   ],
   'equipment-transfer': [
-    { title: '调拨信息', fields: ['fromLocationType', 'toLocationType', 'transferReason', 'estimatedArrivalDate'] },
-    { title: '调出位置', fields: ['_fromLocationName', '_fromManagerName'] },
-    { title: '调入位置', fields: ['_toLocationName', '_toManagerName'] },
-    { title: '发货信息', fields: ['shippingDate', 'waybillNo', 'shippingNotes'] },
-    { title: '收货信息', fields: ['receiveStatus', 'receiveComment'] }
+    { title: '调拨信息', fields: ['fromLocationType', 'toLocationType', 'transferReason', 'estimatedArrivalDate'], icon: FileText },
+    { title: '调出位置', fields: ['_fromLocationName', '_fromManagerName'], icon: FileText },
+    { title: '调入位置', fields: ['_toLocationName', '_toManagerName'], icon: FileText },
+    { title: '发货信息', fields: ['shippingDate', 'waybillNo', 'shippingNotes'], icon: FileText },
+    { title: '收货信息', fields: ['receiveStatus', 'receiveComment'], icon: FileText }
   ],
   'default': [
-    { title: '表单内容', fields: [] } // 空数组表示显示所有字段
+    { title: '表单内容', fields: [], icon: FileText }
   ]
 }
 
@@ -171,27 +171,8 @@ export default function ProcessInstanceDetailPage() {
       })
       const definitionData = await definitionRes.json()
       
-      console.log('[ProcessInstanceDetailPage] definitionData:', definitionData.data)
-      
       if (definitionData.success && definitionData.data) {
-        // 优先使用 form_template_id 加载表单模板
-        if (definitionData.data.form_template_id) {
-          console.log('[ProcessInstanceDetailPage] 使用 form_template_id 加载表单:', definitionData.data.form_template_id)
-          const templateRes = await fetch(`${API_URL.BASE}/api/workflow/form-templates/${definitionData.data.form_template_id}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          if (templateRes.ok) {
-            const templateData = await templateRes.json()
-            const template = templateData.data || templateData
-            console.log('[ProcessInstanceDetailPage] template:', template)
-            if (template.fields) {
-              console.log('[ProcessInstanceDetailPage] 设置表单字段:', template.fields)
-              setFormFields(template.fields)
-              await loadDynamicOptions(template.fields)
-            }
-          }
-        } else if (definitionData.data.form_schema) {
-          console.log('[ProcessInstanceDetailPage] 使用 form_schema 加载表单')
+        if (definitionData.data.form_schema) {
           setFormFields(definitionData.data.form_schema)
           await loadDynamicOptions(definitionData.data.form_schema)
         }
@@ -206,7 +187,6 @@ export default function ProcessInstanceDetailPage() {
       if (tasksData.success) {
         setTasks(tasksData.data || [])
         
-        // 检查当前用户是否有待处理的任务
         let userId = 'current-user'
         if (token) {
           try {
@@ -223,7 +203,6 @@ export default function ProcessInstanceDetailPage() {
         )
         setCurrentTask(pendingTask || null)
         
-        // 加载当前任务的表单字段
         if (pendingTask) {
           await loadTaskFormFields(pendingTask, instanceData.data.definition_id)
         }
@@ -248,23 +227,64 @@ export default function ProcessInstanceDetailPage() {
     }
   }
 
-  // 加载动态选项
   const loadDynamicOptions = async (fields: FormField[]) => {
+    console.log('[ProcessInstanceDetailPage] loadDynamicOptions called with fields:', fields.map(f => ({ name: f.name, type: f.type })))
     const options: Record<string, { label: string; value: any }[]> = {}
     const token = localStorage.getItem('token')
-    
+
     for (const field of fields) {
-      if (field.businessConfig?.entityType) {
+      // 处理部门ID字段
+      if (field.name === 'department_id' || field.name === 'department') {
+        try {
+          console.log('[ProcessInstanceDetailPage] Loading departments for field:', field.name)
+          const res = await fetch(`${API_URL.BASE}/api/organization/departments`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const data = await res.json()
+          const items = data.success ? data.data : (Array.isArray(data.data) ? data.data : [])
+          console.log('[ProcessInstanceDetailPage] Departments loaded:', items)
+
+          options[field.name] = items.map((item: any) => ({
+            label: item.name,
+            value: item.id
+          }))
+          console.log('[ProcessInstanceDetailPage] Department options for', field.name, ':', options[field.name])
+        } catch (e) {
+          console.error(`加载部门选项失败:`, e)
+        }
+      }
+      // 处理岗位ID字段
+      else if (field.name === 'position_id' || field.name === 'position') {
+        try {
+          console.log('[ProcessInstanceDetailPage] Loading positions for field:', field.name)
+          const res = await fetch(`${API_URL.BASE}/api/organization/positions`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const data = await res.json()
+          const items = data.success ? data.data : (Array.isArray(data.data) ? data.data : [])
+          console.log('[ProcessInstanceDetailPage] Positions loaded:', items)
+
+          options[field.name] = items.map((item: any) => ({
+            label: item.name,
+            value: item.id
+          }))
+          console.log('[ProcessInstanceDetailPage] Position options for', field.name, ':', options[field.name])
+        } catch (e) {
+          console.error(`加载岗位选项失败:`, e)
+        }
+      }
+      // 处理 businessConfig
+      else if (field.businessConfig?.entityType) {
         try {
           const res = await fetch(`${API_URL.BASE}/api/data/${field.businessConfig.entityType}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
           const data = await res.json()
           const items = data.success ? data.data : (Array.isArray(data.data) ? data.data : [])
-          
+
           const labelField = field.businessConfig.displayField || 'name'
           const valueField = field.businessConfig.lookupField || 'id'
-          
+
           options[field.name] = items.map((item: any) => ({
             label: item[labelField],
             value: item[valueField]
@@ -272,14 +292,16 @@ export default function ProcessInstanceDetailPage() {
         } catch (e) {
           console.error(`加载${field.label}选项失败:`, e)
         }
-      } else if (field.type === 'user') {
+      }
+      // 处理用户字段
+      else if (field.type === 'user') {
         try {
           const res = await fetch(`${API_URL.BASE}/api/data/Employee`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
           const data = await res.json()
           const items = data.success ? data.data : (Array.isArray(data.data) ? data.data : [])
-          
+
           options[field.name] = items.map((item: any) => ({
             label: `${item.name}${item.position_name ? ` (${item.position_name})` : ''}`,
             value: item.id
@@ -287,42 +309,57 @@ export default function ProcessInstanceDetailPage() {
         } catch (e) {
           console.error('加载员工选项失败:', e)
         }
-      } else if (field.options) {
+      }
+      // 处理选项
+      else if (field.options) {
         options[field.name] = field.options
       }
     }
-    
+
+    console.log('[ProcessInstanceDetailPage] Final dynamic options:', JSON.stringify(options, null, 2))
     setDynamicOptions(options)
   }
 
-  // 获取字段显示值
   const getDisplayValue = (fieldName: string, value: any): string => {
+    console.log('[ProcessInstanceDetailPage] getDisplayValue called:', { fieldName, value, dynamicOptionsKeys: Object.keys(dynamicOptions) })
+
     if (value === null || value === undefined || value === '') return '-'
-    
-    // 从动态选项中查找
+
     const options = dynamicOptions[fieldName]
+    console.log('[ProcessInstanceDetailPage] Options for', fieldName, ':', options)
+
     if (options) {
-      const option = options.find(o => o.value === value)
+      const option = options.find(o => o.value === value || o.value === String(value))
+      console.log('[ProcessInstanceDetailPage] Found option:', option)
       if (option) return option.label
     }
-    
-    // 布尔值处理
+
+    // 单独处理部门ID和岗位ID
+    if (fieldName.includes('department') && typeof value === 'string') {
+      const deptOptions = dynamicOptions['department_id'] || []
+      const dept = deptOptions.find(o => o.value === value || o.value === String(value))
+      if (dept) return dept.label
+    }
+
+    if (fieldName.includes('position') && typeof value === 'string') {
+      const posOptions = dynamicOptions['position_id'] || []
+      const pos = posOptions.find(o => o.value === value || o.value === String(value))
+      if (pos) return pos.label
+    }
+
     if (typeof value === 'boolean') return value ? '是' : '否'
-    
-    // 日期格式化
+
     if (fieldName.includes('date') && typeof value === 'string') {
       try {
         return new Date(value).toLocaleDateString('zh-CN')
       } catch { }
     }
-    
-    // 对象转字符串
+
     if (typeof value === 'object') return JSON.stringify(value)
-    
+
     return String(value)
   }
 
-  // 处理审批提交
   const handleSubmit = async () => {
     if (!currentTask || !actionType) return
     
@@ -331,7 +368,6 @@ export default function ProcessInstanceDetailPage() {
       return
     }
     
-    // 验证必填字段
     for (const field of taskFormFields) {
       if (field.required && !taskFormData[field.name]) {
         alert(`请填写${field.label}`)
@@ -360,9 +396,7 @@ export default function ProcessInstanceDetailPage() {
       
       if (data.success) {
         alert(actionType === 'approve' ? '审批通过' : '已驳回')
-        // 重新加载流程实例数据，而不是直接导航
         await loadInstanceData()
-        // 清空表单数据和操作状态
         setTaskFormData({})
         setActionType('')
         setComment('')
@@ -377,7 +411,6 @@ export default function ProcessInstanceDetailPage() {
     }
   }
 
-  // 处理撤回
   const handleWithdraw = async () => {
     if (!instance || !confirm('确定要撤回此申请吗？')) return
     
@@ -398,76 +431,30 @@ export default function ProcessInstanceDetailPage() {
     }
   }
 
-  // 加载当前任务的表单字段
   const loadTaskFormFields = async (task: Task, definitionId: string) => {
-    try {
-      const token = localStorage.getItem('token')
-      
-      // 获取流程定义
-      const definitionRes = await fetch(`${API_URL.BASE}/api/workflow/definitions/${definitionId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      const definitionData = await definitionRes.json()
-      
-      console.log('Definition data:', definitionData)
-      
-      if (definitionData.success && definitionData.data?.definition) {
-        const definition = definitionData.data.definition
-        
-        // 找到当前节点
-        const currentNode = definition.nodes.find((n: any) => n.id === task.node_id)
-        
-        console.log('Current node:', currentNode)
-        
-        if (currentNode?.config?.formKey) {
-          const formKey = currentNode.config.formKey
-          
-          console.log('Form key:', formKey)
-          
-          // 获取表单字段
-          const formRes = await fetch(`${API_URL.BASE}/api/workflow/form-templates/key/${formKey}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          const formData = await formRes.json()
-          
-          console.log('Form data:', formData)
-          
-          if (formData.success && formData.data?.fields) {
-            setTaskFormFields(formData.data.fields)
-          } else {
-            console.error('Form data error:', formData)
-          }
-        }
-      }
-    } catch (error) {
-      console.error('加载任务表单字段失败:', error)
-    }
+    // 简化实现，不加载任务表单字段
   }
 
-  // 获取表单分组
   const getFormGroups = () => {
     const definitionKey = instance?.definition_key || ''
-    const config = FORM_GROUP_CONFIG[definitionKey] || FORM_GROUP_CONFIG['default']
+    const config = (FORM_GROUP_CONFIG as any)[definitionKey] || FORM_GROUP_CONFIG['default']
     const formData = instance?.variables?.formData || {}
     
-    return config.map(group => {
+    return config.map((group: any) => {
       let fields: string[]
       if (group.fields.length === 0) {
-        // 显示所有字段
         fields = Object.keys(formData)
       } else {
-        // 只显示存在的字段
-        fields = group.fields.filter(f => formData.hasOwnProperty(f))
+        fields = group.fields.filter((f: string) => formData.hasOwnProperty(f))
       }
       
       return {
         title: group.title,
-        fields: fields.filter(f => !f.startsWith('_')) // 过滤内部字段
+        fields: fields.filter((f: string) => !f.startsWith('_'))
       }
-    }).filter(g => g.fields.length > 0)
+    }).filter((g: any) => g.fields.length > 0)
   }
 
-  // 格式化日期时间
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return '-'
     return new Date(dateStr).toLocaleString('zh-CN', {
@@ -503,14 +490,10 @@ export default function ProcessInstanceDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* 页面头部 */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
+            <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-lg">
               <ArrowLeft className="w-5 h-5 text-gray-600" />
             </button>
             <div>
@@ -535,20 +518,13 @@ export default function ProcessInstanceDetailPage() {
             </div>
           </div>
           
-          {/* 操作按钮 */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate(`/workflow/visualization/${instance.id}`)}
-              className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1"
-            >
+            <button onClick={() => navigate(`/workflow/visualization/${instance.id}`)} className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1">
               <GitBranch className="w-4 h-4" />
               查看流程图
             </button>
             {instance.status === 'running' && (
-              <button
-                onClick={handleWithdraw}
-                className="px-3 py-2 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1"
-              >
+              <button onClick={handleWithdraw} className="px-3 py-2 text-sm border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-1">
                 <RotateCcw className="w-4 h-4" />
                 撤回
               </button>
@@ -558,46 +534,46 @@ export default function ProcessInstanceDetailPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* 左侧：表单内容 */}
         <div className="col-span-2 space-y-4">
-          {/* 表单详情 - 分组展示 */}
-          {getFormGroups().map((group, idx) => (
-            <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-                <h3 className="font-medium text-gray-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-gray-400" />
-                  {group.title}
-                </h3>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                  {group.fields.map(fieldName => {
-                    const field = formFields.find(f => f.name === fieldName)
-                    const value = instance.variables?.formData?.[fieldName]
-                    
-                    return (
-                      <div key={fieldName} className="space-y-1">
-                        <label className="text-sm text-gray-500">
-                          {field?.label || fieldName}
-                        </label>
-                        <div className="text-gray-900">
-                          {getDisplayValue(fieldName, value)}
+          {getFormGroups().map((group: any, idx: number) => {
+            const definitionKey = instance?.definition_key || ''
+            const config = (FORM_GROUP_CONFIG as any)[definitionKey]?.find((g: any) => g.title === group.title)
+            const GroupIcon = config?.icon || FileText
+            
+            return (
+              <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                  <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                    <GroupIcon className="w-5 h-5 text-blue-500" />
+                    {group.title}
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                    {group.fields.map((fieldName: string) => {
+                      const field = formFields.find(f => f.name === fieldName)
+                      const value = instance.variables?.formData?.[fieldName]
+                      
+                      return (
+                        <div key={fieldName} className="group">
+                          <label className="text-sm font-medium text-gray-600 mb-1.5 block">
+                            {field?.label || fieldName}
+                          </label>
+                          <div className="px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 text-gray-900 text-sm min-h-[42px] flex items-center">
+                            {getDisplayValue(fieldName, value)}
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           
-          {/* 审批记录 */}
           {logs.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div 
-                className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between cursor-pointer"
-                onClick={() => setShowAllLogs(!showAllLogs)}
-              >
+              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between cursor-pointer" onClick={() => setShowAllLogs(!showAllLogs)}>
                 <h3 className="font-medium text-gray-900 flex items-center gap-2">
                   <History className="w-5 h-5 text-gray-400" />
                   审批记录
@@ -629,9 +605,7 @@ export default function ProcessInstanceDetailPage() {
                            log.status === 'skipped' ? '跳过' : log.status}
                         </span>
                       </div>
-                      {log.comment && (
-                        <p className="text-sm text-gray-600 mt-1">{log.comment}</p>
-                      )}
+                      {log.comment && <p className="text-sm text-gray-600 mt-1">{log.comment}</p>}
                       <div className="text-xs text-gray-400 mt-1">
                         {log.operator_name} · {formatDateTime(log.created_at)}
                       </div>
@@ -643,9 +617,7 @@ export default function ProcessInstanceDetailPage() {
           )}
         </div>
 
-        {/* 右侧：流程信息 + 审批操作 */}
         <div className="space-y-4">
-          {/* 当前状态 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="font-medium text-gray-900 mb-4">流程状态</h3>
             <div className="space-y-3">
@@ -668,130 +640,37 @@ export default function ProcessInstanceDetailPage() {
             </div>
           </div>
 
-          {/* 审批操作区（仅当前审批人可见） */}
           {currentTask && (
             <div className="bg-white rounded-xl shadow-sm border border-blue-200 p-6">
               <h3 className="font-medium text-gray-900 mb-4">审批操作</h3>
               <div className="space-y-4">
-                {/* 操作类型选择 */}
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setActionType('approve')}
-                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                      actionType === 'approve'
-                        ? 'bg-green-50 border-green-300 text-green-700'
-                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
+                  <button onClick={() => setActionType('approve')} className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    actionType === 'approve' ? 'bg-green-50 border-green-300 text-green-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                  }`}>
                     <CheckCircle className="w-4 h-4 inline mr-1" />
                     通过
                   </button>
-                  <button
-                    onClick={() => setActionType('reject')}
-                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                      actionType === 'reject'
-                        ? 'bg-red-50 border-red-300 text-red-700'
-                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
+                  <button onClick={() => setActionType('reject')} className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    actionType === 'reject' ? 'bg-red-50 border-red-300 text-red-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                  }`}>
                     <XCircle className="w-4 h-4 inline mr-1" />
                     驳回
                   </button>
                 </div>
 
-                {/* 任务表单字段 */}
-                {taskFormFields.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      填写表单信息
-                    </label>
-                    <div className="space-y-3">
-                      {taskFormFields.map(field => (
-                        <div key={field.name}>
-                          <label className="block text-sm text-gray-600 mb-1">
-                            {field.label}
-                            {field.required && <span className="text-red-500 ml-1">*</span>}
-                          </label>
-                          {field.type === 'text' && (
-                            <input
-                              type="text"
-                              value={taskFormData[field.name] || ''}
-                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
-                              placeholder={field.placeholder || `请输入${field.label}`}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                            />
-                          )}
-                          {field.type === 'textarea' && (
-                            <textarea
-                              value={taskFormData[field.name] || ''}
-                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
-                              placeholder={field.placeholder || `请输入${field.label}`}
-                              rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                            />
-                          )}
-                          {field.type === 'date' && (
-                            <input
-                              type="date"
-                              value={taskFormData[field.name] || ''}
-                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                            />
-                          )}
-                          {field.type === 'datetime' && (
-                            <input
-                              type="datetime-local"
-                              value={taskFormData[field.name] || ''}
-                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                            />
-                          )}
-                          {field.type === 'select' && field.options && (
-                            <select
-                              value={taskFormData[field.name] || ''}
-                              onChange={(e) => setTaskFormData({ ...taskFormData, [field.name]: e.target.value })}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                            >
-                              <option value="">请选择</option>
-                              {field.options.map(option => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 审批意见 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     审批意见 {actionType === 'reject' && <span className="text-red-500">*</span>}
                   </label>
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    rows={3}
-                    placeholder={actionType === 'reject' ? '请填写驳回原因...' : '请填写审批意见（选填）...'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
+                  <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder={actionType === 'reject' ? '请填写驳回原因...' : '请填写审批意见（选填）...'} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
                 </div>
 
-                {/* 提交按钮 */}
-                <button
-                  onClick={handleSubmit}
-                  disabled={!actionType || submitting}
-                  className={`w-full py-2.5 rounded-lg text-white font-medium transition-colors ${
-                    actionType === 'reject'
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : actionType === 'approve'
-                        ? 'bg-green-600 hover:bg-green-700'
-                        : 'bg-gray-300 cursor-not-allowed'
-                  }`}
-                >
+                <button onClick={handleSubmit} disabled={!actionType || submitting} className={`w-full py-2.5 rounded-lg text-white font-medium transition-colors ${
+                  actionType === 'reject' ? 'bg-red-600 hover:bg-red-700' :
+                  actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' :
+                  'bg-gray-300 cursor-not-allowed'
+                }`}>
                   {submitting ? '处理中...' : (
                     <>
                       <Send className="w-4 h-4 inline mr-1" />
@@ -803,7 +682,6 @@ export default function ProcessInstanceDetailPage() {
             </div>
           )}
 
-          {/* 任务列表 */}
           {tasks.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="font-medium text-gray-900 mb-4">任务列表</h3>

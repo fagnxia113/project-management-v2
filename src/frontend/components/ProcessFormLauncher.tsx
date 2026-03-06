@@ -129,7 +129,9 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
     for (const field of fields) {
       if (field.dynamicOptions && field.dynamicOptionsConfig) {
         try {
-          const response = await fetch(`${API_URL.BASE}${field.dynamicOptionsConfig.source}`, {
+          const url = `${API_URL.BASE}${field.dynamicOptionsConfig.source}`
+
+          const response = await fetch(url, {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -229,6 +231,7 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
     const loadPresetAndFields = async () => {
       try {
         setLoading(true)
+
         const [presetResponse, fieldsResponse, defaultValuesResponse] = await Promise.all([
           fetch(API_URL.WORKFLOW.FORM_PRESET_DETAIL(presetId), {
             headers: {
@@ -264,7 +267,7 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
           throw new Error('加载流程表单预设失败')
         }
       } catch (error) {
-        console.error('加载流程表单预设失败:', error)
+        console.error('[ProcessFormLauncher] 加载流程表单预设失败:', error)
         alert('加载流程表单失败，请重试')
         onCancel?.()
       } finally {
@@ -471,16 +474,18 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
               disabled={field.disabled} readOnly={field.readonly} />
           )}
           {(field.type === 'select' || field.type === 'reference') && (
-            <select id={field.name} name={field.name}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-              defaultValue={field.defaultValue} value={formData[field.name] || ''}
-              onChange={(e) => handleInputChange(field.name, e.target.value)}
-              disabled={field.disabled || field.readonly}>
-              <option value="">{field.placeholder || '请选择'}</option>
-              {(dynamicOptions[field.name] || field.options || []).map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <>
+              <select id={field.name} name={field.name}
+                className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+                defaultValue={field.defaultValue} value={formData[field.name] || ''}
+                onChange={(e) => handleInputChange(field.name, e.target.value)}
+                disabled={field.disabled || field.readonly}>
+                <option value="">{field.placeholder || '请选择'}</option>
+                {(dynamicOptions[field.name] || field.options || []).map((option: any, idx: number) => (
+                  <option key={option.value || idx} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </>
           )}
           {field.type === 'textarea' && (
             <textarea id={field.name} name={field.name} rows={field.rows || 3} cols={field.cols || 50}

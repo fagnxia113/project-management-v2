@@ -5,6 +5,8 @@ import { performanceMonitor } from '../services/PerformanceMonitor.js';
 import { instanceService } from '../services/InstanceService.js';
 import { taskService } from '../services/TaskService.js';
 import { definitionService } from '../services/DefinitionService.js';
+import { projectService } from '../services/ProjectService.js';
+import { inboundOrderService } from '../services/InboundOrderService.js';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
 
 const router = Router();
@@ -28,6 +30,103 @@ router.post('/process/start', async (req, res) => {
       variables,
       initiator
     });
+
+    // 如果是项目审批流程，注册事件监听器
+    if (processKey === 'project-approval') {
+      console.log(`[enhancedWorkflowRoutes] 检测到项目审批流程，注册事件监听器`);
+      const formData = variables?.formData || {};
+      
+      const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
+        if (data.instanceId === instance.id && data.result === 'approved') {
+          try {
+            console.log(`[enhancedWorkflowRoutes] 项目审批通过，开始创建项目`);
+            // 创建项目
+            const project = await projectService.createProject({
+              code: formData.code,
+              name: formData.name,
+              type: formData.type || 'domestic',
+              manager_id: formData.manager_id,
+              status: 'in_progress',
+              start_date: formData.start_date,
+              end_date: formData.end_date,
+              country: formData.country || '中国',
+              address: formData.address,
+              attachments: formData.attachments,
+              description: formData.description,
+              building_area: formData.building_area,
+              it_capacity: formData.it_capacity,
+              cabinet_count: formData.cabinet_count,
+              cabinet_power: formData.cabinet_power,
+              power_architecture: formData.power_architecture,
+              hvac_architecture: formData.hvac_architecture,
+              fire_architecture: formData.fire_architecture,
+              weak_electric_architecture: formData.weak_electric_architecture,
+              customer_id: formData.customer_id,
+              budget: formData.budget || 0,
+              organization_id: formData.organization_id
+            });
+            
+            // 更新流程实例的 businessId
+            await instanceService.updateInstance(instance.id, { business_id: project.id });
+            
+            console.log(`[enhancedWorkflowRoutes] 项目创建成功: ${project.id}`);
+            
+            // 移除事件监听器
+            enhancedWorkflowEngine.off('process.ended', eventHandler);
+          } catch (error) {
+            console.error(`[enhancedWorkflowRoutes] 项目创建失败:`, error);
+            // 即使失败也要移除监听器，避免内存泄漏
+            enhancedWorkflowEngine.off('process.ended', eventHandler);
+          }
+        }
+      };
+      
+      // 注册事件监听器
+      enhancedWorkflowEngine.on('process.ended', eventHandler);
+    }
+
+    // 如果是设备入库流程，注册事件监听器
+    if (processKey === 'equipment-inbound') {
+      console.log(`[enhancedWorkflowRoutes] 检测到设备入库流程，注册事件监听器`);
+      const formData = variables?.formData || {};
+      
+      const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
+        if (data.instanceId === instance.id && data.result === 'approved') {
+          try {
+            console.log(`[enhancedWorkflowRoutes] 设备入库审批通过，开始创建入库单`);
+            // 创建入库单
+            const inboundOrder = await inboundOrderService.createOrder({
+              inbound_type: formData.inbound_type || 'purchase',
+              warehouse_id: formData.warehouse_id,
+              supplier: formData.supplier || '',
+              purchase_date: formData.purchase_date || new Date().toISOString().split('T')[0],
+              notes: formData.notes || '',
+              items: formData.items || []
+            }, initiator.id, initiator.name);
+            
+            // 更新流程实例的 businessId
+            await instanceService.updateInstance(instance.id, { business_id: inboundOrder.id });
+            
+            console.log(`[enhancedWorkflowRoutes] 入库单创建成功: ${inboundOrder.id}`);
+            
+            // 完成入库单，创建设备台账
+            console.log(`[enhancedWorkflowRoutes] 开始完成入库单，创建设备台账`);
+            await inboundOrderService.completeOrder(inboundOrder.id);
+            console.log(`[enhancedWorkflowRoutes] 设备台账创建成功`);
+            
+            // 移除事件监听器
+            enhancedWorkflowEngine.off('process.ended', eventHandler);
+          } catch (error) {
+            console.error(`[enhancedWorkflowRoutes] 入库单创建失败:`, error);
+            // 即使失败也要移除监听器，避免内存泄漏
+            enhancedWorkflowEngine.off('process.ended', eventHandler);
+          }
+        }
+      };
+      
+      // 注册事件监听器
+      enhancedWorkflowEngine.on('process.ended', eventHandler);
+    }
 
     res.json({
       success: true,
@@ -144,6 +243,8 @@ router.post('/task/:taskId/complete', async (req, res) => {
     const { taskId } = req.params;
     const { action, comment, formData, variables, operator } = req.body;
 
+    console.log('完成任务请求参数:', { taskId, action, comment, operator });
+
     await enhancedWorkflowEngine.completeTask(taskId, {
       action,
       comment,
@@ -152,12 +253,15 @@ router.post('/task/:taskId/complete', async (req, res) => {
       operator
     });
 
+    console.log('任务完成成功:', taskId);
+
     res.json({
       success: true,
       message: '任务已完成'
     });
   } catch (error) {
     console.error('完成任务失败:', error);
+    console.error('错误堆栈:', error instanceof Error ? error.stack : 'No stack trace');
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : '完成任务失败'

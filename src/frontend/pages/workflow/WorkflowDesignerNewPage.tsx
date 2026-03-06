@@ -130,18 +130,29 @@ export default function WorkflowDesignerNewPage() {
         name: workflowName,
         category: workflowCategory,
         entity_type: workflowCategory,
-        nodes: workflowData.nodes.map(node => ({
-          id: node.id,
-          type: typeMap[node.type] || node.type,
-          name: node.name,
-          position: node.position,
-          config: node.approvalConfig || node.gatewayConfig || node.serviceConfig,
-          formKey: node.formKey
-        })),
+        nodes: workflowData.nodes.map(node => {
+          const transformedNode: any = {
+            id: node.id,
+            type: typeMap[node.type] || node.type,
+            name: node.name,
+            position: node.position
+          };
+          
+          // 将 approvalConfig、gatewayConfig、serviceConfig、formKey 放入 config 对象
+          if (node.approvalConfig || node.gatewayConfig || node.serviceConfig || node.formKey) {
+            transformedNode.config = {
+              ...(node.approvalConfig && { approvalConfig: node.approvalConfig }),
+              ...(node.gatewayConfig && { gatewayConfig: node.gatewayConfig }),
+              ...(node.serviceConfig && { serviceConfig: node.serviceConfig }),
+              ...(node.formKey && { formKey: node.formKey })
+            };
+          }
+          
+          return transformedNode;
+        }),
         edges: workflowData.edges,
         variables: workflowData.variables,
         form_schema: workflowData.formSchema,
-        form_template_id: formTemplateId || null,
         created_by: 'admin'
       }
 
@@ -187,19 +198,28 @@ export default function WorkflowDesignerNewPage() {
       'exclusive': 'exclusiveGateway',
       'parallel': 'parallelGateway'
     }
-    return {
+    
+    const transformedNode = {
       id: node.id,
       type: typeMap[node.type] || node.type || 'userTask',
       position: node.position || { x: 100 + Math.random() * 300, y: 100 + Math.random() * 200 },
       data: {
         label: node.name || node.data?.label,
         description: node.description || node.data?.description,
-        approvalConfig: node.approvalConfig || node.config || node.data?.approvalConfig,
-        gatewayConfig: node.gatewayConfig || node.data?.gatewayConfig,
-        serviceConfig: node.serviceConfig || node.data?.serviceConfig,
-        formKey: node.formKey || node.data?.formKey
+        approvalConfig: node.approvalConfig || node.config?.approvalConfig || node.data?.approvalConfig,
+        gatewayConfig: node.gatewayConfig || node.config?.gatewayConfig || node.data?.gatewayConfig,
+        serviceConfig: node.serviceConfig || node.config?.serviceConfig || node.data?.serviceConfig,
+        formKey: node.formKey || node.config?.formKey || node.data?.formKey
       }
-    }
+    };
+    
+    // 添加调试日志
+    console.log('转换节点:', node.id, {
+      original: JSON.stringify(node, null, 2),
+      transformed: JSON.stringify(transformedNode, null, 2)
+    });
+    
+    return transformedNode;
   }) || [
     {
       id: 'start',

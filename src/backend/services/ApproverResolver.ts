@@ -51,7 +51,11 @@ export class ApproverResolver {
       case 'project_manager':
         return this.resolveByRole('project_manager', context);
       
+      case 'warehouse_manager':
+        return this.resolveWarehouseManager(context);
+      
       case 'form_field':
+      case 'field':
         return this.resolveFromFormField(source.value, context.formData);
       
       case 'expression':
@@ -75,8 +79,12 @@ export class ApproverResolver {
     const userIds = Array.isArray(value) ? value : [value];
     const approvers: Approver[] = [];
 
+    console.log('[ApproverResolver] resolveFixed 开始解析固定审批人', { userIds });
+
     for (const userId of userIds) {
+      console.log('[ApproverResolver] resolveFixed 解析用户ID:', userId);
       const user = await this.getUserInfo(userId);
+      console.log('[ApproverResolver] resolveFixed getUserInfo 返回:', user);
       if (user) {
         approvers.push(user);
       }
@@ -84,6 +92,7 @@ export class ApproverResolver {
       // 这样可以支持"无审批人时跳过"的场景
     }
 
+    console.log('[ApproverResolver] resolveFixed 最终返回:', approvers);
     return approvers;
   }
 
@@ -351,6 +360,48 @@ export class ApproverResolver {
     }
   }
 
+  /**
+   * 根据仓库ID获取仓库管理员
+   */
+  private async resolveWarehouseManager(context: ProcessContext): Promise<Approver[]> {
+    try {
+      const warehouseId = context.formData?.warehouse_id;
+      
+      if (!warehouseId) {
+        console.log('[ApproverResolver] resolveWarehouseManager: 缺少warehouse_id');
+        return [];
+      }
+      
+      console.log('[ApproverResolver] resolveWarehouseManager: 查询仓库管理员', { warehouseId });
+      
+      // 从warehouses表获取仓库管理员
+      const warehouse = await db.queryOne<any>(
+        `SELECT manager_id FROM warehouses WHERE id = ? AND status = 'active'`,
+        [warehouseId]
+      );
+      
+      if (!warehouse || !warehouse.manager_id) {
+        console.log('[ApproverResolver] resolveWarehouseManager: 仓库未配置管理员', { warehouseId });
+        return [];
+      }
+      
+      console.log('[ApproverResolver] resolveWarehouseManager: 找到管理员ID', { managerId: warehouse.manager_id });
+      
+      // 获取管理员详细信息
+      const user = await this.getUserInfo(warehouse.manager_id);
+      
+      if (user) {
+        console.log('[ApproverResolver] resolveWarehouseManager: 返回管理员信息', user);
+        return [user];
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('[ApproverResolver] resolveWarehouseManager: 获取仓库管理员失败', error);
+      return [];
+    }
+  }
+
   private async resolvePreviousHandler(context: ProcessContext): Promise<Approver[]> {
     if (!context.currentTask) {
       return [];
@@ -371,59 +422,88 @@ export class ApproverResolver {
   }
 
   private async getUserInfo(userId: string): Promise<Approver | null> {
-    // 先尝试作为用户ID查询
-    let row = await db.queryOne<any>(
-      `SELECT u.id as user_id, e.id as employee_id, e.name, e.department_id, e.position 
-       FROM users u
-       LEFT JOIN employees e ON u.id = e.user_id
-       WHERE u.id = ?`,
+    console.log('[ApproverResolver] getUserInfo 开始查询用户:', userId);
+    
+    // 先尝试作为用户ID查询（避免JOIN导致的字符集冲突）
+    let userRow = await db.queryOne<any>(
+      `SELECT id, username, name FROM users WHERE id = ?`,
       [userId]
     );
 
-    // 如果找到用户关联的员工，返回员工信息，但使用user_id作为审批人ID（与前端userId匹配）
-    if (row && row.employee_id) {
-      return {
-        id: row.user_id,
-        name: row.name,
-        department: row.department_id,
-        position: row.position
+    console.log('[ApproverResolver] getUserInfo 作为用户ID查询结果:', userRow);
+
+    // 如果找到用户，再查询对应的员工信息
+    if (userRow) {
+      const employeeRow = await db.queryOne<any>(
+        `SELECT id, name, department_id, position, user_id FROM employees WHERE user_id = ?`,
+        [userId]
+      );
+
+      console.log('[ApproverResolver] getUserInfo 员工信息查询结果:', employeeRow);
+
+      if (employeeRow) {
+        const result = {
+          id: userRow.id,
+          name: employeeRow.name || userRow.name,
+          department: employeeRow.department_id,
+          position: employeeRow.position
+        };
+        console.log('[ApproverResolver] getUserInfo 返回用户+员工信息:', result);
+        return result;
+      }
+
+      // 如果没有员工信息，返回用户信息
+      const result = {
+        id: userRow.id,
+        name: userRow.name,
+        department: null,
+        position: null
       };
+      console.log('[ApproverResolver] getUserInfo 返回用户信息（无员工）:', result);
+      return result;
     }
 
     // 如果没有找到，尝试作为员工ID查询
-    row = await db.queryOne<any>(
+    const employeeRow = await db.queryOne<any>(
       `SELECT id, name, department_id, position, user_id FROM employees WHERE id = ?`,
       [userId]
     );
 
-    if (!row) {
+    console.log('[ApproverResolver] getUserInfo 作为员工ID查询结果:', employeeRow);
+
+    if (!employeeRow) {
+      console.log('[ApproverResolver] getUserInfo 未找到用户');
       return null;
     }
 
-    // 返回员工信息，使用user_id作为审批人ID（与前端userId匹配）
-    if (row.user_id) {
-      return {
-        id: row.user_id,
-        name: row.name,
-        department: row.department_id,
-        position: row.position
+    // 返回员工信息，优先使用user_id作为审批人ID（与前端userId匹配）
+    if (employeeRow.user_id) {
+      const result = {
+        id: employeeRow.user_id,
+        name: employeeRow.name,
+        department: employeeRow.department_id,
+        position: employeeRow.position
       };
+      console.log('[ApproverResolver] getUserInfo 返回员工信息（使用user_id）:', result);
+      return result;
     }
 
     // 如果没有user_id，使用employee_id
-    return {
-      id: row.id,
-      name: row.name,
-      department: row.department_id,
-      position: row.position
+    const result = {
+      id: employeeRow.id,
+      name: employeeRow.name,
+      department: employeeRow.department_id,
+      position: employeeRow.position
     };
+    console.log('[ApproverResolver] getUserInfo 返回员工信息（使用employee_id）:', result);
+    return result;
   }
 
   private async getUsersByRole(role: string): Promise<Approver[]> {
     const rows = await db.query<any>(
       `SELECT u.id as user_id, e.id, e.name, e.department_id, e.position 
        FROM users u
-       JOIN employees e ON u.id = e.user_id
+       JOIN employees e ON u.id COLLATE utf8mb4_unicode_ci = e.user_id
        WHERE u.role = ? AND e.status = 'active'`,
       [role]
     );

@@ -9,6 +9,7 @@ import { logger } from './utils/logger.js'
 import apiRouter from './routes/index.js'
 import performanceRoutes from './routes/performanceRoutes.js'
 import formTemplateRoutes from './routes/formTemplateRoutes.js'
+import draftRoutes from './routes/draft.js'
 import { initUsersTable } from './routes/auth.js'
 import { schedulerService } from './services/SchedulerService.js'
 import { workflowEventListener } from './services/WorkflowEventListener.js'
@@ -64,6 +65,7 @@ app.use((req, res, next) => {
 app.use('/api', apiRouter)
 app.use('/api/performance', performanceRoutes)
 app.use('/api/form-templates', formTemplateRoutes)
+app.use('/api/draft', draftRoutes)
 
 app.use('/uploads', express.static(path.join(__dirname, '../../uploads')))
 

@@ -169,43 +169,35 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
     throw new ValidationError('不能删除管理员账号')
   }
 
-  await db.beginTransaction()
+  await db.executeTransaction(async (connection) => {
+    await connection.execute('DELETE FROM users WHERE id = ?', [id])
+    await connection.execute('DELETE FROM employees WHERE user_id = ?', [id])
 
-  try {
-    await db.delete('DELETE FROM users WHERE id = ?', [id])
-    await db.delete('DELETE FROM employees WHERE user_id = ?', [id])
-
-    const definitions = await db.query<any>(
-      'SELECT id, definition FROM workflow_definitions'
+    const definitions = await connection.query<any>(
+      'SELECT id, node_config FROM workflow_definitions'
     )
     
     for (const def of definitions) {
-      let definition = def.definition
+      let nodeConfig = def.node_config
       let updated = false
       
-      if (typeof definition === 'string') {
-        definition = JSON.parse(definition)
+      if (typeof nodeConfig === 'string') {
+        nodeConfig = JSON.parse(nodeConfig)
       }
       
-      if (definition.nodes) {
-          definition.nodes.forEach((node: any) => {
-            if (node.config && node.config.assignee) {
-              if (node.config.assignee.type === 'user' || node.config.assignee.type === 'fixed') {
-                const userIds = Array.isArray(node.config.assignee.value) 
-                  ? node.config.assignee.value 
-                  : [node.config.assignee.value]
-                
+      if (nodeConfig && nodeConfig.nodes) {
+          nodeConfig.nodes.forEach((node: any) => {
+            if (node.config && node.config.approverSource) {
+              if (node.config.approverSource.type === 'user') {
+                const userIds = node.config.approverSource.value ? node.config.approverSource.value.split(',') : []
                 const filteredUserIds = userIds.filter((uid: string) => uid !== id)
                 
                 if (filteredUserIds.length !== userIds.length) {
                   updated = true
                   if (filteredUserIds.length === 0) {
-                    // 如果没有用户了，删除assignee配置
-                    delete node.config.assignee
+                    delete node.config.approverSource
                   } else {
-                    node.config.assignee.value = Array.isArray(node.config.assignee.value) 
-                      ? filteredUserIds 
-                      : filteredUserIds[0]
+                    node.config.approverSource.value = filteredUserIds.join(',')
                   }
                 }
               }
@@ -214,30 +206,25 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
         }
         
       if (updated) {
-        await db.update(
-          'UPDATE workflow_definitions SET definition = ? WHERE id = ?',
-          [JSON.stringify(definition), def.id]
+        await connection.execute(
+          'UPDATE workflow_definitions SET node_config = ? WHERE id = ?',
+          [JSON.stringify(nodeConfig), def.id]
         )
       }
     }
 
-    await db.delete(
+    await connection.execute(
       'DELETE FROM workflow_tasks WHERE assignee_id = ? AND status = "assigned"',
       [id]
     )
 
-    await db.update(
+    await connection.execute(
       'UPDATE workflow_tasks SET assignee_id = NULL, assignee_name = NULL WHERE assignee_id = ?',
       [id]
     )
+  })
 
-    await db.commit()
-
-    res.json({ success: true, message: '用户删除成功' })
-  } catch (error) {
-    await db.rollback()
-    throw error
-  }
+  res.json({ success: true, message: '用户删除成功' })
 }))
 
 // 切换用户状态（管理员权限）

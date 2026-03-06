@@ -14,9 +14,8 @@ CREATE TABLE IF NOT EXISTS equipment_images (
   
   -- 图片类型
   image_type ENUM(
-    'inbound_main',      -- 入库-仪器本体图片
-    'inbound_with_accessories',  -- 入库-带配件图片
-    'inbound_model',      -- 入库-假负载/线缆型号图片
+    'main',              -- 主机照片
+    'accessory',         -- 配件照片
     'transfer_shipping',  -- 调拨-发货图片
     'transfer_packed',    -- 调拨-打包图片
     'transfer_receiving'  -- 调拨-收货确认图片

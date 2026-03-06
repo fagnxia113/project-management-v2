@@ -194,6 +194,7 @@ export default function ApprovalPendingPageNew() {
             const formData = item.variables?.formData || {}
             const deptMap = formData._deptMap || {}
             const posMap = formData._posMap || {}
+            const userMap = formData._userMap || {}
             
             return {
               id: item.id,
@@ -209,6 +210,7 @@ export default function ApprovalPendingPageNew() {
               field_permissions: item.field_permissions,
               dept_map: deptMap,
               pos_map: posMap,
+              user_map: userMap,
               timeout: item.timeout
             }
           })
@@ -355,6 +357,9 @@ export default function ApprovalPendingPageNew() {
                       }
                       if (key === 'position_id' && task.pos_map?.[value]) {
                         displayValue = task.pos_map[value]
+                      }
+                      if (key === 'manager_id' && task.user_map?.[value]) {
+                        displayValue = task.user_map[value]
                       }
                       
                       return (

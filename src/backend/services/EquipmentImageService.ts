@@ -4,9 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export type ImageType = 
-  | 'inbound_main'      
-  | 'inbound_with_accessories'  
-  | 'inbound_model'      
+  | 'main'      
+  | 'accessory'  
   | 'transfer_shipping'  
   | 'transfer_packed'    
   | 'transfer_receiving';
@@ -222,9 +221,8 @@ export class EquipmentImageService {
     const images = await this.getByEquipmentId(equipmentId);
     
     return {
-      mainImage: images.find(img => img.image_type === 'inbound_main'),
-      withAccessoriesImage: images.find(img => img.image_type === 'inbound_with_accessories'),
-      modelImage: images.find(img => img.image_type === 'inbound_model')
+      mainImage: images.find(img => img.image_type === 'main'),
+      accessoryImage: images.find(img => img.image_type === 'accessory')
     };
   }
 

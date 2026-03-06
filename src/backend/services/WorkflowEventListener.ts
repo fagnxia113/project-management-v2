@@ -1,6 +1,7 @@
 import { enhancedWorkflowEngine } from './EnhancedWorkflowEngine.js';
 import { equipmentRepairService } from './EquipmentRepairService.js';
 import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
+import { equipmentInboundService } from './EquipmentInboundService.js';
 import { instanceService } from './InstanceService.js';
 
 export class WorkflowEventListener {
@@ -36,24 +37,33 @@ export class WorkflowEventListener {
         }
 
         const instance = await instanceService.getInstance(task.instance_id);
-        if (!instance || !instance.business_id) {
-          console.log('[WorkflowEventListener] No instance or business_id, skipping');
+        if (!instance) {
+          console.log('[WorkflowEventListener] No instance, skipping');
           return;
         }
 
-        const businessId = instance.business_id;
         const definitionKey = instance.definition_key;
 
         console.log('[WorkflowEventListener] Processing event:', {
           definitionKey,
-          businessId,
+          businessId: instance.business_id,
           nodeId: task.node_id
         });
 
-        if (definitionKey === 'equipment-repair') {
-          await this.handleRepairOrderApproval(businessId, params, task.node_id);
+        if (definitionKey === 'equipment-inbound') {
+          await this.handleInboundOrderApproval(instance, params, task.node_id);
+        } else if (definitionKey === 'equipment-repair') {
+          if (!instance.business_id) {
+            console.log('[WorkflowEventListener] No business_id for repair order, skipping');
+            return;
+          }
+          await this.handleRepairOrderApproval(instance.business_id, params, task.node_id);
         } else if (definitionKey === 'equipment-scrap-sale') {
-          await this.handleScrapSaleOrderApproval(businessId, params, task.node_id);
+          if (!instance.business_id) {
+            console.log('[WorkflowEventListener] No business_id for scrap/sale order, skipping');
+            return;
+          }
+          await this.handleScrapSaleOrderApproval(instance.business_id, params, task.node_id);
         }
       } catch (error) {
         console.error('[WorkflowEventListener] Error handling task.completed event:', error);
@@ -61,6 +71,20 @@ export class WorkflowEventListener {
     });
 
     console.log('[WorkflowEventListener] task.completed listener setup complete');
+  }
+
+  private async handleInboundOrderApproval(instance: any, params: any, nodeId: string): Promise<void> {
+    try {
+      const action = params.action;
+      
+      if (nodeId === 'warehouse-manager' && (action === 'approve' || action === 'approved')) {
+        await equipmentInboundService.createEquipmentFromWorkflow(instance.id);
+        console.log(`[WorkflowEventListener] Equipment inbound order ${instance.id} approved, creating equipment records`);
+      }
+    } catch (error) {
+      console.error(`[WorkflowEventListener] Error handling inbound order ${instance.id} approval:`, error);
+      throw error;
+    }
   }
 
   private async handleRepairOrderApproval(orderId: string, params: any, nodeId: string): Promise<void> {

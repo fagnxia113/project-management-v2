@@ -105,4 +105,36 @@ router.get('/statistics', async (req: Request, res: Response) => {
   }
 });
 
+// --- Equipment Names & Models ---
+// 获取所有设备名称列表
+router.get('/names', async (req: Request, res: Response) => {
+  try {
+    const names = await equipmentService.getEquipmentNames();
+    res.json({ success: true, data: names });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 根据设备名称获取型号列表
+router.get('/models', async (req: Request, res: Response) => {
+  try {
+    const equipmentName = req.query.equipment_name as string;
+    const category = req.query.category as string;
+    
+    if (equipmentName) {
+      const models = await equipmentService.getModelsByName(equipmentName);
+      res.json({ success: true, data: models });
+    } else if (category) {
+      const models = await equipmentService.getModelsByCategory(category);
+      res.json({ success: true, data: models });
+    } else {
+      const models = await equipmentService.getAllModels();
+      res.json({ success: true, data: models });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

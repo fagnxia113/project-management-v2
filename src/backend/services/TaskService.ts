@@ -143,16 +143,21 @@ export class TaskService {
     }
     whereClause += ')';
 
-    if (status && status.length > 0) {
-      whereClause += ` AND t.status IN (${status.map(() => '?').join(', ')})`;
-      params.push(...status);
+    // 如果没有指定状态，默认返回待处理和进行中的任务
+    // 如果传递了空数组，则返回所有状态的任务
+    const statusFilter = status !== undefined ? status : ['created', 'assigned', 'in_progress'];
+    if (statusFilter && statusFilter.length > 0) {
+      whereClause += ` AND t.status IN (${statusFilter.map(() => '?').join(', ')})`;
+      params.push(...statusFilter);
     }
 
-    // 获取部门和职位名称映射
+    // 获取部门、职位和用户名称映射
     const departments = await db.query<any>('SELECT id, name FROM departments');
     const positions = await db.query<any>('SELECT id, name FROM positions');
+    const employeeList = await db.query<any>('SELECT id, name FROM employees');
     const deptMap = Object.fromEntries(departments.map((d: any) => [d.id, d.name]));
     const posMap = Object.fromEntries(positions.map((p: any) => [p.id, p.name]));
+    const userMap = Object.fromEntries(employeeList.map((e: any) => [e.id, e.name]));
 
     const rows = await db.query<any>(
       `SELECT t.*, i.title as process_title, i.definition_key, i.initiator_id, i.initiator_name, 
@@ -200,7 +205,8 @@ export class TaskService {
       const enrichedFormData = {
         ...formData,
         _deptMap: deptMap,
-        _posMap: posMap
+        _posMap: posMap,
+        _userMap: userMap
       };
       
       return {

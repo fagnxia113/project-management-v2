@@ -1,6 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import ProcessFormLauncher from '../../components/ProcessFormLauncher'
+import WorkflowFormLauncher from '../../components/WorkflowFormLauncher'
 
 export default function PersonnelOnboardPage() {
   const navigate = useNavigate()
@@ -19,8 +19,8 @@ export default function PersonnelOnboardPage() {
       <div className="bg-white shadow rounded-lg p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">员工入职申请</h1>
         
-        <ProcessFormLauncher 
-          presetId="preset-employee-onboard"
+        <WorkflowFormLauncher 
+          definitionKey="employee-onboard"
           onSuccess={handleSuccess}
           onCancel={handleCancel}
         />

@@ -12,7 +12,6 @@ export class DefinitionService {
     nodes: WorkflowNode[];
     edges: WorkflowEdge[];
     form_schema?: any[];
-    form_template_id?: string;
     variables?: any[];
     created_by?: string;
   }): Promise<WorkflowDefinition> {
@@ -34,7 +33,6 @@ export class DefinitionService {
         edges: params.edges
       },
       form_schema: params.form_schema,
-      form_template_id: params.form_template_id,
       variables: params.variables,
       status: 'active',
       created_by: params.created_by,
@@ -45,9 +43,9 @@ export class DefinitionService {
     await db.insert(
       `INSERT INTO workflow_definitions (
         id, \`key\`, name, version, category, entity_type, bpmn_xml, 
-        node_config, form_schema, form_template_id, variables, status, created_by, 
+        node_config, form_schema, variables, status, created_by, 
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         definition.id,
         definition.key,
@@ -58,7 +56,6 @@ export class DefinitionService {
         definition.bpmn_xml ?? null,
         JSON.stringify(definition.node_config),
         JSON.stringify(definition.form_schema),
-        definition.form_template_id ?? null,
         JSON.stringify(definition.variables),
         definition.status,
         definition.created_by ?? null,
@@ -193,11 +190,6 @@ export class DefinitionService {
     if (updates.form_schema !== undefined) {
       updateFields.push('form_schema = ?');
       updateParams.push(JSON.stringify(updates.form_schema));
-    }
-
-    if (updates.form_template_id !== undefined) {
-      updateFields.push('form_template_id = ?');
-      updateParams.push(updates.form_template_id);
     }
 
     if (updates.variables !== undefined) {
@@ -339,7 +331,6 @@ export class DefinitionService {
         edges: nodeConfig.edges || []
       },
       form_schema: formSchema,
-      form_template_id: row.form_template_id,
       variables: variables,
       status: row.status,
       created_by: row.created_by,

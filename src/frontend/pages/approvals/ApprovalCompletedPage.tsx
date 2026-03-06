@@ -71,7 +71,7 @@ export default function ApprovalCompletedPage() {
       const token = localStorage.getItem('token')
       const userInfo = parseJWTToken(token || '')
       
-      const response = await fetch(`${API_URL.BASE}/api/workflow/my-completed-tasks?userId=${userInfo.userId}`, {
+      const response = await fetch(`${API_URL.BASE}/api/workflow/my-completed-tasks?userId=${userInfo.id}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
@@ -121,7 +121,7 @@ export default function ApprovalCompletedPage() {
   }
 
   const handleViewDetail = (task: ApprovedTask) => {
-    navigate(`/workflow/process/${task.process_id}`)
+    navigate(`/workflow/detail/${task.process_id}`)
   }
 
   return (

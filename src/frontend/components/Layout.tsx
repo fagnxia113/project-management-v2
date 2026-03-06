@@ -54,7 +54,6 @@ const getMenus = (role: string): MenuItem[] => {
       icon: 'folder',
       children: [
         { label: '项目列表', path: '/projects' },
-        { label: '新建项目', path: '/projects/create' },
         { label: '任务看板', path: '/tasks/board' },
       ]
     },
@@ -97,7 +96,6 @@ const getMenus = (role: string): MenuItem[] => {
       children: [
         { label: '设备台账', path: '/equipment' },
         { label: '仓库管理', path: '/warehouses' },
-        { label: '入库登记', path: '/equipment/inbounds/create' },
         { label: '设备调拨', path: '/equipment/transfers/create' },
       ]
     },

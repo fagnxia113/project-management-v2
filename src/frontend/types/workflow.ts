@@ -1,11 +1,12 @@
 export interface FormField {
   name: string
   label: string
-  type: 'text' | 'number' | 'select' | 'date' | 'file' | 'user' | 'department' | 'textarea' | 'array' | 'currency' | 'phone' | 'email' | 'checkbox' | 'radio'
+  type: 'text' | 'number' | 'select' | 'date' | 'file' | 'user' | 'department' | 'textarea' | 'array' | 'currency' | 'phone' | 'email' | 'checkbox' | 'radio' | 'reference' | 'lookup' | 'images' | 'files'
   required?: boolean
   options?: string[]
   defaultValue?: any
   placeholder?: string
+  accept?: string
   validation?: {
     min?: number
     max?: number
@@ -22,6 +23,29 @@ export interface FormField {
     showLabel?: boolean
     readonly?: boolean
     hidden?: boolean
+  }
+  autoGenerate?: boolean
+  readonly?: boolean
+  disabled?: boolean
+  editorProps?: {
+    format?:(value: any) => string,
+    parse?:(value: string) => any
+  }
+  refEntity?: string
+  refLabel?: string
+  refValue?: string
+  cascadeFrom?: string
+  cascadeField?: string
+  dynamicOptions?: 'department' | 'position' | 'employee' | 'project' | 'warehouse'
+  dynamicOptionsConfig?: {
+    source: string
+    labelField: string
+    valueField: string
+    filter?: Record<string, any>
+  }
+  showCondition?: {
+    field: string
+    value: any
   }
 }
 
@@ -83,7 +107,6 @@ export interface WorkflowDefinition {
     edges: WorkflowEdge[]
   }
   form_schema?: FormField[]
-  form_template_id?: string
   variables?: ProcessVariable[]
   status: 'draft' | 'active' | 'suspended' | 'archived'
   created_by?: string

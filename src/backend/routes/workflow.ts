@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
+import { logger } from '../utils/logger.js';
 import { enhancedWorkflowEngine } from '../services/EnhancedWorkflowEngine.js';
 import { definitionService } from '../services/DefinitionService.js';
 import { instanceService } from '../services/InstanceService.js';
 import { taskService } from '../services/TaskService.js';
 import { processFormIntegrationService } from '../services/ProcessFormIntegrationService.js';
 import { unifiedFormService } from '../services/UnifiedFormService.js';
+import WorkflowTemplatesService from '../services/WorkflowTemplates.js';
 import { db } from '../database/connection.js';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
 import { 
@@ -51,27 +53,26 @@ router.post('/definitions',
   requireAdmin,
   auditLog('create_definition'),
   async (req: Request, res: Response) => {
-  try {
-    const { key, name, category, entity_type, bpmn_xml, nodes, edges, form_schema, form_template_id, variables, created_by } = req.body;
-    
-    const definition = await definitionService.createDefinition({
-      key,
-      name,
-      category,
-      entity_type,
-      bpmn_xml,
-      nodes,
-      edges,
-      form_schema,
-      form_template_id,
-      variables,
-      created_by
-    });
-    
-    res.status(201).json({ success: true, data: definition });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
+    try {
+      const { key, name, category, entity_type, bpmn_xml, nodes, edges, form_schema, variables, created_by } = req.body;
+      
+      const definition = await definitionService.createDefinition({
+        key,
+        name,
+        category,
+        entity_type,
+        bpmn_xml,
+        nodes,
+        edges,
+        form_schema,
+        variables,
+        created_by
+      });
+      
+      res.status(201).json({ success: true, data: definition });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
 });
 
 /**
@@ -120,36 +121,97 @@ router.put('/definitions/:id',
   requireAdmin,
   auditLog('update_definition'),
   async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { key, name, category, entity_type, nodes, edges, variables, form_template_id } = req.body;
-    
-    // 构建node_config
-    const node_config = {
-      nodes: nodes || [],
-      edges: edges || []
-    };
-    
-    const success = await definitionService.updateDefinition(id, {
-      key,
-      name,
-      category,
-      entity_type,
-      node_config,
-      variables,
-      form_template_id
-    });
-    
-    if (!success) {
-      return res.status(404).json({ error: '流程定义不存在' });
+    try {
+      const { id } = req.params;
+      const { key, name, category, entity_type, nodes, edges, variables } = req.body;
+      
+      // 添加调试日志
+      logger.info('收到前端发送的流程定义数据', { 
+        id, 
+        key, 
+        nodesCount: nodes?.length,
+        firstNode: nodes?.[0],
+        allNodes: nodes?.map(n => ({ 
+          id: n.id, 
+          name: n.name, 
+          approvalConfig: n.approvalConfig,
+          gatewayConfig: n.gatewayConfig,
+          serviceConfig: n.serviceConfig,
+          formKey: n.formKey,
+          config: n.config
+        }))
+      });
+      
+      // 构建node_config，将前端的数据结构转换为后端期望的格式
+      const node_config = {
+        nodes: (nodes || []).map((node: any) => {
+          const transformedNode: any = {
+            id: node.id,
+            type: node.type || 'userTask',
+            name: node.name,
+            position: node.position
+          };
+          
+          // 如果有 approvalConfig，将其放入 config 对象
+          if (node.approvalConfig) {
+            transformedNode.config = {
+              approvalConfig: { ...node.approvalConfig }
+            };
+          }
+          
+          // 如果有 gatewayConfig、serviceConfig、formKey，也放入 config 对象
+          if (node.gatewayConfig) {
+            transformedNode.config = transformedNode.config || {};
+            transformedNode.config.gatewayConfig = node.gatewayConfig;
+          }
+          if (node.serviceConfig) {
+            transformedNode.config = transformedNode.config || {};
+            transformedNode.config.serviceConfig = node.serviceConfig;
+          }
+          if (node.formKey) {
+            transformedNode.config = transformedNode.config || {};
+            transformedNode.config.formKey = node.formKey;
+          }
+          
+          // 如果已经有 config 对象，合并它（但保留 approvalConfig 的优先级）
+          if (node.config) {
+            transformedNode.config = transformedNode.config || {};
+            transformedNode.config = { ...node.config, ...transformedNode.config };
+          }
+          
+          return transformedNode;
+        }),
+        edges: edges || []
+      };
+      
+      // 添加调试日志
+      logger.info('转换后的节点配置', { 
+        nodesCount: node_config.nodes.length,
+        allNodes: node_config.nodes.map(n => ({ id: n.id, name: n.name, config: n.config }))
+      });
+      
+      const success = await definitionService.updateDefinition(id, {
+        key,
+        name,
+        category,
+        entity_type,
+        node_config,
+        variables
+      });
+      
+      if (!success) {
+        return res.status(404).json({ error: '流程定义不存在' });
+      }
+      
+      // 清除流程引擎缓存，确保使用最新的流程定义
+      enhancedWorkflowEngine.clearCache();
+      
+      // 获取更新后的定义
+      const updated = await definitionService.getDefinition(id);
+      res.json({ success: true, data: updated });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
-    
-    // 获取更新后的定义
-    const updated = await definitionService.getDefinition(id);
-    res.json({ success: true, data: updated });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 /**
@@ -169,6 +231,63 @@ router.post('/definitions/:id/activate',
     }
     
     res.json({ success: true, message: '流程定义已激活' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 重新加载流程定义
+ * POST /api/workflow/definitions/:key/reload
+ */
+router.post('/definitions/:key/reload',
+  requireAdmin,
+  auditLog('reload_definition'),
+  async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    
+    const templates = WorkflowTemplatesService.getAllTemplates();
+    const template = templates.find(t => t.id === key);
+    
+    if (!template) {
+      return res.status(404).json({ error: '流程模板不存在' });
+    }
+    
+    const existingDefinition = await definitionService.getLatestDefinition(key);
+    
+    if (existingDefinition) {
+      const success = await definitionService.updateDefinition(existingDefinition.id, {
+        node_config: {
+          nodes: template.definition.nodes,
+          edges: template.definition.edges
+        },
+        form_schema: template.formSchema
+      });
+      
+      if (!success) {
+        return res.status(500).json({ error: '更新流程定义失败' });
+      }
+      
+      enhancedWorkflowEngine.clearCache();
+      
+      const updated = await definitionService.getDefinition(existingDefinition.id);
+      res.json({ success: true, data: updated, message: '流程定义已重新加载' });
+    } else {
+      const definition = await definitionService.createDefinition({
+        key: template.id,
+        name: template.name,
+        category: template.category,
+        entity_type: template.entityType,
+        nodes: template.definition.nodes,
+        edges: template.definition.edges,
+        form_schema: template.formSchema,
+        version: 1,
+        status: 'active',
+      });
+      
+      res.json({ success: true, data: definition, message: '流程定义已创建' });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -423,9 +542,10 @@ router.get('/my-tasks', authenticate, async (req: Request, res: Response) => {
 router.get('/my-completed-tasks', authenticate, async (req: Request, res: Response) => {
   try {
     const { userId } = req.query;
-    const authenticatedUserId = req.user!.userId;
+    const authenticatedUserId = req.user!.id;
     
-    const tasks = await taskService.getTasksByAssignee(authenticatedUserId);
+    // 获取所有任务（包括已完成的）
+    const tasks = await taskService.getTasksByAssignee(authenticatedUserId, []);
     const completedTasks = tasks.filter(task => 
       task.status === 'completed' || task.status === 'approved' || task.status === 'rejected'
     );
@@ -881,6 +1001,16 @@ router.get('/form-templates/key/:key', async (req: Request, res: Response) => {
     
     if (!template) {
       return res.status(404).json({ error: '表单模板不存在' });
+    }
+    
+    console.log(`[DEBUG] 模板 ${key} 的 items.arrayConfig.fields:`);
+    const itemsField = template.fields?.find((f: any) => f.name === 'items');
+    if (itemsField?.arrayConfig?.fields) {
+      itemsField.arrayConfig.fields.forEach((f: any) => {
+        if (f.type === 'images' || f.type === 'files' || f.name === 'accessory_list') {
+          console.log(`  - ${f.name}: type=${f.type}`);
+        }
+      });
     }
     
     res.json({ success: true, data: template });

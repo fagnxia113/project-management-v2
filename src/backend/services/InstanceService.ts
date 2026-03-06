@@ -348,7 +348,7 @@ export class InstanceService {
 
   private async cleanupExecutions(instanceId: string): Promise<void> {
     await db.update(
-      `UPDATE workflow_executions SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP 
+      `UPDATE workflow_executions SET status = 'cancelled' 
        WHERE instance_id = ? AND status = 'active'`,
       [instanceId]
     );

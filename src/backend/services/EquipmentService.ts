@@ -379,6 +379,26 @@ export class EquipmentService {
         `, [equipmentName]);
         return result;
     }
+
+    async getModelsByCategory(category: string): Promise<any[]> {
+        const result = await db.query(`
+            SELECT DISTINCT equipment_name, model_no, brand, category, unit
+            FROM equipment_instances
+            WHERE category = ?
+            ORDER BY equipment_name, model_no
+        `, [category]);
+        return result;
+    }
+
+    async getAllModels(): Promise<any[]> {
+        const result = await db.query(`
+            SELECT DISTINCT equipment_name, model_no, brand, category, unit
+            FROM equipment_instances
+            WHERE equipment_name IS NOT NULL AND equipment_name != ''
+            ORDER BY equipment_name, model_no
+        `);
+        return result;
+    }
 }
 
 export const equipmentService = new EquipmentService();

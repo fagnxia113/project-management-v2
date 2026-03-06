@@ -934,29 +934,44 @@ export class ProcessFormIntegrationService {
    * 优先从 WorkflowTemplates 获取完整的字段配置（包括动态选项）
    */
   async getFormFields(presetId: string): Promise<any[]> {
+    console.log('[ProcessFormIntegrationService] getFormFields called for presetId:', presetId)
+
     const preset = this.presets.get(presetId);
     if (!preset) {
+      console.error('[ProcessFormIntegrationService] Preset not found:', presetId);
       return [];
     }
+    console.log('[ProcessFormIntegrationService] Found preset:', preset);
 
     // 优先从 WorkflowTemplates 获取完整字段配置
     const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
+    console.log('[ProcessFormIntegrationService] Workflow template:', workflowTemplate?.id, workflowTemplate?.name);
+
     if (workflowTemplate && workflowTemplate.formSchema) {
+      console.log('[ProcessFormIntegrationService] Returning formSchema from workflow template:', workflowTemplate.formSchema.length, 'fields');
+      console.log('[ProcessFormIntegrationService] FormSchema sample:', JSON.stringify(workflowTemplate.formSchema.slice(0, 2), null, 2));
       return workflowTemplate.formSchema;
     }
 
     // 降级：从表单模板获取
     const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
+    console.log('[ProcessFormIntegrationService] Form template:', formTemplate?.id, formTemplate?.key);
+
     if (formTemplate) {
+      console.log('[ProcessFormIntegrationService] Returning fields from form template:', formTemplate.fields.length, 'fields');
       return formTemplate.fields;
     }
 
     // 最后降级：从流程定义获取
     const definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
+    console.log('[ProcessFormIntegrationService] Definition:', definition?.id, definition?.key);
+
     if (definition && definition.form_schema) {
+      console.log('[ProcessFormIntegrationService] Returning form_schema from definition:', definition.form_schema.length, 'fields');
       return definition.form_schema;
     }
 
+    console.error('[ProcessFormIntegrationService] No form fields found for preset:', presetId);
     return [];
   }
 

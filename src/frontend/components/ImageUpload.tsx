@@ -45,8 +45,8 @@ export default function ImageUpload({
 
   const getImageTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      'inbound_main': '仪器主体图片',
-      'inbound_model': '设备识别图片',
+      'main': '主机照片',
+      'accessory': '配件照片',
       'transfer_shipping': '发货图片',
       'transfer_packed': '打包图片',
       'transfer_receiving': '收货图片'

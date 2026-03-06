@@ -226,9 +226,9 @@ export class EnhancedWorkflowEngine {
           timestamp: new Date()
         });
         
-        // 如果驳回，将流程实例状态设置为rejected，但不结束流程
+        // 如果驳回，将流程实例状态设置为completed，result设置为rejected
         if (params.action === 'rejected') {
-          await instanceService.updateInstanceStatus(instance.id, 'rejected', params.operator, params.comment);
+          await instanceService.endInstance(instance.id, 'rejected', params.operator, params.comment);
         } else {
           const definition = await this.getCachedDefinitionById(instance.definition_id);
           // 找到下一个节点并执行，而不是重新执行当前节点
@@ -562,7 +562,7 @@ export class EnhancedWorkflowEngine {
         await this.continueExecution(instance, definition, nextNodes[0]);
         return;
       } else {
-        await this.endInstance(instance.id, 'completed');
+        await this.endInstance(instance.id, 'approved');
         return;
       }
     }
@@ -577,16 +577,42 @@ export class EnhancedWorkflowEngine {
 
     let approvers: any[] = [];
     try {
+      logger.debug(`开始解析节点 ${node.name} (${node.id}) 的审批人`, { 
+        approverSource: approvalConfig.approverSource 
+      });
       approvers = await this.resolveApproversWithCache(node, approvalConfig.approverSource, context);
+      logger.debug(`节点 ${node.name} (${node.id}) 解析到 ${approvers.length} 个审批人`, { 
+        approvers: approvers.map(a => ({ id: a.id, name: a.name }))
+      });
     } catch (error) {
       logger.error(`节点 ${node.name} (${node.id}) 解析审批人失败`, error as Error, { approverSource: approvalConfig.approverSource })
     }
 
     if (approvers.length === 0) {
-      logger.debug(`节点 ${node.name} (${node.id}) 无法解析审批人`, { approverSource: approvalConfig.approverSource, skipIfNoApprover: (approvalConfig as any).skipIfNoApprover })
+      const skipIfNoApprover = (approvalConfig as any).skipIfNoApprover;
+      const skipCondition = (approvalConfig as any).skipCondition;
+      
+      logger.debug(`节点 ${node.name} (${node.id}) 无法解析审批人`, { 
+        approverSource: approvalConfig.approverSource, 
+        skipIfNoApprover,
+        skipCondition
+      })
+      
+      // 检查是否需要跳过节点
+      let shouldSkip = false;
+      
+      // 1. 检查 skipIfNoApprover（布尔值，旧版本兼容）
+      if (skipIfNoApprover === true) {
+        shouldSkip = true;
+      }
+      
+      // 2. 检查 skipCondition（字符串，新版本）
+      if (skipCondition === 'no_approvers' || skipCondition === 'always') {
+        shouldSkip = true;
+      }
       
       // 如果配置了无审批人跳过，则跳过该节点
-      if ((approvalConfig as any).skipIfNoApprover) {
+      if (shouldSkip) {
         logger.info(`节点 ${node.name} (${node.id}) 配置了无审批人跳过，跳过该节点`)
         
         // 记录节点跳过日志
@@ -612,7 +638,7 @@ export class EnhancedWorkflowEngine {
         if (nextNodes.length > 0) {
           await this.continueExecution(instance, definition, nextNodes[0]);
         } else {
-          await this.endInstance(instance.id, 'completed');
+          await this.endInstance(instance.id, 'approved');
         }
         return;
       }
@@ -793,7 +819,16 @@ export class EnhancedWorkflowEngine {
         await this.executeCreateEmployeeService(instance, serviceConfig);
       }
 
-      await this.executeGatewayOrUserTask(instance, definition, node);
+      // 找到下一个节点并继续执行
+      const nextNodes = await this.findNextNodes(definition, node.id);
+      if (nextNodes.length > 0) {
+        for (const nextNodeId of nextNodes) {
+          await this.continueExecution(instance, definition, nextNodeId);
+        }
+      } else {
+        // 没有下一个节点，结束流程
+        await this.endInstance(instance.id, 'approved');
+      }
     } catch (error) {
       logger.error('服务任务执行失败', error as Error)
       throw error;
@@ -816,19 +851,22 @@ export class EnhancedWorkflowEngine {
       
       // 直接从表单数据提取员工信息（不再依赖dataMapping）
       const employeeName = formData.employee_name;
-      const employeeNo = formData.employee_id;
       const departmentId = formData.department_id;
       const positionId = formData.position_id;
       const hireDate = formData.start_date;
       const email = formData.email || '';
       const phone = formData.phone || '';
       
-      logger.debug('创建员工服务 - 解析后的数据', { employeeName, employeeNo, departmentId, positionId, hireDate })
+      logger.debug('创建员工服务 - 解析后的数据', { employeeName, departmentId, positionId, hireDate })
       
       if (!employeeName) {
         logger.error('员工姓名为空，无法创建员工记录')
         return;
       }
+      
+      // 自动生成工号
+      const employeeNo = await this.generateEmployeeNo();
+      logger.debug('生成的工号', { employeeNo })
       
       // 生成拼音用户名
       logger.debug('开始生成拼音用户名')
@@ -903,6 +941,59 @@ export class EnhancedWorkflowEngine {
     
     // 直接返回值
     return mapping;
+  }
+
+  /**
+   * 生成工号
+   */
+  private async generateEmployeeNo(): Promise<string> {
+    const prefix = 'EMP';
+    
+    // 查询当前最大的工号
+    const result = await db.queryOne<{ max_no: string }>(
+      `SELECT employee_no as max_no 
+       FROM employees 
+       WHERE employee_no LIKE ?
+       ORDER BY employee_no DESC 
+       LIMIT 1`,
+      [`${prefix}-%`]
+    );
+    
+    let sequence = 1;
+    
+    if (result && result.max_no) {
+      // 从现有工号中提取序号
+      const match = result.max_no.match(/^EMP-(\d+)$/);
+      if (match) {
+        sequence = parseInt(match[1]) + 1;
+      }
+    }
+    
+    // 工号格式: EMP-XXXXX (前缀-序号，5位数字)
+    const employeeNo = `${prefix}-${sequence.toString().padStart(5, '0')}`;
+    
+    // 检查工号是否已存在（避免并发冲突）
+    let finalEmployeeNo = employeeNo;
+    let counter = 1;
+    
+    while (await this.isEmployeeNoExists(finalEmployeeNo)) {
+      const newSequence = sequence + counter;
+      finalEmployeeNo = `${prefix}-${newSequence.toString().padStart(5, '0')}`;
+      counter++;
+    }
+    
+    return finalEmployeeNo;
+  }
+
+  /**
+   * 检查工号是否已存在
+   */
+  private async isEmployeeNoExists(employeeNo: string): Promise<boolean> {
+    const result = await db.queryOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM employees WHERE employee_no = ?',
+      [employeeNo]
+    );
+    return result ? result.count > 0 : false;
   }
 
   /**
@@ -1108,11 +1199,18 @@ export class EnhancedWorkflowEngine {
 
   private async endInstance(instanceId: string, result: string): Promise<void> {
     console.log(`[EnhancedWorkflowEngine] endInstance 被调用: instanceId=${instanceId}, result=${result}`);
-    await this.clearCurrentNode(instanceId);
-    await instanceService.endInstance(instanceId, result as any);
-    logger.debug(`准备触发 process.ended 事件: instanceId=${instanceId}, result=${result}`)
-    this.eventBus.emit('process.ended', { instanceId, result, timestamp: new Date() });
-    logger.debug('process.ended 事件已触发')
+    try {
+      await this.clearCurrentNode(instanceId);
+      console.log(`[EnhancedWorkflowEngine] clearCurrentNode 完成`);
+      await instanceService.endInstance(instanceId, result as any);
+      console.log(`[EnhancedWorkflowEngine] instanceService.endInstance 完成`);
+      console.log(`[EnhancedWorkflowEngine] 准备触发 process.ended 事件: instanceId=${instanceId}, result=${result}`);
+      this.eventBus.emit('process.ended', { instanceId, result, timestamp: new Date() });
+      console.log(`[EnhancedWorkflowEngine] process.ended 事件已触发`);
+    } catch (error) {
+      console.error(`[EnhancedWorkflowEngine] endInstance 错误:`, error);
+      throw error;
+    }
   }
 
   private async updateCurrentNode(instanceId: string, nodeId: string, nodeName: string): Promise<void> {
@@ -1509,6 +1607,20 @@ export class EnhancedWorkflowEngine {
 
   getMetrics(): typeof this.metrics {
     return { ...this.metrics };
+  }
+
+  // ==================== 事件总线方法 ====================
+
+  on(event: string, listener: (...args: any[]) => void): void {
+    this.eventBus.on(event, listener);
+  }
+
+  off(event: string, listener: (...args: any[]) => void): void {
+    this.eventBus.off(event, listener);
+  }
+
+  emit(event: string, ...args: any[]): void {
+    this.eventBus.emit(event, ...args);
   }
 
   clearCache(): void {

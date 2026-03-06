@@ -73,6 +73,23 @@ export interface CreateInboundOrderDto {
     item_notes?: string;
     technical_doc?: string;
     attachment?: string;
+    images?: Array<{
+      image_url: string;
+      image_type: 'main' | 'accessory';
+      image_name?: string;
+      notes?: string;
+    }>;
+    accessories?: Array<{
+      accessory_name: string;
+      model_no?: string;
+      brand?: string;
+      category: 'instrument' | 'fake_load' | 'cable';
+      quantity: number;
+      unit?: string;
+      serial_number?: string;
+      purchase_price?: number;
+      notes?: string;
+    }>;
   }>;
 }
 
@@ -152,17 +169,88 @@ export class InboundOrderService {
         const itemNotes = item.item_notes === undefined || item.item_notes === '' ? null : item.item_notes;
         const attachment = item.attachment === undefined || item.attachment === '' ? null : item.attachment;
         
+        const itemId = uuidv4();
+        
         await connection.execute(`
           INSERT INTO equipment_inbound_items 
           (id, order_id, equipment_name, model_no, brand, category, unit,
            quantity, purchase_price, total_price, serial_numbers, certificate_no, certificate_issuer, certificate_expiry_date, accessory_desc, manufacturer, technical_params, item_notes, technical_doc, attachment, status)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-          uuidv4(), orderId, item.equipment_name, item.model_no, null, item.category, 
+          itemId, orderId, item.equipment_name, item.model_no, null, item.category, 
           item.unit || '台',
           item.quantity, item.purchase_price, item.total_price, serialNumbers,
           certificateNo, certificateIssuer, certificateExpiryDate, accessoryDesc, manufacturer, technicalParams, itemNotes, null, attachment, 'pending'
         ]);
+        
+        // 处理设备图片
+        if (item.images && item.images.length > 0) {
+          for (const image of item.images) {
+            await connection.execute(`
+              INSERT INTO equipment_images 
+              (id, equipment_id, equipment_name, model_no, category, image_type, image_url, image_name, notes, business_type, business_id, uploader_id, uploader_name)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              uuidv4(),
+              null, // equipment_id 将在审批通过后创建设备实例时更新
+              item.equipment_name,
+              item.model_no,
+              item.category,
+              image.image_type,
+              image.image_url,
+              image.image_name || null,
+              image.notes || null,
+              'inbound',
+              orderId,
+              finalUserId,
+              finalUserName
+            ]);
+          }
+        }
+        
+        // 处理附件清单
+        if (item.accessories && item.accessories.length > 0) {
+          for (const accessory of item.accessories) {
+            const accessoryId = uuidv4();
+            
+            // 创建附件实例
+            await connection.execute(`
+              INSERT INTO equipment_accessory_instances 
+              (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, host_equipment_id, uploader_id, uploader_name)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              accessoryId,
+              accessory.accessory_name,
+              accessory.model_no || null,
+              accessory.brand || null,
+              accessory.category,
+              accessory.unit || '个',
+              accessory.quantity,
+              accessory.serial_number || null,
+              accessory.purchase_price || 0,
+              accessory.notes || null,
+              null, // host_equipment_id 将在审批通过后创建设备实例时更新
+              finalUserId,
+              finalUserName
+            ]);
+            
+            // 创建附件关联记录（暂时关联到入库单明细，审批通过后更新）
+            await connection.execute(`
+              INSERT INTO equipment_accessories 
+              (id, host_equipment_id, accessory_id, accessory_name, accessory_model, accessory_category, quantity, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              uuidv4(),
+              itemId, // 暂时使用入库单明细ID，审批通过后更新为设备实例ID
+              accessoryId,
+              accessory.accessory_name,
+              accessory.model_no || null,
+              accessory.category,
+              accessory.quantity,
+              accessory.notes || null
+            ]);
+          }
+        }
       }
       
       await connection.commit();
@@ -359,16 +447,30 @@ export class InboundOrderService {
       );
       
       for (const item of items[0]) {
+        // 获取保管人ID
+        let keeperId = null;
+        if (order[0].warehouse_id) {
+          // 从仓库获取管理员
+          const [warehouseResult] = await connection.execute(
+            'SELECT manager_id FROM warehouses WHERE id = ?',
+            [order[0].warehouse_id]
+          );
+          if (warehouseResult[0] && warehouseResult[0].manager_id) {
+            keeperId = warehouseResult[0].manager_id;
+          }
+        }
+        
         if (item.category === 'instrument') {
+          const equipmentId = uuidv4();
           await connection.execute(`
             INSERT INTO equipment_instances 
             (id, equipment_name, model_no, brand, manufacturer, technical_params, category, unit, serial_number, manage_code, 
              equipment_type, equipment_source, health_status, usage_status, location_status, location_id, 
              purchase_date, purchase_price, calibration_expiry, certificate_no, certificate_issuer, 
-             accessory_desc, notes, technical_doc, attachment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             accessory_desc, notes, technical_doc, attachment, keeper_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
-            uuidv4(), 
+            equipmentId, 
             item.equipment_name, 
             item.model_no,
             item.brand,
@@ -392,18 +494,20 @@ export class InboundOrderService {
             item.accessory_desc || null,
             item.item_notes || null,
             item.technical_doc || null,
-            item.attachment || null
+            item.attachment || null,
+            keeperId
           ]);
         } else {
+          const equipmentId = uuidv4();
           await connection.execute(`
             INSERT INTO equipment_instances 
             (id, equipment_name, model_no, brand, manufacturer, technical_params, category, unit, quantity, serial_number, manage_code, 
              equipment_type, equipment_source, health_status, usage_status, location_status, location_id, 
              purchase_date, purchase_price, calibration_expiry, certificate_no, certificate_issuer, 
-             accessory_desc, notes, technical_doc, attachment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             accessory_desc, notes, technical_doc, attachment, keeper_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `, [
-            uuidv4(), 
+            equipmentId, 
             item.equipment_name, 
             item.model_no,
             item.brand,
@@ -428,9 +532,47 @@ export class InboundOrderService {
             item.accessory_desc || null,
             item.item_notes || null,
             item.technical_doc || null,
-            item.attachment || null
+            item.attachment || null,
+            keeperId
           ]);
         }
+        
+        // 更新设备图片的关联关系
+        await connection.execute(`
+          UPDATE equipment_images 
+          SET equipment_id = ?
+          WHERE business_type = 'inbound' AND business_id = ? AND equipment_name = ? AND model_no = ?
+        `, [equipmentId, id, item.equipment_name, item.model_no]);
+        
+        // 更新附件关联关系和附件实例的host_equipment_id
+        const accessories = await connection.execute(`
+          SELECT * FROM equipment_accessories 
+          WHERE host_equipment_id = ?
+        `, [item.id]);
+        
+        for (const accessory of accessories[0]) {
+          // 更新附件关联记录
+          await connection.execute(`
+            UPDATE equipment_accessories 
+            SET host_equipment_id = ?
+            WHERE id = ?
+          `, [equipmentId, accessory.id]);
+          
+          // 更新附件实例的host_equipment_id
+          await connection.execute(`
+            UPDATE equipment_accessory_instances 
+            SET host_equipment_id = ?
+            WHERE id = ?
+          `, [equipmentId, accessory.accessory_id]);
+        }
+        
+        // 更新设备实例的附件数量
+        const accessoryCount = accessories.length > 0 ? accessories.length : 0;
+        await connection.execute(`
+          UPDATE equipment_instances 
+          SET has_accessories = ?, accessory_count = ?
+          WHERE id = ?
+        `, [accessoryCount > 0, accessoryCount, equipmentId]);
       }
       
       await connection.execute(`

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config/api'
+import { API_URL, parseJWTToken } from '../../config/api'
 import {
   GitBranch,
   History,
@@ -171,6 +171,20 @@ export default function PersonnelOnboardDetailPage() {
       setSubmitting(true)
       const token = localStorage.getItem('token')
 
+      let userId = 'current-user'
+      let userName = '当前用户'
+      if (token) {
+        try {
+          const payload = parseJWTToken(token)
+          if (payload) {
+            userId = payload.userId || payload.id || 'current-user'
+            userName = payload.name || payload.username || payload.sub || '当前用户'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
+
       const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${currentTask.id}/complete`, {
         method: 'POST',
         headers: {
@@ -179,7 +193,8 @@ export default function PersonnelOnboardDetailPage() {
         },
         body: JSON.stringify({
           action: actionType === 'approve' ? 'approve' : 'reject',
-          comment: comment.trim()
+          comment: comment.trim(),
+          operator: { id: userId, name: userName }
         })
       })
 
