@@ -683,34 +683,185 @@ export default function ApprovalMinePageNew() {
                     
                     {/* 入库单特殊处理 */}
                     {selectedOrder.order_type === 'equipment-inbound' && selectedOrder.form_data.items && (
-                      <div>
-                        <h5 className="font-medium text-gray-900 mb-3">设备明细</h5>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-100">
-                              <tr>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">设备名称</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">单价</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">总价</th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {selectedOrder.form_data.items.map((item: any, idx: number) => (
-                                <tr key={idx}>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{item.equipment_name}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{item.model_no}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{EQUIPMENT_CATEGORY_LABELS[item.category] || item.category}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{item.quantity}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-900">¥{item.purchase_price}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-900">¥{item.total_price}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
+                      <div className="space-y-6">
+                        {selectedOrder.form_data.items.map((item: any, idx: number) => (
+                          <div key={idx} className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                              <h5 className="font-medium text-gray-900">
+                                设备 {idx + 1}: {item.equipment_name} ({EQUIPMENT_CATEGORY_LABELS[item.category] || item.category})
+                              </h5>
+                            </div>
+                            <div className="p-4 space-y-4">
+                              {/* 基本信息 */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                  <span className="text-xs text-gray-500">设备型号</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.model_no || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">单位</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.unit || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">数量</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.quantity || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">序列号</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.serial_no || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">生产厂家</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.manufacturer || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">技术参数</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.tech_params || '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">采购单价</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.purchase_price ? `¥${item.purchase_price}` : '-'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-xs text-gray-500">总价</span>
+                                  <p className="text-sm font-medium text-gray-900">{item.total_price ? `¥${item.total_price}` : '-'}</p>
+                                </div>
+                              </div>
+
+                              {/* 校准证书信息 - 仅仪器类 */}
+                              {item.category === 'instrument' && (
+                                <div className="bg-blue-50 rounded-lg p-3">
+                                  <h6 className="text-sm font-medium text-blue-800 mb-2">校准证书信息</h6>
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div>
+                                      <span className="text-xs text-gray-500">证书编号</span>
+                                      <p className="text-sm font-medium text-gray-900">{item.calibration_cert_no || '-'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-xs text-gray-500">发证单位</span>
+                                      <p className="text-sm font-medium text-gray-900">{item.calibration_issuer || '-'}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-xs text-gray-500">到期时间</span>
+                                      <p className="text-sm font-medium text-gray-900">{item.calibration_expiry || '-'}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 配件情况 */}
+                              <div>
+                                <span className="text-xs text-gray-500">配件情况</span>
+                                <p className="text-sm font-medium text-gray-900">{item.accessory_desc || '-'}</p>
+                              </div>
+
+                              {/* 备注 */}
+                              <div>
+                                <span className="text-xs text-gray-500">备注</span>
+                                <p className="text-sm font-medium text-gray-900">{item.remark || '-'}</p>
+                              </div>
+
+                              {/* 主机图片 */}
+                              {item.main_images && item.main_images.length > 0 && (
+                                <div>
+                                  <span className="text-xs text-gray-500 block mb-2">主机图片</span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {item.main_images.map((img: string, imgIdx: number) => (
+                                      <a
+                                        key={imgIdx}
+                                        href={img}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block"
+                                      >
+                                        <img
+                                          src={img}
+                                          alt={`主机图片 ${imgIdx + 1}`}
+                                          className="w-20 h-20 object-cover rounded border border-gray-200 hover:border-blue-500 transition-colors"
+                                        />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 配件图片 */}
+                              {item.accessory_images && item.accessory_images.length > 0 && (
+                                <div>
+                                  <span className="text-xs text-gray-500 block mb-2">配件图片</span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {item.accessory_images.map((img: string, imgIdx: number) => (
+                                      <a
+                                        key={imgIdx}
+                                        href={img}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block"
+                                      >
+                                        <img
+                                          src={img}
+                                          alt={`配件图片 ${imgIdx + 1}`}
+                                          className="w-20 h-20 object-cover rounded border border-gray-200 hover:border-blue-500 transition-colors"
+                                        />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 附件信息 */}
+                              {item.attachments && item.attachments.length > 0 && (
+                                <div>
+                                  <span className="text-xs text-gray-500 block mb-2">附件</span>
+                                  <div className="space-y-1">
+                                    {item.attachments.map((att: any, attIdx: number) => (
+                                      <a
+                                        key={attIdx}
+                                        href={typeof att === 'string' ? att : att.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm text-blue-600 hover:text-blue-800 underline block"
+                                      >
+                                        {typeof att === 'string' ? `附件 ${attIdx + 1}` : (att.name || `附件 ${attIdx + 1}`)}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 配件清单 - 仅仪器类 */}
+                              {item.category === 'instrument' && item.accessory_list && item.accessory_list.length > 0 && (
+                                <div>
+                                  <span className="text-xs text-gray-500 block mb-2">配件清单</span>
+                                  <div className="bg-gray-50 rounded-lg overflow-hidden">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-100">
+                                        <tr>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">序号</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">配件名称</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">规格型号</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">数量</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">单位</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {item.accessory_list.map((acc: any, accIdx: number) => (
+                                          <tr key={accIdx}>
+                                            <td className="px-3 py-2 text-sm text-gray-900">{accIdx + 1}</td>
+                                            <td className="px-3 py-2 text-sm text-gray-900">{acc.accessory_name || '-'}</td>
+                                            <td className="px-3 py-2 text-sm text-gray-900">{acc.accessory_model || '-'}</td>
+                                            <td className="px-3 py-2 text-sm text-gray-900">{acc.accessory_quantity || '-'}</td>
+                                            <td className="px-3 py-2 text-sm text-gray-900">{acc.accessory_unit || '-'}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                     

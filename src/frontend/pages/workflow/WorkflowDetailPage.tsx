@@ -122,7 +122,7 @@ export default function WorkflowDetailPage() {
   const [currentTask, setCurrentTask] = useState<WorkflowTask | null>(null)
   const [showAllLogs, setShowAllLogs] = useState(false)
 
-  const [actionType, setActionType] = useState<'approve' | 'reject' | 'return' | 'addSigner' | ''>('')
+  const [actionType, setActionType] = useState<'approve' | 'reject' | 'return' | 'addSigner' | 'transfer' | ''>('')
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [targetNodeId, setTargetNodeId] = useState('')
@@ -131,6 +131,9 @@ export default function WorkflowDetailPage() {
   // 加签相关状态
   const [selectedSigners, setSelectedSigners] = useState<string[]>([])
   const [showSignerDialog, setShowSignerDialog] = useState(false)
+
+  // 移交相关状态
+  const [selectedTransferee, setSelectedTransferee] = useState<string>('')
 
   // 设备调拨相关状态
   const [shippingNo, setShippingNo] = useState('')
@@ -300,6 +303,14 @@ export default function WorkflowDetailPage() {
           const projectIds: string[] = []
           const userIds: string[] = []
           
+          // 设备入库相关ID
+          if (formData.warehouse_id) {
+            warehouseIds.push(formData.warehouse_id)
+          }
+          if (formData.warehouse_manager_id) {
+            userIds.push(formData.warehouse_manager_id)
+          }
+          
           // 设备调拨相关ID
           if (formData.fromLocationId) {
             if (formData.fromLocationType === 'warehouse') {
@@ -336,10 +347,10 @@ export default function WorkflowDetailPage() {
 
           // 加载所有需要的映射数据
           const loadPromises: Promise<void>[] = []
-          
+
           if (deptIds.length > 0) {
             loadPromises.push(
-              fetchWithTimeout(`${API_URL.BASE}/api/departments`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/organization/departments`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -351,10 +362,10 @@ export default function WorkflowDetailPage() {
               }).catch(() => {})
             )
           }
-          
+
           if (posIds.length > 0) {
             loadPromises.push(
-              fetchWithTimeout(`${API_URL.BASE}/api/positions`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/organization/positions`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -405,7 +416,14 @@ export default function WorkflowDetailPage() {
                 if (res.ok) {
                   const result = await res.json()
                   if (result.success && result.data) {
-                    setUserMap(Object.fromEntries(result.data.map((u: any) => [u.id, u.name])))
+                    const map: Record<string, string> = {}
+                    result.data.forEach((u: any) => {
+                      map[u.id] = u.name
+                      if (u.user_id) {
+                        map[u.user_id] = u.name
+                      }
+                    })
+                    setUserMap(map)
                   }
                 }
               }).catch(() => {})
@@ -794,7 +812,8 @@ export default function WorkflowDetailPage() {
         setTargetNodeId('')
         loadInstanceData()
       } else {
-        throw new Error('回退失败')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || '回退失败')
       }
     } catch (error: any) {
       console.error('回退失败:', error)
@@ -883,6 +902,61 @@ export default function WorkflowDetailPage() {
     } catch (error: any) {
       console.error('添加加签人失败:', error)
       alert(error.message || '添加加签人失败，请重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleTransfer = async () => {
+    if (!currentTask) return
+    if (!selectedTransferee) {
+      alert('请选择移交人')
+      return
+    }
+    if (!confirm(`确定要将任务移交给${userMap[selectedTransferee]}吗？`)) return
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      let userId = 'current-user'
+      let userName = '当前用户'
+      if (token) {
+        try {
+          const payload = parseJWTToken(token)
+          if (payload) {
+            userId = payload.userId || payload.id || 'current-user'
+            userName = payload.name || payload.username || payload.sub || '当前用户'
+          }
+        } catch (e) {
+          console.warn('Token解析失败')
+        }
+      }
+
+      const res = await fetch(`${API_URL.BASE}/api/workflow/v2/task/${currentTask.id}/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetUser: { id: selectedTransferee, name: userMap[selectedTransferee] },
+          operator: { id: userId, name: userName },
+          comment: comment
+        })
+      })
+
+      if (res.ok) {
+        alert('已移交任务')
+        setActionType('')
+        setComment('')
+        setSelectedTransferee('')
+        loadInstanceData()
+      } else {
+        throw new Error('移交任务失败')
+      }
+    } catch (error: any) {
+      console.error('移交任务失败:', error)
+      alert(error.message || '移交任务失败，请重试')
     } finally {
       setSubmitting(false)
     }
@@ -1029,12 +1103,116 @@ export default function WorkflowDetailPage() {
             {value.map((item: any, index: number) => (
               <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                  {arrayFields.map((arrayField: any) => (
-                    <div key={arrayField.name}>
-                      <div className="text-gray-500 mb-1">{arrayField.label}</div>
-                      <div className="text-gray-900">{item[arrayField.name] || '-'}</div>
-                    </div>
-                  ))}
+                  {arrayFields.map((arrayField: any) => {
+                    const fieldValue = item[arrayField.name]
+                    
+                    // 处理嵌套数组字段（如 images 和 attachments）
+                    if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+                      if (arrayField.name === 'images' || arrayField.name === 'main_images' || arrayField.name === 'accessory_images') {
+                        return (
+                          <div key={arrayField.name} className="md:col-span-2">
+                            <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                            <div className="flex flex-wrap gap-2">
+                              {fieldValue.map((img: any, imgIndex: number) => {
+                                const imgUrl = typeof img === 'string' ? img : (img.image_url || img.url)
+                                return (
+                                  <a
+                                    key={imgIndex}
+                                    href={imgUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <img
+                                      src={imgUrl}
+                                      alt={`图片 ${imgIndex + 1}`}
+                                      className="w-16 h-16 object-cover rounded border border-gray-300 hover:border-blue-500 transition-colors"
+                                    />
+                                  </a>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      } else if (arrayField.name === 'attachments') {
+                        return (
+                          <div key={arrayField.name} className="md:col-span-2">
+                            <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                            <div className="space-y-1">
+                              {fieldValue.map((att: any, attIndex: number) => {
+                                const attUrl = typeof att === 'string' ? att : (att.file_url || att.url)
+                                const attName = typeof att === 'string' ? att.split('/').pop() : (att.name || att.file_url?.split('/').pop() || '附件')
+                                return (
+                                  <a
+                                    key={attIndex}
+                                    href={attUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline text-sm block"
+                                  >
+                                    {attName}
+                                  </a>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      } else if (arrayField.name === 'accessories' || arrayField.name === 'accessory_list') {
+                        return (
+                          <div key={arrayField.name} className="md:col-span-2">
+                            <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                            <div className="bg-white rounded border border-gray-200 overflow-hidden">
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-gray-100">
+                                  <tr>
+                                    <th className="px-2 py-1 text-left text-xs text-gray-500">序号</th>
+                                    <th className="px-2 py-1 text-left text-xs text-gray-500">配件名称</th>
+                                    <th className="px-2 py-1 text-left text-xs text-gray-500">规格型号</th>
+                                    <th className="px-2 py-1 text-left text-xs text-gray-500">数量</th>
+                                    <th className="px-2 py-1 text-left text-xs text-gray-500">单位</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {fieldValue.map((acc: any, accIndex: number) => (
+                                    <tr key={accIndex}>
+                                      <td className="px-2 py-1 text-gray-900">{accIndex + 1}</td>
+                                      <td className="px-2 py-1 text-gray-900">{acc.accessory_name || '-'}</td>
+                                      <td className="px-2 py-1 text-gray-900">{acc.accessory_model || '-'}</td>
+                                      <td className="px-2 py-1 text-gray-900">{acc.accessory_quantity || acc.quantity || '-'}</td>
+                                      <td className="px-2 py-1 text-gray-900">{acc.accessory_unit || acc.unit || '-'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )
+                      } else {
+                        return (
+                          <div key={arrayField.name}>
+                            <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                            <div className="text-gray-900">{fieldValue.length} 项</div>
+                          </div>
+                        )
+                      }
+                    }
+                    
+                    // 处理普通字段
+                    // 格式化字段值
+                    let displayFieldValue = item[arrayField.name] || '-'
+                    
+                    // 处理 select 类型的选项转换
+                    if (arrayField.type === 'select' && arrayField.options) {
+                      const option = arrayField.options.find((opt: any) => opt.value === displayFieldValue)
+                      displayFieldValue = option?.label || displayFieldValue
+                    }
+                    
+                    return (
+                      <div key={arrayField.name}>
+                        <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                        <div className="text-gray-900">{displayFieldValue}</div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             ))}
@@ -1048,7 +1226,6 @@ export default function WorkflowDetailPage() {
     if (value === null || value === undefined || value === '') {
       displayValue = '-'
     } else if (fieldConfig.display) {
-      // 使用字段配置的 display 配置
       const displayType = fieldConfig.display.type
       const displayFormat = fieldConfig.display.format
 
@@ -1056,23 +1233,39 @@ export default function WorkflowDetailPage() {
         displayValue = userMap[value]
       } else if (displayType === 'lookup' && displayFormat === 'name') {
         displayValue = typeof value === 'object' ? value.name : value
+      } else if (displayType === 'select' && displayFormat === 'label') {
+        if (fieldConfig.dynamicOptions === 'warehouse' && warehouseMap[value]) {
+          displayValue = warehouseMap[value]
+        } else if (fieldConfig.options) {
+          const option = fieldConfig.options.find((opt: any) => opt.value === value)
+          displayValue = option?.label || value
+        } else {
+          displayValue = value
+        }
       }
     } else if (fieldType === 'date') {
-      // date 类型：格式化日期
       try {
         displayValue = new Date(value).toLocaleDateString('zh-CN')
       } catch {
         displayValue = value
       }
     } else if (fieldType === 'select' && fieldConfig.options) {
-      // select 类型：将值转换为标签
       const option = fieldConfig.options.find((opt: any) => opt.value === value)
       displayValue = option?.label || value
+    } else if (fieldType === 'select' && fieldConfig.dynamicOptions === 'warehouse') {
+      displayValue = warehouseMap[value] || value
+    } else if (fieldConfig.name === 'department_id' || fieldConfig.name === 'department') {
+      displayValue = deptMap[value] || value
+    } else if (fieldConfig.name === 'position_id' || fieldConfig.name === 'position') {
+      displayValue = posMap[value] || value
+    } else if (fieldConfig.name === 'employee_type' && fieldConfig.options) {
+      const option = fieldConfig.options.find((opt: any) => opt.value === value)
+      displayValue = option?.label || value
+    } else if (fieldType === 'user' && userMap[value]) {
+      displayValue = userMap[value]
     } else if (Array.isArray(value)) {
-      // 数组类型：显示数量
       displayValue = `${value.length} 项`
     } else if (typeof value === 'object') {
-      // 对象类型：转换为 JSON 字符串
       displayValue = JSON.stringify(value)
     } else {
       displayValue = String(value)
@@ -1099,7 +1292,6 @@ export default function WorkflowDetailPage() {
     // 只渲染在 formFields 中定义的字段
     const entries = formFields
       .map((field: any) => [field.name, formData[field.name]])
-      .filter(([key, value]) => value !== null && value !== undefined && value !== '')
 
     console.log('[WorkflowDetailPage] renderFormTab - entries:', entries)
 
@@ -1451,6 +1643,7 @@ export default function WorkflowDetailPage() {
               {actionType === 'approve' ? '审批通过' : 
                actionType === 'reject' ? '审批驳回' : 
                actionType === 'return' ? '回退' :
+               actionType === 'transfer' ? '移交' :
                actionType === 'addSigner' ? '加签' :
                '减签'}
             </h3>
@@ -1503,6 +1696,29 @@ export default function WorkflowDetailPage() {
                     </label>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* 移交人选择 */}
+            {actionType === 'transfer' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择移交人 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedTransferee}
+                  onChange={(e) => setSelectedTransferee(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">请选择移交人</option>
+                  {Object.entries(userMap)
+                    .filter(([userId]) => userId !== currentUserId)
+                    .map(([userId, userName]) => (
+                      <option key={userId} value={userId}>
+                        {userName}
+                      </option>
+                    ))}
+                </select>
               </div>
             )}
             
@@ -1767,9 +1983,10 @@ export default function WorkflowDetailPage() {
                   actionType === 'approve' ? handleApprove :
                   actionType === 'reject' ? handleReject :
                   actionType === 'return' ? handleReturn :
+                  actionType === 'transfer' ? handleTransfer :
                   handleAddSigner
                 }
-                disabled={submitting || (actionType === 'reject' && !comment.trim())}
+                disabled={submitting || (actionType === 'reject' && !comment.trim()) || (actionType === 'transfer' && !selectedTransferee)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Send className="w-4 h-4" />
@@ -1781,6 +1998,7 @@ export default function WorkflowDetailPage() {
                   setComment('');
                   setTargetNodeId('');
                   setSelectedSigners([]);
+                  setSelectedTransferee('');
                   setShippingNo('');
                   setShippedAt('');
                   setReceiveStatus('normal');
