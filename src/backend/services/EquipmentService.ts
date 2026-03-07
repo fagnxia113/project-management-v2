@@ -53,12 +53,21 @@ export class EquipmentService {
     async getInstanceById(id: string): Promise<EquipmentInstance | undefined> {
         const res = await db.queryOne<EquipmentInstance>(
             `SELECT i.*, 
+                m.name as equipment_name,
+                m.model_no,
+                m.category,
+                m.brand,
+                m.unit,
+                m.manufacturer,
+                m.technical_params,
                 CASE 
                     WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
                     WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
                     ELSE NULL
-                END as location_name
+                END as location_name,
+                (SELECT name FROM employees WHERE id = i.keeper_id) as keeper_name
             FROM equipment_instances i 
+            LEFT JOIN equipment_models m ON i.model_id = m.id
             WHERE i.id = ?`, 
             [id]
         );
@@ -112,36 +121,188 @@ export class EquipmentService {
 
         if (location_id) { whereClause += ' AND i.location_id = ?'; params.push(location_id); }
         if (status) { whereClause += ' AND i.location_status = ?'; params.push(status); }
-        if (category) { whereClause += ' AND i.category = ?'; params.push(category); }
+        if (category) { whereClause += ' AND m.category = ?'; params.push(category); }
         if (health_status) { whereClause += ' AND i.health_status = ?'; params.push(health_status); }
         if (usage_status) { whereClause += ' AND i.usage_status = ?'; params.push(usage_status); }
         if (location_status) { whereClause += ' AND i.location_status = ?'; params.push(location_status); }
         if (equipment_source) { whereClause += ' AND i.equipment_source = ?'; params.push(equipment_source); }
         if (search) {
-            whereClause += ' AND (i.manage_code LIKE ? OR i.serial_number LIKE ? OR i.equipment_name LIKE ?)';
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            whereClause += ' AND (i.manage_code LIKE ? OR i.serial_number LIKE ? OR m.name LIKE ? OR m.model_no LIKE ?)';
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         const countRes = await db.queryOne<{ total: number }>(
-            `SELECT COUNT(*) as total FROM equipment_instances i WHERE ${whereClause}`,
+            `SELECT COUNT(*) as total FROM equipment_instances i 
+             LEFT JOIN equipment_models m ON i.model_id = m.id
+             WHERE ${whereClause}`,
             params
         );
         const total = countRes?.total || 0;
 
         const data = await db.query(
             `SELECT i.*, 
+                m.name as equipment_name,
+                m.model_no,
+                m.category,
+                m.brand,
+                m.unit,
                 CASE 
                     WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
                     WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
                     ELSE NULL
                 END as location_name
        FROM equipment_instances i 
+       LEFT JOIN equipment_models m ON i.model_id = m.id
        WHERE ${whereClause} 
        ORDER BY i.created_at DESC LIMIT ? OFFSET ?`,
             [...params, pageSize, offset]
         );
 
         return { data, total, totalPages: Math.ceil(total / pageSize) };
+    }
+
+    async getAggregatedInstances(filters: {
+        location_id?: string;
+        status?: string;
+        search?: string;
+        category?: string;
+        health_status?: string;
+        usage_status?: string;
+        location_status?: string;
+        equipment_source?: string;
+        page: number;
+        pageSize: number
+    }): Promise<{ data: any[]; total: number; totalPages: number }> {
+        const { location_id, status, search, category, health_status, usage_status, location_status, equipment_source, page, pageSize } = filters;
+        const offset = (page - 1) * pageSize;
+        let whereClause = '1=1';
+        const params: any[] = [];
+
+        if (location_id) { whereClause += ' AND i.location_id = ?'; params.push(location_id); }
+        if (status) { whereClause += ' AND i.location_status = ?'; params.push(status); }
+        if (category) { whereClause += ' AND m.category = ?'; params.push(category); }
+        if (health_status) { whereClause += ' AND i.health_status = ?'; params.push(health_status); }
+        if (usage_status) { whereClause += ' AND i.usage_status = ?'; params.push(usage_status); }
+        if (location_status) { whereClause += ' AND i.location_status = ?'; params.push(location_status); }
+        if (equipment_source) { whereClause += ' AND i.equipment_source = ?'; params.push(equipment_source); }
+        if (search) {
+            whereClause += ' AND (i.manage_code LIKE ? OR i.serial_number LIKE ? OR m.name LIKE ? OR m.model_no LIKE ?)';
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        const instrumentWhereClause = whereClause + " AND m.category = 'instrument'";
+        const nonInstrumentWhereClause = whereClause + " AND m.category != 'instrument'";
+
+        const instrumentCount = await db.queryOne<{ total: number }>(
+            `SELECT COUNT(*) as total FROM equipment_instances i 
+             LEFT JOIN equipment_models m ON i.model_id = m.id
+             WHERE ${instrumentWhereClause}`,
+            [...params]
+        );
+
+        const aggregatedCount = await db.queryOne<{ total: number }>(
+            `SELECT COUNT(*) as total
+             FROM equipment_instances i 
+             LEFT JOIN equipment_models m ON i.model_id = m.id
+             WHERE ${nonInstrumentWhereClause}`,
+            [...params]
+        );
+
+        const total = (instrumentCount?.total || 0) + (aggregatedCount?.total || 0);
+
+        const instrumentData = await db.query(
+            `SELECT 
+                i.id,
+                i.model_id,
+                i.serial_number,
+                i.manage_code,
+                i.health_status,
+                i.usage_status,
+                i.location_status,
+                i.location_id,
+                i.keeper_id,
+                i.purchase_date,
+                i.purchase_price,
+                i.calibration_expiry,
+                i.certificate_no,
+                i.certificate_issuer,
+                i.accessory_desc,
+                i.notes,
+                i.accessories,
+                i.created_at,
+                m.name as equipment_name,
+                m.model_no,
+                m.category,
+                m.brand,
+                m.manufacturer,
+                m.technical_params,
+                m.unit,
+                CASE 
+                    WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
+                    WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
+                    ELSE NULL
+                END as location_name,
+                (SELECT name FROM employees WHERE id = i.keeper_id) as keeper_name,
+                1 as quantity,
+                'instrument' as display_type,
+                (SELECT image_url FROM equipment_images WHERE equipment_id = i.id AND image_type = 'main' ORDER BY created_at DESC LIMIT 1) as main_image
+            FROM equipment_instances i 
+            LEFT JOIN equipment_models m ON i.model_id = m.id
+            WHERE ${instrumentWhereClause}
+            ORDER BY i.created_at DESC`,
+            [...params]
+        );
+
+        const aggregatedData = await db.query(
+            `SELECT 
+                i.id,
+                i.model_id,
+                NULL as serial_number,
+                i.manage_code as manage_codes,
+                i.health_status,
+                i.usage_status,
+                i.location_status,
+                i.location_id,
+                i.keeper_id,
+                i.purchase_date,
+                i.purchase_price,
+                i.calibration_expiry,
+                i.certificate_no,
+                i.certificate_issuer,
+                i.accessory_desc,
+                i.notes,
+                i.accessories,
+                i.created_at,
+                m.name as equipment_name,
+                m.model_no,
+                m.category,
+                m.brand,
+                m.manufacturer,
+                m.technical_params,
+                m.unit,
+                CASE 
+                    WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
+                    WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
+                    ELSE NULL
+                END as location_name,
+                (SELECT name FROM employees WHERE id = i.keeper_id) as keeper_name,
+                COALESCE(i.quantity, 1) as quantity,
+                'aggregated' as display_type,
+                i.id as instance_ids,
+                (SELECT image_url FROM equipment_images WHERE equipment_id = i.id AND image_type = 'main' ORDER BY created_at DESC LIMIT 1) as main_image
+            FROM equipment_instances i 
+            LEFT JOIN equipment_models m ON i.model_id = m.id
+            WHERE ${nonInstrumentWhereClause}
+            ORDER BY i.created_at DESC`,
+            [...params]
+        );
+
+        const allData = [...instrumentData, ...aggregatedData];
+        allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        const paginatedData = allData.slice(offset, offset + pageSize);
+
+        return { data: paginatedData, total, totalPages: Math.ceil(total / pageSize) };
     }
 
     // --- Stock Distribution ---
@@ -397,6 +558,14 @@ export class EquipmentService {
             WHERE equipment_name IS NOT NULL AND equipment_name != ''
             ORDER BY equipment_name, model_no
         `);
+        return result;
+    }
+
+    async getImagesByEquipmentId(equipmentId: string): Promise<any[]> {
+        const result = await db.query(
+            'SELECT * FROM equipment_images WHERE equipment_id = ? ORDER BY created_at DESC',
+            [equipmentId]
+        );
         return result;
     }
 }

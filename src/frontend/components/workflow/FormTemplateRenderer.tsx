@@ -4,15 +4,19 @@ import { API_URL } from '../../config/api'
 
 interface FormTemplateRendererProps {
   fields: FormField[]
-  data: Record<string, any>
+  data?: Record<string, any>
+  formData?: Record<string, any>
   onChange: (name: string, value: any) => void
   nodeId?: string
-  mode?: 'create' | 'edit' | 'view'
+  currentNodeId?: string
+  mode?: 'create' | 'edit' | 'view' | 'approval'
+  isReadonly?: boolean
   userMap?: Record<string, string>
   departmentMap?: Record<string, string>
   warehouseMap?: Record<string, string>
   projectMap?: Record<string, string>
   positionMap?: Record<string, string>
+  repairOrder?: any
 }
 
 interface EquipmentOption {
@@ -24,15 +28,23 @@ interface EquipmentOption {
 const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
   fields,
   data,
+  formData: formDataProp,
   onChange,
   nodeId,
+  currentNodeId,
   mode = 'create',
+  isReadonly: isReadonlyProp,
   userMap = {},
   departmentMap = {},
   warehouseMap = {},
   projectMap = {},
-  positionMap = {}
+  positionMap = {},
+  repairOrder
 }) => {
+  const formData = formDataProp || data || {}
+  const effectiveNodeId = currentNodeId || nodeId || ''
+  const isReadonly = isReadonlyProp ?? mode === 'view'
+  
   const [equipmentOptions, setEquipmentOptions] = useState<EquipmentOption[]>([])
   const [loadingEquipment, setLoadingEquipment] = useState(false)
   const [customFields, setCustomFields] = useState<Record<string, boolean>>({})
@@ -44,13 +56,13 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
   }, [])
 
   useEffect(() => {
-    if (data.warehouse_id) {
-      loadWarehouseManager(data.warehouse_id)
+    if (formData.warehouse_id) {
+      loadWarehouseManager(formData.warehouse_id)
     } else {
       setWarehouseManager(null)
       onChange('warehouse_manager_id', '')
     }
-  }, [data.warehouse_id])
+  }, [formData.warehouse_id])
 
   const loadWarehouseManager = async (warehouseId: string) => {
     try {
@@ -130,7 +142,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     editable: boolean
     required: boolean
   } => {
-    // 检查字段是否被隐藏
     if ((field as any).hidden === true || (field as any).visible === false) {
       return {
         visible: false,
@@ -139,38 +150,95 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
       }
     }
 
-    if (!field.permissions) {
+    if (mode === 'create') {
+      if (!field.permissions) {
+        return {
+          visible: true,
+          editable: true,
+          required: field.required || false
+        }
+      }
+      if (field.permissions.default) {
+        return {
+          visible: field.permissions.default.visible !== false,
+          editable: field.permissions.default.editable !== false,
+          required: field.permissions.default.required ?? field.required ?? false
+        }
+      }
       return {
         visible: true,
-        editable: mode !== 'view',
+        editable: true,
         required: field.required || false
       }
     }
 
-    if (nodeId && field.permissions.nodePermissions && field.permissions.nodePermissions[nodeId]) {
+    if (mode === 'approval') {
+      const visibleOn = (field as any).visibleOn
+      const editableOn = (field as any).editableOn
+      
+      if (visibleOn && Array.isArray(visibleOn)) {
+        const isVisible = visibleOn.includes(effectiveNodeId)
+        if (!isVisible) {
+          return {
+            visible: false,
+            editable: false,
+            required: false
+          }
+        }
+      }
+      
+      let isEditable = false
+      if (editableOn && Array.isArray(editableOn)) {
+        isEditable = editableOn.includes(effectiveNodeId)
+      } else if (field.permissions) {
+        if (effectiveNodeId && field.permissions.nodePermissions && field.permissions.nodePermissions[effectiveNodeId]) {
+          const nodePerm = field.permissions.nodePermissions[effectiveNodeId]
+          isEditable = nodePerm.editable === true
+        } else if (field.permissions.default) {
+          isEditable = field.permissions.default.editable === true
+        }
+      }
+      
       return {
-        visible: field.permissions.nodePermissions[nodeId].visible,
-        editable: field.permissions.nodePermissions[nodeId].editable && mode !== 'view',
-        required: field.permissions.nodePermissions[nodeId].required ?? field.required ?? false
+        visible: true,
+        editable: isEditable,
+        required: field.required || false
+      }
+    }
+
+    if (!field.permissions) {
+      return {
+        visible: true,
+        editable: !isReadonly,
+        required: field.required || false
+      }
+    }
+
+    if (effectiveNodeId && field.permissions.nodePermissions && field.permissions.nodePermissions[effectiveNodeId]) {
+      return {
+        visible: field.permissions.nodePermissions[effectiveNodeId].visible !== false,
+        editable: field.permissions.nodePermissions[effectiveNodeId].editable === true && !isReadonly,
+        required: field.permissions.nodePermissions[effectiveNodeId].required ?? field.required ?? false
       }
     }
 
     if (field.permissions.default) {
       return {
-        visible: field.permissions.default.visible,
-        editable: field.permissions.default.editable && mode !== 'view',
+        visible: field.permissions.default.visible !== false,
+        editable: field.permissions.default.editable === true && !isReadonly,
         required: field.permissions.default.required ?? field.required ?? false
       }
     }
 
     return {
       visible: true,
-      editable: mode !== 'view',
+      editable: !isReadonly,
       required: field.required || false
     }
   }
 
   const renderFieldInput = (field: FormField, value: any, onChange: (name: string, value: any) => void, isReadonly: boolean) => {
+    console.log('[FormTemplateRenderer] renderFieldInput:', field.name, 'isReadonly:', isReadonly, 'value:', value)
     switch (field.type) {
       case 'text':
       case 'phone':
@@ -234,11 +302,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'select':
         let selectOptions: { label: string; value: any }[] = []
+        let displayValue = value ?? ''
         
-        // 处理仓库管理员字段的动态选项
-        if (field.name === 'warehouse_manager_id' && data.warehouse_id) {
+        if (field.name === 'warehouse_manager_id' && formData.warehouse_id) {
           if (warehouseManager) {
             selectOptions = [{ label: warehouseManager.name, value: warehouseManager.id }]
+            if (value === warehouseManager.id) {
+              displayValue = warehouseManager.name
+            }
           } else {
             selectOptions = []
           }
@@ -249,15 +320,56 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             }
             return opt
           }) : []
+          const selectedOption = selectOptions.find(opt => opt.value === value)
+          if (selectedOption) {
+            displayValue = selectedOption.label
+          }
+        } else {
+          if (field.name === 'fromLocationType' && value) {
+            displayValue = value === 'warehouse' ? '仓库' : value === 'project' ? '项目' : value
+          } else if (field.name === 'toLocationType' && value) {
+            displayValue = value === 'warehouse' ? '仓库' : value === 'project' ? '项目' : value
+          } else if (field.name === 'fromLocationId' && value) {
+            const locationType = (formData as any).fromLocationType
+            if (locationType === 'warehouse' && warehouseMap[value]) {
+              displayValue = warehouseMap[value]
+            } else if (locationType === 'project' && projectMap[value]) {
+              displayValue = projectMap[value]
+            }
+          } else if (field.name === 'toLocationId' && value) {
+            const locationType = (formData as any).toLocationType
+            if (locationType === 'warehouse' && warehouseMap[value]) {
+              displayValue = warehouseMap[value]
+            } else if (locationType === 'project' && projectMap[value]) {
+              displayValue = projectMap[value]
+            }
+          } else if (field.name === 'fromManagerId' && value) {
+            if (userMap[value]) {
+              displayValue = userMap[value]
+            }
+          } else if (field.name === 'toManagerId' && value) {
+            if (userMap[value]) {
+              displayValue = userMap[value]
+            }
+          }
+        }
+        
+        const isDisabled = isReadonly || field.disabled
+        if (isDisabled) {
+          return (
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700">
+              {displayValue || '-'}
+            </div>
+          )
         }
         
         return (
           <select
             value={value ?? ''}
             onChange={(e) => onChange(field.name, e.target.value)}
-            disabled={isReadonly}
+            disabled={isDisabled}
             className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              isDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
           >
             <option value="">{field.placeholder || `请选择${field.label}`}</option>
@@ -269,12 +381,35 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'user':
         let userOptions: { label: string; value: any }[] = []
-        if (field.dynamicOptionsConfig?.source === 'warehouse_id' && data.warehouse_id) {
-          // 仓库管理员：需要从后端获取仓库的管理员
-          // 暂时使用 userMap
+        let userDisplayValue = value ?? ''
+        
+        if (field.dynamicOptionsConfig?.source === 'warehouse_id' && formData.warehouse_id) {
           userOptions = Object.entries(userMap).map(([id, name]) => ({ label: name, value: id }))
         } else {
           userOptions = Object.entries(userMap).map(([id, name]) => ({ label: name, value: id }))
+        }
+        
+        const selectedUser = userOptions.find(opt => opt.value === value)
+        if (selectedUser) {
+          userDisplayValue = selectedUser.label
+        }
+        
+        if (field.name === 'fromManagerId' && value) {
+          if (userMap[value]) {
+            userDisplayValue = userMap[value]
+          }
+        } else if (field.name === 'toManagerId' && value) {
+          if (userMap[value]) {
+            userDisplayValue = userMap[value]
+          }
+        }
+        
+        if (isReadonly) {
+          return (
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700">
+              {userDisplayValue || '-'}
+            </div>
+          )
         }
         
         return (
@@ -609,16 +744,20 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
   const renderField = (field: FormField) => {
     const permissions = getFieldPermissions(field)
+    console.log('[FormTemplateRenderer] renderField:', field.name, 'permissions:', permissions, 'effectiveNodeId:', effectiveNodeId)
 
     if (!permissions.visible) {
       return null
     }
 
-    const value = data[field.name] ?? ''
-    // 支持多种方式标识字段为只读/自动生成
+    let value = formData[field.name] ?? ''
+    
+    if (repairOrder && (field.name === 'equipment_name' || field.name === 'equipment_category' || field.name === 'repair_quantity')) {
+      value = repairOrder[field.name] ?? ''
+    }
+    
     const isAutoGenerate = (field as any).autoGenerate === true || field.readonly === true || (field as any).disabled === true
     const isReadonly = !permissions.editable || isAutoGenerate
-    // 自动生成的字段不应该显示必填标记（因为由系统自动生成）
     const showRequired = permissions.required && !isAutoGenerate
 
     const fieldWrapper = (content: React.ReactNode) => {
@@ -706,6 +845,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'select':
         let selectOptions: { label: string; value: any }[] = []
+        let displayValue = value ?? ''
 
         // 优先使用动态选项（通过 props 传递）
         if (field.name === 'department_id' && Object.keys(departmentMap).length > 0) {
@@ -720,6 +860,41 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         } else if (field.name === 'warehouse_id' && Object.keys(warehouseMap).length > 0) {
           // 仓库字段使用仓库映射
           selectOptions = Object.entries(warehouseMap).map(([id, name]) => ({ label: name, value: id }))
+        } else if (field.name === 'fromLocationType' || field.name === 'toLocationType') {
+          // 位置类型字段
+          selectOptions = [
+            { label: '仓库', value: 'warehouse' },
+            { label: '项目', value: 'project' }
+          ]
+          if (value) {
+            displayValue = value === 'warehouse' ? '仓库' : value === 'project' ? '项目' : value
+          }
+        } else if (field.name === 'fromLocationId' && value) {
+          // 调出位置字段
+          const locationType = (formData as any).fromLocationType
+          if (locationType === 'warehouse' && warehouseMap[value]) {
+            displayValue = warehouseMap[value]
+          } else if (locationType === 'project' && projectMap[value]) {
+            displayValue = projectMap[value]
+          }
+        } else if (field.name === 'toLocationId' && value) {
+          // 调入位置字段
+          const locationType = (formData as any).toLocationType
+          if (locationType === 'warehouse' && warehouseMap[value]) {
+            displayValue = warehouseMap[value]
+          } else if (locationType === 'project' && projectMap[value]) {
+            displayValue = projectMap[value]
+          }
+        } else if (field.name === 'fromManagerId' && value) {
+          // 调出位置负责人字段
+          if (userMap[value]) {
+            displayValue = userMap[value]
+          }
+        } else if (field.name === 'toManagerId' && value) {
+          // 调入位置负责人字段
+          if (userMap[value]) {
+            displayValue = userMap[value]
+          }
         } else if (field.options) {
           // 回退到静态选项
           selectOptions = Array.isArray(field.options) ? field.options.map(opt => {
@@ -728,15 +903,28 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             }
             return opt
           }) : []
+          const selectedOption = selectOptions.find(opt => opt.value === value)
+          if (selectedOption) {
+            displayValue = selectedOption.label
+          }
+        }
+
+        const isDisabled = isReadonly || field.disabled
+        if (isDisabled) {
+          return fieldWrapper(
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700">
+              {displayValue || '-'}
+            </div>
+          )
         }
 
         return fieldWrapper(
           <select
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
-            disabled={isReadonly}
+            disabled={isDisabled}
             className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              isDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
           >
             <option value="">请选择{field.label}</option>
@@ -749,13 +937,41 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         )
 
       case 'user':
+        let userDisplayValue = value ?? ''
+        
+        if (field.name === 'fromManagerId' && value) {
+          if (userMap[value]) {
+            userDisplayValue = userMap[value]
+          }
+        } else if (field.name === 'toManagerId' && value) {
+          if (userMap[value]) {
+            userDisplayValue = userMap[value]
+          }
+        } else {
+          const selectedUser = Object.entries(userMap).find(([id]) => id === value)
+          if (selectedUser) {
+            userDisplayValue = selectedUser[1]
+          }
+        }
+        
+        console.log('[FormTemplateRenderer] userDisplayValue:', userDisplayValue)
+        
+        const isUserDisabled = isReadonly || field.disabled
+        if (isUserDisabled) {
+          return fieldWrapper(
+            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700">
+              {userDisplayValue || '-'}
+            </div>
+          )
+        }
+        
         return fieldWrapper(
           <select
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
-            disabled={isReadonly}
+            disabled={isUserDisabled}
             className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              isUserDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
           >
             <option value="">请选择{field.label}</option>
@@ -1830,7 +2046,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         if (!permissions.visible) return null
 
         if (field.type === 'array' && field.name === 'items') {
-          const arrayValue = Array.isArray(data[field.name]) ? data[field.name] : []
+          const arrayValue = Array.isArray(formData[field.name]) ? formData[field.name] : []
           const arrayConfig = field.arrayConfig || {}
           const isReadonly = !permissions.editable
 

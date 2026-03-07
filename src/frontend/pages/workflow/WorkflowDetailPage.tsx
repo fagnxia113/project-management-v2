@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { API_URL, parseJWTToken } from '../../config/api'
+import FormTemplateRenderer from '../../components/workflow/FormTemplateRenderer'
 import {
   GitBranch,
   History,
@@ -9,6 +10,7 @@ import {
   Clock,
   ChevronUp,
   ChevronDown,
+  ChevronRight,
   Send,
   User,
   RotateCcw,
@@ -143,6 +145,14 @@ export default function WorkflowDetailPage() {
   const [receiveComment, setReceiveComment] = useState('')
   // 发货信息（调入方查看）
   const [transferOrder, setTransferOrder] = useState<any>(null)
+  // 设备维修单信息
+  const [repairOrder, setRepairOrder] = useState<any>(null)
+  // 发货图片
+  const [shippingItemImages, setShippingItemImages] = useState<Record<string, string[]>>({})
+  const [shippingPackageImages, setShippingPackageImages] = useState<string[]>([])
+  // 收货图片
+  const [receivingItemImages, setReceivingItemImages] = useState<Record<string, string[]>>({})
+  const [receivingPackageImages, setReceivingPackageImages] = useState<string[]>([])
   // 表单字段
   const [formFields, setFormFields] = useState<any[]>([])
   // 设备维修 - 收货时间
@@ -237,6 +247,26 @@ export default function WorkflowDetailPage() {
                   setFormFields(formSchema.fields)
                 } else if (Array.isArray(formSchema)) {
                   setFormFields(formSchema)
+                }
+                
+                const definitionKey = definitionResult.data.key || definitionResult.data.definition_key
+                if (definitionKey === 'equipment-transfer' || definitionKey === 'equipment_transfer') {
+                  setFormFields([
+                    { name: 'fromLocationType', label: '调出位置类型', type: 'select', required: true, placeholder: '请选择调出位置类型', options: [
+                      { label: '仓库', value: 'warehouse' },
+                      { label: '项目', value: 'project' }
+                    ] },
+                    { name: 'fromLocationId', label: '调出位置', type: 'select', required: true, placeholder: '请选择调出位置', options: [] },
+                    { name: 'fromManagerId', label: '调出位置负责人', type: 'select', required: true, placeholder: '请选择调出位置负责人', options: [] },
+                    { name: 'toLocationType', label: '调入位置类型', type: 'select', required: true, placeholder: '请选择调入位置类型', options: [
+                      { label: '仓库', value: 'warehouse' },
+                      { label: '项目', value: 'project' }
+                    ] },
+                    { name: 'toLocationId', label: '调入位置', type: 'select', required: true, placeholder: '请选择调入位置', options: [] },
+                    { name: 'toManagerId', label: '调入位置负责人', type: 'select', required: true, placeholder: '请选择调入位置负责人', options: [] },
+                    { name: 'transferReason', label: '调拨原因', type: 'textarea', required: true, placeholder: '请输入调拨原因', rows: 3 },
+                    { name: 'estimatedArrivalDate', label: '期望到达时间', type: 'date', required: true, placeholder: '请选择期望到达时间' }
+                  ])
                 }
               }
             }
@@ -440,6 +470,10 @@ export default function WorkflowDetailPage() {
           console.log('[WorkflowDetailPage] 加载调拨单 - instanceResult.data:', instanceResult.data)
           console.log('[WorkflowDetailPage] 加载调拨单 - instanceResult.data.business_id:', instanceResult.data.business_id)
           console.log('[WorkflowDetailPage] 加载调拨单 - formData:', formData)
+          console.log('[WorkflowDetailPage] 加载调拨单 - formData.fromLocationType:', formData.fromLocationType)
+          console.log('[WorkflowDetailPage] 加载调拨单 - formData.fromLocationId:', formData.fromLocationId)
+          console.log('[WorkflowDetailPage] 加载调拨单 - formData.toLocationType:', formData.toLocationType)
+          console.log('[WorkflowDetailPage] 加载调拨单 - formData.toLocationId:', formData.toLocationId)
           console.log('[WorkflowDetailPage] 加载调拨单 - formData.transferOrderId:', formData.transferOrderId)
           console.log('[WorkflowDetailPage] 加载调拨单 - transferOrderId:', transferOrderId)
           if (isEquipmentTransfer && transferOrderId) {
@@ -575,7 +609,10 @@ export default function WorkflowDetailPage() {
           },
           body: JSON.stringify({
             shipped_at: shippedAt,
-            shipping_no: shippingNo
+            shipping_no: shippingNo,
+            shipping_attachment: shippingNotes,
+            item_images: Object.entries(shippingItemImages).map(([item_id, images]) => ({ item_id, images })),
+            package_images: shippingPackageImages
           })
         })
         if (!shipRes.ok) {
@@ -603,25 +640,6 @@ export default function WorkflowDetailPage() {
           throw new Error(errData.error || '维修发货失败')
         }
         console.log('[WorkflowDetailPage] 维修发货API调用成功')
-      }
-
-      // 设备调拨 - 调入方确认收货时先调用收货API
-      if (isEquipmentTransfer && currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to')) && transferOrderId) {
-        const receiveRes = await fetch(`${API_URL.BASE}/api/equipment/transfers/${transferOrderId}/receive`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            receive_status: receiveStatus === 'normal' ? 'normal' : 'exception',
-            receive_comment: receiveComment
-          })
-        })
-        if (!receiveRes.ok) {
-          const errData = await receiveRes.json()
-          throw new Error(errData.error || '收货确认失败')
-        }
       }
 
       // 设备维修 - 确认接收节点先调用收货API
@@ -659,9 +677,53 @@ export default function WorkflowDetailPage() {
 
       // 设备调拨 - 调入方审批时传递收货信息到流程变量
       if (isEquipmentTransfer && currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to'))) {
+        // 收集每个设备的实收数量
+        const receiveItems: { item_id: string; received_quantity: number }[] = []
+        const inputs = document.querySelectorAll('input[data-item-id]') as NodeListOf<HTMLInputElement>
+        inputs.forEach(input => {
+          const itemId = input.dataset.itemId
+          const expectedQty = parseInt(input.dataset.expectedQty || '0')
+          const receivedQty = parseInt(input.value) || 0
+          if (itemId) {
+            receiveItems.push({ item_id: itemId, received_quantity: Math.min(receivedQty, expectedQty) })
+          }
+        })
+        
         completeParams.formData = {
           receive_status: receiveStatus === 'normal' ? 'normal' : 'exception',
-          receive_comment: receiveComment
+          receive_comment: receiveComment,
+          receive_items: receiveItems
+        }
+        
+        // 先调用收货API
+        if (transferOrderId) {
+          // 收集每个设备的收货图片
+          const itemImages: { item_id: string; images: string[] }[] = []
+          Object.keys(receivingItemImages).forEach(itemId => {
+            const images = receivingItemImages[itemId]
+            if (images && images.length > 0) {
+              itemImages.push({ item_id: itemId, images })
+            }
+          })
+
+          const receiveRes = await fetch(`${API_URL.BASE}/api/equipment/transfers/${transferOrderId}/receive`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              receive_status: receiveStatus,
+              receive_comment: receiveComment,
+              received_items: receiveItems,
+              item_images: itemImages,
+              package_images: receivingPackageImages
+            })
+          })
+          if (!receiveRes.ok) {
+            const errData = await receiveRes.json()
+            throw new Error(errData.error || '收货确认失败')
+          }
         }
       }
 
@@ -1072,11 +1134,15 @@ export default function WorkflowDetailPage() {
     const currentNodeId = currentTask?.node_id || instance?.current_node_id || 'start'
 
     let isVisible = true
+    let isEditable = false
+    
     if (fieldConfig.permissions) {
       if (fieldConfig.permissions.nodePermissions && fieldConfig.permissions.nodePermissions[currentNodeId]) {
-        isVisible = fieldConfig.permissions.nodePermissions[currentNodeId].visible
+        isVisible = fieldConfig.permissions.nodePermissions[currentNodeId].visible !== false
+        isEditable = fieldConfig.permissions.nodePermissions[currentNodeId].editable === true
       } else if (fieldConfig.permissions.default) {
-        isVisible = fieldConfig.permissions.default.visible
+        isVisible = fieldConfig.permissions.default.visible !== false
+        isEditable = fieldConfig.permissions.default.editable === true
       }
     } else if (fieldConfig.visibleOn) {
       isVisible = fieldConfig.visibleOn.includes(currentNodeId)
@@ -1285,34 +1351,97 @@ export default function WorkflowDetailPage() {
     if (!instance) return null
 
     const formData = instance.variables?.formData || {}
+    const currentNodeId = currentTask?.node_id || instance?.current_node_id || 'start'
+    const isReadonly = instance.status === 'completed' || instance.status === 'terminated' || !currentTask
     
-    console.log('[WorkflowDetailPage] renderFormTab - formFields:', formFields)
-    console.log('[WorkflowDetailPage] renderFormTab - formData:', formData)
-    
-    // 只渲染在 formFields 中定义的字段
-    const entries = formFields
-      .map((field: any) => [field.name, formData[field.name]])
-
-    console.log('[WorkflowDetailPage] renderFormTab - entries:', entries)
-
     const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer'
     const isInboundApproval = currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to'))
+
+    const handleFormDataChange = (name: string, value: any) => {
+      console.log('[WorkflowDetailPage] handleFormDataChange:', name, value)
+    }
 
     return (
       <div className="space-y-6">
         <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-gray-400" />
-            申请内容
-          </h3>
-          {entries.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {entries.map(([key, value]) => renderFormField(key, value, formData))}
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-gray-400" />
+              申请内容
+            </h3>
+            {!isReadonly && currentTask && (
+              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                当前节点: {currentTask.name}
+              </span>
+            )}
+          </div>
+          
+          {formFields.length > 0 ? (
+            <FormTemplateRenderer
+              fields={formFields}
+              formData={formData}
+              onChange={handleFormDataChange}
+              isReadonly={isReadonly}
+              currentNodeId={currentNodeId}
+              mode="approval"
+              userMap={userMap}
+              departmentMap={deptMap}
+              warehouseMap={warehouseMap}
+              projectMap={projectMap}
+              positionMap={posMap}
+              repairOrder={repairOrder}
+            />
           ) : (
             <div className="text-center text-gray-500 py-8">暂无表单数据</div>
           )}
         </div>
+
+        {isEquipmentTransfer && transferOrder && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-gray-400" />
+              设备明细
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">设备名称</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {transferOrder.items && transferOrder.items.length > 0 ? transferOrder.items.map((item: any) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-2 text-sm">{item.equipment_name}</td>
+                      <td className="px-4 py-2 text-sm">{item.model_no || '-'}</td>
+                      <td className="px-4 py-2 text-sm">
+                        <span className={`px-2 py-0.5 rounded text-xs ${
+                          item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                          item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-sm">{item.manage_code || '-'}</td>
+                      <td className="px-4 py-2 text-sm">{item.quantity} {item.unit}</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-4 text-center text-gray-500 text-sm">
+                        暂无设备明细
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {isEquipmentTransfer && isInboundApproval && (
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -1362,6 +1491,11 @@ export default function WorkflowDetailPage() {
   const renderWorkflowTab = () => {
     if (!instance) return null
 
+    const completedTasks = tasks.filter(t => t.status === 'completed')
+    const pendingTasks = tasks.filter(t => t.status === 'assigned' || t.status === 'in_progress')
+    const totalTasks = tasks.length
+    const completedCount = completedTasks.length
+
     return (
       <div className="space-y-6">
         <div className="bg-gray-50 rounded-lg p-6">
@@ -1397,6 +1531,119 @@ export default function WorkflowDetailPage() {
             </div>
           </div>
         </div>
+
+        <div className="bg-gray-50 rounded-lg p-6">
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-gray-400" />
+            流程进度
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="bg-white rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-blue-600">{totalTasks}</div>
+              <div className="text-sm text-gray-500">总节点数</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-green-600">{completedCount}</div>
+              <div className="text-sm text-gray-500">已完成</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-orange-600">{pendingTasks.length}</div>
+              <div className="text-sm text-gray-500">处理中</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 text-center">
+              <div className="text-2xl font-bold text-gray-400">{totalTasks - completedCount - pendingTasks.length}</div>
+              <div className="text-sm text-gray-500">待处理</div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-600">审批进度</span>
+              <span className="text-sm font-medium text-gray-900">{totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                style={{ width: `${totalTasks > 0 ? (completedCount / totalTasks) * 100 : 0}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        {definition?.node_config && (
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <GitBranch className="w-5 h-5 text-gray-400" />
+              流程图
+            </h3>
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="flex flex-wrap gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <span className="text-xs text-gray-600">已完成</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+                  <span className="text-xs text-gray-600">当前节点</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-orange-400"></div>
+                  <span className="text-xs text-gray-600">预测节点</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                  <span className="text-xs text-gray-600">待处理</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {definition.node_config.nodes?.map((node: any, index: number) => {
+                  const task = tasks.find((t: any) => t.node_id === node.id)
+                  const isCompleted = task?.status === 'completed'
+                  const isCurrent = task?.status === 'assigned' || task?.status === 'in_progress'
+                  const isPending = !task
+                  
+                  let bgColor = 'bg-gray-100'
+                  let borderColor = 'border-gray-300'
+                  let textColor = 'text-gray-600'
+                  let icon = null
+                  
+                  if (isCompleted) {
+                    bgColor = 'bg-green-50'
+                    borderColor = 'border-green-500'
+                    textColor = 'text-green-700'
+                    icon = <CheckCircle className="w-4 h-4 text-green-500" />
+                  } else if (isCurrent) {
+                    bgColor = 'bg-blue-50'
+                    borderColor = 'border-blue-500'
+                    textColor = 'text-blue-700'
+                    icon = <Clock className="w-4 h-4 text-blue-500 animate-pulse" />
+                  } else if (isPending && index > 0) {
+                    const prevNode = definition.node_config.nodes[index - 1]
+                    const prevTask = tasks.find((t: any) => t.node_id === prevNode.id)
+                    if (prevTask?.status === 'completed' || prevTask?.status === 'assigned') {
+                      bgColor = 'bg-orange-50'
+                      borderColor = 'border-orange-400'
+                      textColor = 'text-orange-600'
+                    }
+                  }
+                  
+                  return (
+                    <React.Fragment key={node.id}>
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${bgColor} ${borderColor}`}>
+                        {icon}
+                        <span className={`text-sm font-medium ${textColor}`}>{node.name}</span>
+                      </div>
+                      {index < (definition.node_config.nodes?.length || 0) - 1 && (
+                        <div className="flex items-center">
+                          <ChevronRight className="w-4 h-4 text-gray-400" />
+                        </div>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {tasks.length > 0 && (
           <div className="bg-gray-50 rounded-lg p-6">
@@ -1764,6 +2011,144 @@ export default function WorkflowDetailPage() {
                     />
                   </div>
                 </div>
+                
+                {/* 设备明细图片上传 */}
+                {transferOrder?.items && transferOrder.items.length > 0 && (
+                  <div className="mt-4 border-t border-blue-200 pt-4">
+                    <h5 className="font-medium text-blue-800 mb-3">设备明细图片</h5>
+                    <div className="space-y-4">
+                      {transferOrder.items.map((item: any) => (
+                        <div key={item.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{item.equipment_name}</span>
+                              <span className="text-xs text-gray-500">{item.model_no}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${
+                                item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                                item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-500">{item.quantity} {item.unit}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(shippingItemImages[item.id] || []).map((url, idx) => (
+                              <div key={idx} className="relative w-16 h-16">
+                                <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShippingItemImages(prev => ({
+                                      ...prev,
+                                      [item.id]: (prev[item.id] || []).filter((_, i) => i !== idx)
+                                    }))
+                                  }}
+                                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            <label className="w-16 h-16 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-400">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const files = e.target.files
+                                  if (files) {
+                                    const token = localStorage.getItem('token')
+                                    const newUrls: string[] = []
+                                    for (let i = 0; i < files.length; i++) {
+                                      const formData = new FormData()
+                                      formData.append('file', files[i])
+                                      try {
+                                        const res = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                                          method: 'POST',
+                                          headers: { 'Authorization': `Bearer ${token}` },
+                                          body: formData
+                                        })
+                                        const data = await res.json()
+                                        if (data.fileUrl) {
+                                          newUrls.push(data.fileUrl)
+                                        }
+                                      } catch (err) {
+                                        console.error('上传失败:', err)
+                                      }
+                                    }
+                                    setShippingItemImages(prev => ({
+                                      ...prev,
+                                      [item.id]: [...(prev[item.id] || []), ...newUrls]
+                                    }))
+                                  }
+                                }}
+                              />
+                              <span className="text-gray-400 text-2xl">+</span>
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* 打包整体图片上传 */}
+                <div className="mt-4 border-t border-blue-200 pt-4">
+                  <h5 className="font-medium text-blue-800 mb-3">打包整体图片</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {shippingPackageImages.map((url, idx) => (
+                      <div key={idx} className="relative w-20 h-20">
+                        <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShippingPackageImages(prev => prev.filter((_, i) => i !== idx))
+                          }}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-400">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = e.target.files
+                          if (files) {
+                            const token = localStorage.getItem('token')
+                            const newUrls: string[] = []
+                            for (let i = 0; i < files.length; i++) {
+                              const formData = new FormData()
+                              formData.append('file', files[i])
+                              try {
+                                const res = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                                  method: 'POST',
+                                  headers: { 'Authorization': `Bearer ${token}` },
+                                  body: formData
+                                })
+                                const data = await res.json()
+                                if (data.fileUrl) {
+                                  newUrls.push(data.fileUrl)
+                                }
+                              } catch (err) {
+                                console.error('上传失败:', err)
+                              }
+                            }
+                            setShippingPackageImages(prev => [...prev, ...newUrls])
+                          }
+                        }}
+                      />
+                      <span className="text-gray-400 text-2xl">+</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1806,47 +2191,183 @@ export default function WorkflowDetailPage() {
               <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
                 <h4 className="font-medium text-green-800 mb-3">收货确认</h4>
                 
-                {/* 显示发货信息 - 优先从流程变量获取，其次从调拨单获取 */}
-                {(instance?.variables?.formData?.shipping_date || instance?.variables?.formData?.shipping_no || 
-                   instance?.variables?.formData?.shipping_notes || transferOrder?.shipped_at || transferOrder?.shipping_no) && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <h5 className="font-medium text-blue-800 mb-2 text-sm">发货信息</h5>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                      {(instance?.variables?.formData?.shipping_date || transferOrder?.shipped_at) && (
-                        <div>
-                          <span className="text-gray-500">发货时间：</span>
-                          <span className="text-gray-900">
-                            {instance?.variables?.formData?.shipping_date || transferOrder?.shipped_at?.substring(0, 10)}
-                          </span>
+                {/* 显示发货信息 */}
+                <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <h5 className="font-medium text-blue-800 mb-2 text-sm">发货信息</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                    {transferOrder?.shipped_at && (
+                      <div>
+                        <span className="text-gray-500">发货时间：</span>
+                        <span className="text-gray-900">{transferOrder.shipped_at?.substring(0, 16).replace('T', ' ')}</span>
+                      </div>
+                    )}
+                    {transferOrder?.shipping_no && (
+                      <div>
+                        <span className="text-gray-500">物流单号：</span>
+                        <span className="text-gray-900">{transferOrder.shipping_no}</span>
+                      </div>
+                    )}
+                    {transferOrder?.shipping_attachment && (
+                      <div className="col-span-1 md:col-span-2">
+                        <span className="text-gray-500">发货备注：</span>
+                        <span className="text-gray-900">{transferOrder.shipping_attachment}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 发货设备明细图片 */}
+                  {transferOrder?.items && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <h6 className="font-medium text-blue-700 mb-2 text-sm">发货设备图片</h6>
+                      <div className="space-y-2">
+                        {transferOrder.items.map((item: any) => {
+                          let images: string[] = []
+                          try {
+                            images = item.shipping_images ? JSON.parse(item.shipping_images) : []
+                          } catch (e) {
+                            images = item.shipping_images || []
+                          }
+                          return (
+                            <div key={item.id} className="bg-white rounded p-2 border border-blue-100">
+                              <div className="text-xs text-gray-600 mb-1">{item.equipment_name} - {item.model_no}</div>
+                              <div className="flex flex-wrap gap-2">
+                                {images.length > 0 ? (
+                                  images.map((url: string, idx: number) => (
+                                    <img key={idx} src={url} alt="" className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80" onClick={() => window.open(url, '_blank')} />
+                                  ))
+                                ) : (
+                                  <div className="text-xs text-gray-400 italic">暂无图片</div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 打包整体图片 */}
+                  {transferOrder?.shipping_package_images && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <h6 className="font-medium text-blue-700 mb-2 text-sm">打包整体图片</h6>
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          try {
+                            const images = JSON.parse(transferOrder.shipping_package_images)
+                            return images.map((url: string, idx: number) => (
+                              <img key={idx} src={url} alt="" className="w-20 h-20 object-cover rounded border cursor-pointer hover:opacity-80" onClick={() => window.open(url, '_blank')} />
+                            ))
+                          } catch (e) {
+                            return null
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 设备明细收货确认 */}
+                {transferOrder?.items && transferOrder.items.length > 0 && (
+                  <div className="mb-4">
+                    <h5 className="font-medium text-green-800 mb-2 text-sm">设备明细收货确认</h5>
+                    <div className="space-y-2">
+                      {transferOrder.items.map((item: any) => (
+                        <div key={item.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{item.equipment_name}</span>
+                              <span className="text-xs text-gray-500">{item.model_no}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${
+                                item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                                item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                                'bg-green-100 text-green-700'
+                              }`}>
+                                {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-500">发货数量: {item.quantity} {item.unit}</span>
+                          </div>
+                          <div className="flex items-center gap-4 mb-2">
+                            <label className="flex items-center gap-1 text-sm">
+                              <span className="text-gray-600">实收数量:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max={item.quantity}
+                                defaultValue={item.quantity}
+                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0
+                                  const el = e.target
+                                  el.style.borderColor = val !== item.quantity ? 'border-orange-400' : 'border-gray-300'
+                                }}
+                                data-item-id={item.id}
+                                data-expected-qty={item.quantity}
+                              />
+                              <span className="text-gray-500">{item.unit}</span>
+                            </label>
+                          </div>
+                          <div className="mt-2">
+                            <label className="block text-xs text-gray-600 mb-1">收货图片</label>
+                            <div className="flex flex-wrap gap-2">
+                              {(receivingItemImages[item.id] || []).map((url, idx) => (
+                                <div key={idx} className="relative w-16 h-16">
+                                  <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReceivingItemImages(prev => ({
+                                        ...prev,
+                                        [item.id]: (prev[item.id] || []).filter((_, i) => i !== idx)
+                                      }))
+                                    }}
+                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                              <label className="w-16 h-16 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-400">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const files = e.target.files
+                                    if (files) {
+                                      const token = localStorage.getItem('token')
+                                      const newUrls: string[] = []
+                                      for (let i = 0; i < files.length; i++) {
+                                        const formData = new FormData()
+                                        formData.append('file', files[i])
+                                        try {
+                                          const res = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                                            method: 'POST',
+                                            headers: { 'Authorization': `Bearer ${token}` },
+                                            body: formData
+                                          })
+                                          const data = await res.json()
+                                          if (data.fileUrl) {
+                                            newUrls.push(data.fileUrl)
+                                          }
+                                        } catch (err) {
+                                          console.error('上传失败:', err)
+                                        }
+                                      }
+                                      setReceivingItemImages(prev => ({
+                                        ...prev,
+                                        [item.id]: [...(prev[item.id] || []), ...newUrls]
+                                      }))
+                                    }
+                                  }}
+                                />
+                                <span className="text-gray-400 text-2xl">+</span>
+                              </label>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      {(instance?.variables?.formData?.shipping_no || transferOrder?.shipping_no) && (
-                        <div>
-                          <span className="text-gray-500">物流单号：</span>
-                          <span className="text-gray-900">
-                            {instance?.variables?.formData?.shipping_no || transferOrder?.shipping_no}
-                          </span>
-                        </div>
-                      )}
-                      {instance?.variables?.formData?.shipping_notes && (
-                        <div className="col-span-1 md:col-span-2">
-                          <span className="text-gray-500">发货备注：</span>
-                          <span className="text-gray-900">{instance.variables.formData.shipping_notes}</span>
-                        </div>
-                      )}
-                      {transferOrder?.shipping_attachment && (
-                        <div className="col-span-1 md:col-span-2">
-                          <span className="text-gray-500">发货凭证：</span>
-                          <a
-                            href={transferOrder.shipping_attachment}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 underline ml-2"
-                          >
-                            查看附件
-                          </a>
-                        </div>
-                      )}
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1895,6 +2416,61 @@ export default function WorkflowDetailPage() {
                       />
                     </div>
                   )}
+                </div>
+
+                {/* 打包整体图片上传 */}
+                <div className="mt-4 pt-4 border-t border-green-200">
+                  <h5 className="font-medium text-green-800 mb-3 text-sm">打包整体图片</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {receivingPackageImages.map((url, idx) => (
+                      <div key={idx} className="relative w-20 h-20">
+                        <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReceivingPackageImages(prev => prev.filter((_, i) => i !== idx))
+                          }}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-400">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = e.target.files
+                          if (files) {
+                            const token = localStorage.getItem('token')
+                            const newUrls: string[] = []
+                            for (let i = 0; i < files.length; i++) {
+                              const formData = new FormData()
+                              formData.append('file', files[i])
+                              try {
+                                const res = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                                  method: 'POST',
+                                  headers: { 'Authorization': `Bearer ${token}` },
+                                  body: formData
+                                })
+                                const data = await res.json()
+                                if (data.fileUrl) {
+                                  newUrls.push(data.fileUrl)
+                                }
+                              } catch (err) {
+                                console.error('上传失败:', err)
+                              }
+                            }
+                            setReceivingPackageImages(prev => [...prev, ...newUrls])
+                          }
+                        }}
+                      />
+                      <span className="text-gray-400 text-2xl">+</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             )}

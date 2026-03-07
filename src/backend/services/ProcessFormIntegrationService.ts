@@ -800,6 +800,53 @@ export class ProcessFormIntegrationService {
           });
           
           console.log(`[ProcessFormIntegrationService] 调拨单创建成功: ${order.id}, 已更新 business_id 和 transferOrderId`);
+          
+          // 注册流程完成事件监听器，在审批通过后自动确认收货
+          const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
+            if (data.instanceId === instance.id && data.result === 'approved') {
+              try {
+                console.log(`[ProcessFormIntegrationService] 调拨流程完成，准备确认收货: ${order.id}`);
+                
+                // 获取流程实例的最新变量
+                const currentInstance = await instanceService.getInstance(instance.id);
+                const formData = currentInstance.variables?.formData || {};
+                
+                // 检查是否有收货信息
+                if (formData.receive_status && formData.receive_items) {
+                  console.log('[ProcessFormIntegrationService] 收货信息:', {
+                    receive_status: formData.receive_status,
+                    receive_items: formData.receive_items,
+                    receive_comment: formData.receive_comment
+                  });
+                  
+                  // 调用收货API
+                  await this.transferOrderService.confirmReceiving(
+                    order.id,
+                    params.initiator.id,
+                    formData.receive_status || 'normal',
+                    formData.receive_comment || '',
+                    formData.item_images || [],
+                    formData.package_images || [],
+                    formData.receive_items || []
+                  );
+                  
+                  console.log(`[ProcessFormIntegrationService] 调拨单收货确认成功: ${order.id}`);
+                } else {
+                  console.warn(`[ProcessFormIntegrationService] 调拨流程完成但缺少收货信息: ${order.id}`);
+                }
+                
+                // 移除事件监听器
+                enhancedWorkflowEngine.off('process.ended', eventHandler);
+              } catch (error) {
+                console.error(`[ProcessFormIntegrationService] 调拨单收货确认失败:`, error);
+                // 即使失败也要移除监听器，避免内存泄漏
+                enhancedWorkflowEngine.off('process.ended', eventHandler);
+              }
+            }
+          };
+          
+          // 使用 on 而不是 once，并在回调中手动移除监听器
+          enhancedWorkflowEngine.on('process.ended', eventHandler);
         } catch (error) {
           console.error(`[ProcessFormIntegrationService] 调拨单创建失败:`, error);
           console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
@@ -844,6 +891,73 @@ export class ProcessFormIntegrationService {
           });
           
           console.log(`[ProcessFormIntegrationService] 维修单创建成功: ${order.id}, 已更新 business_id 和 repairOrderId`);
+          
+          // 注册流程完成事件监听器，在审批通过后自动处理发货和收货
+          const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
+            if (data.instanceId === instance.id && data.result === 'approved') {
+              try {
+                console.log(`[ProcessFormIntegrationService] 维修流程完成，准备处理发货和收货: ${order.id}`);
+                
+                // 获取流程实例的最新变量
+                const currentInstance = await instanceService.getInstance(instance.id);
+                const formData = currentInstance.variables?.formData || {};
+                
+                // 检查是否有发货信息
+                if (formData.shipping_no) {
+                  console.log('[ProcessFormIntegrationService] 发货信息:', {
+                    shipping_no: formData.shipping_no
+                  });
+                  
+                  // 调用发货API
+                  await equipmentRepairService.shipRepairOrder(
+                    order.id,
+                    formData.shipping_no,
+                    params.initiator.id
+                  );
+                  
+                  console.log(`[ProcessFormIntegrationService] 维修单发货成功: ${order.id}`);
+                } else {
+                  console.warn(`[ProcessFormIntegrationService] 维修流程完成但缺少发货信息: ${order.id}`);
+                }
+                
+                // 检查是否有收货信息
+                if (formData.repair_result) {
+                  console.log('[ProcessFormIntegrationService] 收货信息:', {
+                    repair_result: formData.repair_result,
+                    actual_cost: formData.actual_cost
+                  });
+                  
+                  // 调用收货API
+                  await equipmentRepairService.receiveRepairOrder(
+                    order.id,
+                    params.initiator.id
+                  );
+                  
+                  // 更新维修结果和实际费用
+                  await this.db.execute(
+                    `UPDATE equipment_repair_orders 
+                     SET repair_result = ?, actual_cost = ? 
+                     WHERE id = ?`,
+                    [formData.repair_result, formData.actual_cost || 0, order.id]
+                  );
+                  
+                  console.log(`[ProcessFormIntegrationService] 维修单收货确认成功: ${order.id}`);
+                } else {
+                  console.warn(`[ProcessFormIntegrationService] 维修流程完成但缺少收货信息: ${order.id}`);
+                }
+                
+                // 移除事件监听器
+                enhancedWorkflowEngine.off('process.ended', eventHandler);
+              } catch (error) {
+                console.error(`[ProcessFormIntegrationService] 维修单发货或收货确认失败:`, error);
+                // 即使失败也要移除监听器，避免内存泄漏
+                enhancedWorkflowEngine.off('process.ended', eventHandler);
+              }
+            }
+          };
+          
+          // 使用 on 而不是 once，并在回调中手动移除监听器
+          enhancedWorkflowEngine.on('process.ended', eventHandler);
         } catch (error) {
           console.error(`[ProcessFormIntegrationService] 维修单创建失败:`, error);
           console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));

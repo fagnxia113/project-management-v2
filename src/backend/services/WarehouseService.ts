@@ -120,6 +120,16 @@ export class WarehouseService {
         const values = [...Object.values(data), id];
 
         await db.execute(`UPDATE warehouses SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
+
+        if (data.manager_id !== undefined) {
+            await db.execute(
+                `UPDATE equipment_instances 
+                 SET keeper_id = ?, updated_at = NOW() 
+                 WHERE location_id = ? AND location_status = 'warehouse'`,
+                [data.manager_id, id]
+            );
+            console.log(`[WarehouseService] 已更新仓库 ${id} 下设备的保管人为: ${data.manager_id}`);
+        }
     }
 
     async deleteWarehouse(id: string): Promise<void> {

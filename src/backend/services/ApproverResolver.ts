@@ -181,19 +181,26 @@ export class ApproverResolver {
   }
 
   private async resolveFromFormField(value: string | string[], formData: Record<string, any>): Promise<Approver[]> {
+    console.log('[ApproverResolver] resolveFromFormField 开始解析表单字段', { value, formData });
+    
     const fields = Array.isArray(value) ? value : [value];
     const approvers: Approver[] = [];
 
     for (const field of fields) {
+      console.log('[ApproverResolver] resolveFromFormField 解析字段:', field);
       const userId = this.getFormFieldValue(formData, field);
+      console.log('[ApproverResolver] resolveFromFormField 获取到用户ID:', userId);
+      
       if (userId) {
         const user = await this.getUserInfo(userId);
+        console.log('[ApproverResolver] resolveFromFormField getUserInfo 返回:', user);
         if (user) {
           approvers.push(user);
         }
       }
     }
 
+    console.log('[ApproverResolver] resolveFromFormField 最终返回:', approvers);
     return approvers;
   }
 

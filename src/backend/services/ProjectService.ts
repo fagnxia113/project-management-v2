@@ -147,6 +147,26 @@ export class ProjectService {
         await db.execute('DELETE FROM projects WHERE id = ?', [id]);
     }
 
+    async updateProject(id: string, data: Partial<Omit<Project, 'id' | 'code' | 'created_at' | 'updated_at'>>): Promise<void> {
+        const fields = Object.keys(data);
+        if (fields.length === 0) return;
+
+        const setClause = fields.map(f => `${f} = ?`).join(', ');
+        const values = [...Object.values(data), id];
+
+        await db.execute(`UPDATE projects SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
+
+        if (data.manager_id !== undefined) {
+            await db.execute(
+                `UPDATE equipment_instances 
+                 SET keeper_id = ?, updated_at = NOW() 
+                 WHERE location_id = ? AND location_status = 'in_project'`,
+                [data.manager_id, id]
+            );
+            console.log(`[ProjectService] 已更新项目 ${id} 下设备的保管人为: ${data.manager_id}`);
+        }
+    }
+
     // --- WBS/Task Methods ---
 
     async createTask(data: Omit<Task, 'id' | 'progress' | 'wbs_path' | 'wbs_code' | 'status'>): Promise<Task> {

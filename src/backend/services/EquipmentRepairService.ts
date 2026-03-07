@@ -181,7 +181,7 @@ export class EquipmentRepairService {
       for (const order of orders) {
         try {
           const instance = await instanceService.createInstance({
-            definitionId: 'wf-equipment-repair-001',
+            definitionId: 'wf-equipment-repair-1',
             businessKey: order.order_no,
             businessId: order.id,
             title: `设备维修申请 - ${order.equipment_name}`,

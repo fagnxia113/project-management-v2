@@ -2,6 +2,35 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { API_URL } from '../../config/api'
 
+interface EquipmentImage {
+  id: string
+  image_type: string
+  image_url: string
+  image_name?: string
+  image_size?: number
+  created_at: string
+}
+
+interface Employee {
+  id: string
+  name: string
+  department?: string
+  position?: string
+}
+
+interface User {
+  id: string
+  username: string
+  name: string
+  role: string
+}
+
+interface Location {
+  id: string
+  name: string
+  type: string
+}
+
 interface Equipment {
   id: string
   equipment_name: string
@@ -30,6 +59,8 @@ interface Equipment {
   created_at: string
   updated_at: string
   keeper_id: string | null
+  keeper_name: string | null
+  accessories: any[] | null
 }
 
 interface EquipmentInstance extends Equipment {}
@@ -395,6 +426,7 @@ export default function EquipmentDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<EquipmentInstance>>({})
   const [showRepairModal, setShowRepairModal] = useState(false)
+  const [images, setImages] = useState<EquipmentImage[]>([])
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -433,6 +465,8 @@ export default function EquipmentDetailPage() {
         if (result.data.keeper_id) {
           loadKeeper(result.data.keeper_id)
         }
+        
+        loadImages(result.data.id)
       } else {
         throw new Error('设备不存在')
       }
@@ -462,6 +496,21 @@ export default function EquipmentDetailPage() {
       }
     } catch (err) {
       console.error('加载保管人信息失败:', err)
+    }
+  }
+
+  const loadImages = async (equipmentId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.BASE}/api/equipment/images/equipment/${equipmentId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const result = await response.json()
+      if (result.success) {
+        setImages(result.data || [])
+      }
+    } catch (err) {
+      console.error('加载图片失败:', err)
     }
   }
 
@@ -799,7 +848,7 @@ export default function EquipmentDetailPage() {
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">保管人</label>
-                    <div className="text-sm font-medium text-gray-900">{keeper?.name || '-'}</div>
+                    <div className="text-sm font-medium text-gray-900">{equipment.keeper_name || keeper?.name || '-'}</div>
                   </div>
                 </div>
               </div>
@@ -841,6 +890,84 @@ export default function EquipmentDetailPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {equipment.category === 'instrument' && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">配件清单</h2>
+                {equipment.accessories && equipment.accessories.length > 0 ? (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">配件名称</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">型号</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">单位</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {equipment.accessories.map((acc: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="px-4 py-3 text-sm text-gray-900">{acc.accessory_name || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{acc.accessory_model || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{acc.accessory_quantity || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{acc.accessory_unit || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-4">暂无配件</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">设备图片</h2>
+            {images.filter(img => img.image_type === 'main').length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {images.filter(img => img.image_type === 'main').map((image) => (
+                  <div key={image.id} className="relative group">
+                    <img
+                      src={image.image_url}
+                      alt={image.image_name || '设备图片'}
+                      className="w-full h-40 object-cover rounded-lg border border-gray-200 cursor-pointer hover:shadow-lg"
+                      onClick={() => window.open(image.image_url, '_blank')}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg">
+                      主机照片
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-4">暂无主机图片</div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">配件图片</h2>
+            {images.filter(img => img.image_type === 'accessory').length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {images.filter(img => img.image_type === 'accessory').map((image) => (
+                  <div key={image.id} className="relative group">
+                    <img
+                      src={image.image_url}
+                      alt={image.image_name || '配件图片'}
+                      className="w-full h-40 object-cover rounded-lg border border-gray-200 cursor-pointer hover:shadow-lg"
+                      onClick={() => window.open(image.image_url, '_blank')}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg">
+                      配件照片
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-4">暂无配件图片</div>
             )}
           </div>
 

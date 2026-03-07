@@ -2,6 +2,22 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { API_URL } from '../../config/api'
 
+interface AccessoryItem {
+  id: string
+  host_equipment_id: string
+  accessory_id: string
+  accessory_name: string
+  accessory_model: string
+  accessory_category: 'instrument' | 'fake_load' | 'cable'
+  accessory_quantity: number
+  is_required: boolean
+  accessory_notes: string | null
+  serial_number: string | null
+  accessory_manage_code: string | null
+  accessory_health_status: string
+  accessory_usage_status: string
+}
+
 interface TransferItem {
   id: string
   equipment_id: string | null
@@ -15,6 +31,9 @@ interface TransferItem {
   quantity: number
   status: string
   notes: string | null
+  shipping_images?: string[]
+  receiving_images?: string[]
+  accessories?: AccessoryItem[]
 }
 
 interface TransferOrder {
@@ -67,6 +86,8 @@ interface TransferOrder {
   received_at: string | null
   received_by: string | null
   receive_comment: string | null
+  shipping_package_images?: string[]
+  receiving_package_images?: string[]
   
   created_at: string
   updated_at: string
@@ -87,14 +108,21 @@ export default function TransferDetailPage() {
   const [shippingData, setShippingData] = useState({
     shipped_at: '',
     shipping_no: '',
-    shipping_attachment: ''
+    shipping_attachment: '',
+    item_images: [] as { item_id: string; images: string[] }[],
+    package_images: [] as string[]
   })
   
   const [receivingData, setReceivingData] = useState({
     received_at: '',
     receive_status: 'normal' as 'normal' | 'damaged' | 'missing' | 'partial',
-    receive_comment: ''
+    receive_comment: '',
+    item_images: [] as { item_id: string; images: string[] }[],
+    package_images: [] as string[],
+    received_items: [] as { item_id: string; received_quantity: number }[]
   })
+  
+  const [uploadingImages, setUploadingImages] = useState(false)
 
   const [currentUser, setCurrentUser] = useState<any>(null)
 
@@ -232,7 +260,9 @@ export default function TransferDetailPage() {
         body: JSON.stringify({
           shipped_at: shippingData.shipped_at || undefined,
           shipping_no: shippingData.shipping_no || undefined,
-          shipping_attachment: shippingData.shipping_attachment || undefined
+          shipping_attachment: shippingData.shipping_attachment || undefined,
+          item_images: shippingData.item_images,
+          package_images: shippingData.package_images
         })
       })
       
@@ -240,7 +270,7 @@ export default function TransferDetailPage() {
       if (result.success) {
         alert('发货成功')
         setShowShippingDialog(false)
-        setShippingData({ shipped_at: '', shipping_no: '', shipping_attachment: '' })
+        setShippingData({ shipped_at: '', shipping_no: '', shipping_attachment: '', item_images: [], package_images: [] })
         loadOrder()
       } else {
         alert('发货失败：' + result.error)
@@ -254,6 +284,15 @@ export default function TransferDetailPage() {
   }
 
   const handleReceive = async () => {
+    if (!order) return
+    
+    setReceivingData(prev => ({
+      ...prev,
+      received_items: order.items.map(item => ({
+        item_id: item.id,
+        received_quantity: item.quantity
+      }))
+    }))
     setShowReceivingDialog(true)
   }
 
@@ -272,7 +311,10 @@ export default function TransferDetailPage() {
         body: JSON.stringify({
           received_at: receivingData.received_at || undefined,
           receive_status: receivingData.receive_status || undefined,
-          receive_comment: receivingData.receive_comment || undefined
+          receive_comment: receivingData.receive_comment || undefined,
+          item_images: receivingData.item_images,
+          package_images: receivingData.package_images,
+          received_items: receivingData.received_items
         })
       })
       
@@ -280,7 +322,7 @@ export default function TransferDetailPage() {
       if (result.success) {
         alert('收货成功')
         setShowReceivingDialog(false)
-        setReceivingData({ received_at: '', receive_status: 'normal', receive_comment: '' })
+        setReceivingData({ received_at: '', receive_status: 'normal', receive_comment: '', item_images: [], package_images: [], received_items: [] })
         loadOrder()
       } else {
         alert('收货失败：' + result.error)
@@ -290,6 +332,98 @@ export default function TransferDetailPage() {
       alert('收货失败')
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const handleImageUpload = async (file: File): Promise<string | null> => {
+    setUploadingImages(true)
+    try {
+      const token = localStorage.getItem('token')
+      const formData = new FormData()
+      formData.append('image', file)
+      formData.append('image_type', 'transfer')
+      formData.append('business_type', 'transfer')
+      
+      const response = await fetch(`${API_URL.BASE}/api/equipment/images/upload`, {
+        method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: formData
+      })
+      
+      const result = await response.json()
+      if (result.success && result.data?.image_url) {
+        return result.data.image_url
+      }
+      return null
+    } catch (error) {
+      console.error('上传图片失败:', error)
+      return null
+    } finally {
+      setUploadingImages(false)
+    }
+  }
+
+  const handleItemImagesUpload = async (itemId: string, files: FileList, isShipping: boolean) => {
+    const urls: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const url = await handleImageUpload(files[i])
+      if (url) urls.push(url)
+    }
+    
+    if (isShipping) {
+      setShippingData(prev => {
+        const existing = prev.item_images.find(img => img.item_id === itemId)
+        if (existing) {
+          return {
+            ...prev,
+            item_images: prev.item_images.map(img => 
+              img.item_id === itemId ? { ...img, images: [...img.images, ...urls] } : img
+            )
+          }
+        }
+        return {
+          ...prev,
+          item_images: [...prev.item_images, { item_id: itemId, images: urls }]
+        }
+      })
+    } else {
+      setReceivingData(prev => {
+        const existing = prev.item_images.find(img => img.item_id === itemId)
+        if (existing) {
+          return {
+            ...prev,
+            item_images: prev.item_images.map(img => 
+              img.item_id === itemId ? { ...img, images: [...img.images, ...urls] } : img
+            )
+          }
+        }
+        return {
+          ...prev,
+          item_images: [...prev.item_images, { item_id: itemId, images: urls }]
+        }
+      })
+    }
+  }
+
+  const handlePackageImagesUpload = async (files: FileList, isShipping: boolean) => {
+    const urls: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const url = await handleImageUpload(files[i])
+      if (url) urls.push(url)
+    }
+    
+    if (isShipping) {
+      setShippingData(prev => ({
+        ...prev,
+        package_images: [...prev.package_images, ...urls]
+      }))
+    } else {
+      setReceivingData(prev => ({
+        ...prev,
+        package_images: [...prev.package_images, ...urls]
+      }))
     }
   }
 
@@ -525,6 +659,64 @@ export default function TransferDetailPage() {
         </div>
       </div>
 
+      {order.items.some(item => item.category === 'instrument' && item.accessories && item.accessories.length > 0) && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="font-medium text-gray-900 mb-4">配件清单</h3>
+          <div className="space-y-6">
+            {order.items.filter(item => item.category === 'instrument' && item.accessories && item.accessories.length > 0).map(item => (
+              <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">{item.equipment_name} ({item.model_no})</h4>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">配件名称</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">序列号</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">是否必需</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">备注</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {item.accessories!.map(accessory => (
+                        <tr key={accessory.id}>
+                          <td className="px-4 py-3 text-sm">{accessory.accessory_name}</td>
+                          <td className="px-4 py-3 text-sm">{accessory.accessory_model || '-'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              accessory.accessory_category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                              accessory.accessory_category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                              {accessory.accessory_category === 'instrument' ? '仪器类' :
+                               accessory.accessory_category === 'fake_load' ? '假负载类' : '线材类'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">{accessory.accessory_quantity}</td>
+                          <td className="px-4 py-3 text-sm">{accessory.accessory_manage_code || '-'}</td>
+                          <td className="px-4 py-3 text-sm">{accessory.serial_number || '-'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              accessory.is_required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {accessory.is_required ? '必需' : '可选'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">{accessory.accessory_notes || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="font-medium text-gray-900 mb-4">调拨信息</h3>
         <div className="space-y-4">
@@ -660,7 +852,7 @@ export default function TransferDetailPage() {
           <h3 className="font-medium text-gray-900 mb-4">操作</h3>
           <div className="flex flex-wrap gap-3">
             {/* 调出方审批 */}
-            {order.status === 'pending_from' && currentUser && currentUser.id === order.from_manager_id && (
+            {order.status === 'pending_from' && currentUser && currentUser.employee_id === order.from_manager_id && (
               <>
                 <button
                   onClick={() => handleApprove()}
@@ -686,7 +878,7 @@ export default function TransferDetailPage() {
               </>
             )}
             {/* 调入方审批 */}
-            {order.status === 'pending_to' && currentUser && currentUser.id === order.to_manager_id && (
+            {order.status === 'pending_to' && currentUser && currentUser.employee_id === order.to_manager_id && (
               <>
                 <button
                   onClick={() => handleApprove()}
@@ -705,7 +897,7 @@ export default function TransferDetailPage() {
               </>
             )}
             {/* 发货操作 - 调出方审批通过后 */}
-            {order.status === 'shipping' && currentUser && currentUser.id === order.from_manager_id && (
+            {order.status === 'shipping' && currentUser && currentUser.employee_id === order.from_manager_id && (
               <>
                 <button
                   onClick={handleShip}
@@ -724,7 +916,7 @@ export default function TransferDetailPage() {
               </>
             )}
             {/* 收货操作 - 发货后 */}
-            {order.status === 'receiving' && currentUser && currentUser.id === order.to_manager_id && (
+            {order.status === 'receiving' && currentUser && currentUser.employee_id === order.to_manager_id && (
               <button
                 onClick={handleReceive}
                 disabled={actionLoading}
@@ -737,39 +929,142 @@ export default function TransferDetailPage() {
         </div>
       )}
 
-      {showShippingDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      {showShippingDialog && order && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto py-8">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-medium text-gray-900 mb-4">填写发货信息</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">发货时间</label>
-                <input
-                  type="datetime-local"
-                  value={shippingData.shipped_at}
-                  onChange={(e) => setShippingData({ ...shippingData, shipped_at: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">发货时间</label>
+                  <input
+                    type="datetime-local"
+                    value={shippingData.shipped_at}
+                    onChange={(e) => setShippingData({ ...shippingData, shipped_at: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">发货单号</label>
+                  <input
+                    type="text"
+                    value={shippingData.shipping_no}
+                    onChange={(e) => setShippingData({ ...shippingData, shipping_no: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="请输入发货单号"
+                  />
+                </div>
               </div>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">发货单号</label>
-                <input
-                  type="text"
-                  value={shippingData.shipping_no}
-                  onChange={(e) => setShippingData({ ...shippingData, shipping_no: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="请输入发货单号"
-                />
+                <h4 className="text-sm font-medium text-gray-900 mb-3">设备明细</h4>
+                <div className="space-y-4">
+                  {order.items.map(item => (
+                    <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="font-medium">{item.equipment_name}</span>
+                          <span className="text-sm text-gray-500 ml-2">{item.model_no}</span>
+                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                            item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                            item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                          </span>
+                          {item.category !== 'instrument' && <span className="text-sm text-gray-500 ml-2">x{item.quantity}</span>}
+                        </div>
+                      </div>
+                      {item.category !== 'instrument' && (
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">接收数量</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.quantity}
+                            value={receivingData.received_items.find(ri => ri.item_id === item.id)?.received_quantity || item.quantity}
+                            onChange={(e) => {
+                              const receivedQty = parseInt(e.target.value) || 0;
+                              setReceivingData(prev => ({
+                                ...prev,
+                                received_items: prev.received_items.map(ri =>
+                                  ri.item_id === item.id
+                                    ? { ...ri, received_quantity: receivedQty }
+                                    : ri
+                                )
+                              }))
+                            }}
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-500 ml-2">/ {item.quantity}</span>
+                        </div>
+                      )}
+                      <h5 className="text-sm font-medium text-gray-900 mb-2">设备明细图片</h5>
+                      <div className="flex flex-wrap gap-2">
+                        {(shippingData.item_images.find(img => img.item_id === item.id)?.images || []).map((url, idx) => (
+                          <div key={idx} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShippingData(prev => ({
+                                  ...prev,
+                                  item_images: prev.item_images.map(img =>
+                                    img.item_id === item.id
+                                      ? { ...img, images: img.images.filter((_, i) => i !== idx) }
+                                      : img
+                                  )
+                                }))
+                              }}
+                              className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                            >×</button>
+                          </div>
+                        ))}
+                        <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-500">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => e.target.files && handleItemImagesUpload(item.id, e.target.files, true)}
+                            disabled={uploadingImages}
+                          />
+                          <span className="text-gray-400 text-2xl">+</span>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">发货凭证附件</label>
-                <input
-                  type="text"
-                  value={shippingData.shipping_attachment}
-                  onChange={(e) => setShippingData({ ...shippingData, shipping_attachment: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="请输入附件URL"
-                />
+                <h4 className="text-sm font-medium text-gray-900 mb-3">打包整体图片</h4>
+                <div className="flex flex-wrap gap-2">
+                  {(shippingData.package_images || []).map((url, idx) => (
+                    <div key={idx} className="relative w-20 h-20">
+                      <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                      <button
+                        type="button"
+                        onClick={() => setShippingData(prev => ({
+                          ...prev,
+                          package_images: prev.package_images.filter((_, i) => i !== idx)
+                        }))}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                      >×</button>
+                    </div>
+                  ))}
+                  <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-500">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => e.target.files && handlePackageImagesUpload(e.target.files, true)}
+                      disabled={uploadingImages}
+                    />
+                    <span className="text-gray-400 text-2xl">+</span>
+                  </label>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
@@ -781,52 +1076,166 @@ export default function TransferDetailPage() {
               </button>
               <button
                 onClick={handleConfirmShip}
-                disabled={actionLoading}
+                disabled={actionLoading || uploadingImages}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                确认发货
+                {actionLoading ? '处理中...' : '确认发货'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {showReceivingDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      {showReceivingDialog && order && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto py-8">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-medium text-gray-900 mb-4">填写到货信息</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">到货时间</label>
-                <input
-                  type="datetime-local"
-                  value={receivingData.received_at}
-                  onChange={(e) => setReceivingData({ ...receivingData, received_at: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">到货时间</label>
+                  <input
+                    type="datetime-local"
+                    value={receivingData.received_at}
+                    onChange={(e) => setReceivingData({ ...receivingData, received_at: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">到货状态</label>
+                  <select
+                    value={receivingData.receive_status}
+                    onChange={(e) => setReceivingData({ ...receivingData, receive_status: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="normal">正常</option>
+                    <option value="damaged">损坏</option>
+                    <option value="missing">缺失</option>
+                    <option value="partial">部分到货</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">到货状态</label>
-                <select
-                  value={receivingData.receive_status}
-                  onChange={(e) => setReceivingData({ ...receivingData, receive_status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="normal">正常</option>
-                  <option value="damaged">损坏</option>
-                  <option value="missing">缺失</option>
-                  <option value="partial">部分到货</option>
-                </select>
-              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">到货备注</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={receivingData.receive_comment}
                   onChange={(e) => setReceivingData({ ...receivingData, receive_comment: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   placeholder="请输入到货备注"
                 />
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">设备明细</h4>
+                <div className="space-y-4">
+                  {order.items.map(item => (
+                    <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="font-medium">{item.equipment_name}</span>
+                          <span className="text-sm text-gray-500 ml-2">{item.model_no}</span>
+                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                            item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                            item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                            'bg-green-100 text-green-700'
+                          }`}>
+                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                          </span>
+                          {item.category !== 'instrument' && <span className="text-sm text-gray-500 ml-2">x{item.quantity}</span>}
+                        </div>
+                      </div>
+                      {item.category !== 'instrument' && (
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">接收数量</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.quantity}
+                            value={receivingData.received_items.find(ri => ri.item_id === item.id)?.received_quantity || item.quantity}
+                            onChange={(e) => {
+                              const receivedQty = parseInt(e.target.value) || 0;
+                              setReceivingData(prev => ({
+                                ...prev,
+                                received_items: prev.received_items.map(ri =>
+                                  ri.item_id === item.id
+                                    ? { ...ri, received_quantity: receivedQty }
+                                    : ri
+                                )
+                              }))
+                            }}
+                            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-500 ml-2">/ {item.quantity}</span>
+                        </div>
+                      )}
+                      <h5 className="text-sm font-medium text-gray-900 mb-2">设备明细图片</h5>
+                      <div className="flex flex-wrap gap-2">
+                        {(receivingData.item_images.find(img => img.item_id === item.id)?.images || []).map((url, idx) => (
+                          <div key={idx} className="relative w-20 h-20">
+                            <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReceivingData(prev => ({
+                                  ...prev,
+                                  item_images: prev.item_images.map(img =>
+                                    img.item_id === item.id
+                                      ? { ...img, images: img.images.filter((_, i) => i !== idx) }
+                                      : img
+                                  )
+                                }))
+                              }}
+                              className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                            >×</button>
+                          </div>
+                        ))}
+                        <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-500">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => e.target.files && handleItemImagesUpload(item.id, e.target.files, false)}
+                            disabled={uploadingImages}
+                          />
+                          <span className="text-gray-400 text-2xl">+</span>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">整体收货图片</h4>
+                <div className="flex flex-wrap gap-2">
+                  {(receivingData.package_images || []).map((url, idx) => (
+                    <div key={idx} className="relative w-20 h-20">
+                      <img src={url} alt="" className="w-full h-full object-cover rounded border" />
+                      <button
+                        type="button"
+                        onClick={() => setReceivingData(prev => ({
+                          ...prev,
+                          package_images: prev.package_images.filter((_, i) => i !== idx)
+                        }))}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                      >×</button>
+                    </div>
+                  ))}
+                  <label className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center cursor-pointer hover:border-blue-500">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => e.target.files && handlePackageImagesUpload(e.target.files, false)}
+                      disabled={uploadingImages}
+                    />
+                    <span className="text-gray-400 text-2xl">+</span>
+                  </label>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
@@ -838,10 +1247,10 @@ export default function TransferDetailPage() {
               </button>
               <button
                 onClick={handleConfirmReceive}
-                disabled={actionLoading}
+                disabled={actionLoading || uploadingImages}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
-                确认收货
+                {actionLoading ? '处理中...' : '确认收货'}
               </button>
             </div>
           </div>

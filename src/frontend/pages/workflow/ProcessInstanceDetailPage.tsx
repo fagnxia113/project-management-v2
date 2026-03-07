@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
+import EquipmentTransferForm from '../../components/equipment/EquipmentTransferForm'
 
 interface FormField {
   name: string
@@ -141,6 +142,14 @@ export default function ProcessInstanceDetailPage() {
   const [showAllLogs, setShowAllLogs] = useState(false)
   const [taskFormData, setTaskFormData] = useState<Record<string, any>>({})
   const [taskFormFields, setTaskFormFields] = useState<FormField[]>([])
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr))
+    }
+  }, [])
 
   useEffect(() => {
     if (instanceId) {
@@ -535,41 +544,64 @@ export default function ProcessInstanceDetailPage() {
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-4">
-          {getFormGroups().map((group: any, idx: number) => {
-            const definitionKey = instance?.definition_key || ''
-            const config = (FORM_GROUP_CONFIG as any)[definitionKey]?.find((g: any) => g.title === group.title)
-            const GroupIcon = config?.icon || FileText
+          {(() => {
+            console.log('[ProcessInstanceDetailPage] instance:', instance)
+            console.log('[ProcessInstanceDetailPage] definition_key:', instance?.definition_key)
+            console.log('[ProcessInstanceDetailPage] business_id:', instance?.business_id)
+            console.log('[ProcessInstanceDetailPage] variables:', instance?.variables)
+            console.log('[ProcessInstanceDetailPage] variables.formData:', instance?.variables?.formData)
+            console.log('[ProcessInstanceDetailPage] transferOrderId:', instance?.variables?.formData?.transferOrderId)
             
-            return (
-              <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                  <h3 className="font-medium text-gray-900 flex items-center gap-2">
-                    <GroupIcon className="w-5 h-5 text-blue-500" />
-                    {group.title}
-                  </h3>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-                    {group.fields.map((fieldName: string) => {
-                      const field = formFields.find(f => f.name === fieldName)
-                      const value = instance.variables?.formData?.[fieldName]
-                      
-                      return (
-                        <div key={fieldName} className="group">
-                          <label className="text-sm font-medium text-gray-600 mb-1.5 block">
-                            {field?.label || fieldName}
-                          </label>
-                          <div className="px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 text-gray-900 text-sm min-h-[42px] flex items-center">
-                            {getDisplayValue(fieldName, value)}
+            const isEquipmentTransfer = instance?.definition_key === 'equipment-transfer' || instance?.definition_key === 'preset-equipment-transfer'
+            const hasBusinessId = instance?.business_id || instance?.variables?.formData?.transferOrderId
+            
+            console.log('[ProcessInstanceDetailPage] isEquipmentTransfer:', isEquipmentTransfer)
+            console.log('[ProcessInstanceDetailPage] hasBusinessId:', hasBusinessId)
+            
+            return isEquipmentTransfer && hasBusinessId
+          })() ? (
+            <EquipmentTransferForm 
+              transferOrderId={instance?.business_id || instance?.variables?.formData?.transferOrderId}
+              currentUser={currentUser}
+              onShippingComplete={loadInstanceData}
+            />
+          ) : (
+            getFormGroups().map((group: any, idx: number) => {
+              const definitionKey = instance?.definition_key || ''
+              const config = (FORM_GROUP_CONFIG as any)[definitionKey]?.find((g: any) => g.title === group.title)
+              const GroupIcon = config?.icon || FileText
+              
+              return (
+                <div key={idx} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                    <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                      <GroupIcon className="w-5 h-5 text-blue-500" />
+                      {group.title}
+                    </h3>
+                  </div>
+                  <div className="p-6">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                      {group.fields.map((fieldName: string) => {
+                        const field = formFields.find(f => f.name === fieldName)
+                        const value = instance.variables?.formData?.[fieldName]
+                        
+                        return (
+                          <div key={fieldName} className="group">
+                            <label className="text-sm font-medium text-gray-600 mb-1.5 block">
+                              {field?.label || fieldName}
+                            </label>
+                            <div className="px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 text-gray-900 text-sm min-h-[42px] flex items-center">
+                              {getDisplayValue(fieldName, value)}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
           
           {logs.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

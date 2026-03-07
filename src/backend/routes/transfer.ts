@@ -91,12 +91,14 @@ router.put('/:id/ship', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 'system';
     const userName = (req as any).user?.name || '系统';
-    const { shipped_at, shipping_no, shipping_attachment } = req.body;
+    const { shipped_at, shipping_no, shipping_attachment, item_images, package_images } = req.body;
     
     const order = await transferOrderService.shipOrder(req.params.id, userId, userName, {
       shipped_at,
       shipping_no,
-      shipping_attachment
+      shipping_attachment,
+      item_images,
+      package_images
     });
     res.json({ success: true, data: order });
   } catch (error: any) {
@@ -108,14 +110,40 @@ router.put('/:id/receive', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 'system';
     const userName = (req as any).user?.name || '系统';
-    const { received_at, receive_status, receive_comment } = req.body;
+    const { received_at, receive_status, receive_comment, item_images, package_images, received_items } = req.body;
     
-    const order = await transferOrderService.receiveOrder(req.params.id, userId, userName, {
-      received_at,
-      receive_status,
-      receive_comment
-    });
-    res.json({ success: true, data: order });
+    const success = await transferOrderService.confirmReceiving(
+      req.params.id, 
+      userId, 
+      receive_status || 'normal', 
+      receive_comment,
+      item_images,
+      package_images,
+      received_items
+    );
+    res.json({ success, message: success ? '收货成功' : '收货失败' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/:id/confirm-partial', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id || 'system';
+    const success = await transferOrderService.confirmPartialReceive(req.params.id, userId);
+    res.json({ success, message: success ? '确认成功' : '确认失败' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put('/:id/return-to-shipping', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id || 'system';
+    const { return_comment } = req.body;
+    
+    const success = await transferOrderService.returnToShipping(req.params.id, userId, return_comment);
+    res.json({ success, message: success ? '回退成功' : '回退失败' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -45,6 +45,16 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
 });
 
+router.put('/:id', async (req: Request, res: Response) => {
+    try {
+        await projectService.updateProject(req.params.id as string, req.body);
+        const project = await projectService.getProjectById(req.params.id as string);
+        res.json({ success: true, data: project });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // --- Tasks (WBS) ---
 router.get('/:id/structure', async (req: Request, res: Response) => {
     try {

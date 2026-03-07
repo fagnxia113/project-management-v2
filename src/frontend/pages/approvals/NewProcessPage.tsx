@@ -60,13 +60,13 @@ const categoryIcons: Record<string, React.ReactNode> = {
 const presetToWorkflowKey: Record<string, string> = {
   'preset-employee-onboard': 'employee-onboard',
   'preset-equipment-inbound': 'equipment-inbound',
-  'preset-equipment-repair': 'equipment-repair',
   'preset-equipment-scrap-sale': 'equipment-scrap-sale',
   'preset-project-approval': 'project-approval',
 }
 
 const presetRoutes: Record<string, string> = {
   'preset-equipment-transfer': '/equipment/transfers/create',
+  'preset-equipment-repair': '/equipment/repairs/create',
 }
 
 export default function NewProcessPage() {

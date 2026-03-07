@@ -251,8 +251,6 @@ export class EquipmentScrapSaleService {
         [approvedBy, comment, id]
       );
 
-      await this.setEquipmentStatusToScrapped(connection, order);
-
       await connection.commit();
       return true;
     } catch (error) {

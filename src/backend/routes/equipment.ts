@@ -8,21 +8,36 @@ router.get('/instances', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = parseInt(req.query.pageSize as string) || 10;
-    const { model_id, location_id, status, search, location_status, category, health_status, usage_status, equipment_source } = req.query;
+    const { model_id, location_id, status, search, location_status, category, health_status, usage_status, equipment_source, aggregated } = req.query;
 
-    const result = await equipmentService.getInstances({
-      model_id: (model_id as string),
-      location_id: (location_id as string),
-      status: (status as string),
-      search: (search as string),
-      location_status: (location_status as string),
-      category: (category as string),
-      health_status: (health_status as string),
-      usage_status: (usage_status as string),
-      equipment_source: (equipment_source as string),
-      page,
-      pageSize
-    });
+    const useAggregated = aggregated !== 'false';
+    
+    const result = useAggregated 
+      ? await equipmentService.getAggregatedInstances({
+          location_id: (location_id as string),
+          status: (status as string),
+          search: (search as string),
+          location_status: (location_status as string),
+          category: (category as string),
+          health_status: (health_status as string),
+          usage_status: (usage_status as string),
+          equipment_source: (equipment_source as string),
+          page,
+          pageSize
+        })
+      : await equipmentService.getInstances({
+          model_id: (model_id as string),
+          location_id: (location_id as string),
+          status: (status as string),
+          search: (search as string),
+          location_status: (location_status as string),
+          category: (category as string),
+          health_status: (health_status as string),
+          usage_status: (usage_status as string),
+          equipment_source: (equipment_source as string),
+          page,
+          pageSize
+        });
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -132,6 +147,16 @@ router.get('/models', async (req: Request, res: Response) => {
       const models = await equipmentService.getAllModels();
       res.json({ success: true, data: models });
     }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- Equipment Images ---
+router.get('/images/equipment/:equipmentId', async (req: Request, res: Response) => {
+  try {
+    const images = await equipmentService.getImagesByEquipmentId(req.params.equipmentId);
+    res.json({ success: true, data: images });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

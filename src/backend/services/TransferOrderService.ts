@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/connection.js';
 
 // 类型定义
-export type TransferOrderStatus = 'pending_from' | 'pending_to' | 'shipping' | 'receiving' | 'completed' | 'rejected' | 'cancelled' | 'withdrawn';
+export type TransferOrderStatus = 'pending_from' | 'pending_to' | 'shipping' | 'receiving' | 'partial_received' | 'completed' | 'rejected' | 'cancelled' | 'withdrawn';
 export type TransferScene = 'A' | 'B' | 'C';
 
 export interface TransferOrderItem {
@@ -171,16 +171,10 @@ export class TransferOrderService {
           from_manager_id, from_manager,
           to_location_type, to_warehouse_id, to_warehouse_name, to_project_id, to_project_name,
           to_manager_id, to_manager,
-          solution, estimated_arrival,
           transfer_reason, estimated_ship_date, estimated_arrival_date, transport_method, tracking_no, notes,
-          status, approval_id,
-          from_approved_at, from_approved_by, from_approval_comment,
-          to_approved_at, to_approved_by, to_approval_comment,
-          shipped_at, shipped_by, shipping_no, shipping_attachment,
-          received_at, received_by, receive_status, receive_comment,
-          total_items, total_quantity, transfer_type,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          status,
+          total_items, total_quantity, transfer_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         id, orderNo, 'A', userId, userName, new Date().toISOString().slice(0, 10),
         firstItem.equipment_id || null, firstItem.manage_code || null, firstItem.equipment_name || null, firstItem.category || null,
@@ -188,14 +182,9 @@ export class TransferOrderService {
         fromManagerId, fromManager,
         convertedDto.to_location_type, convertedDto.to_warehouse_id || null, toWarehouseName, convertedDto.to_project_id || null, toProjectName,
         toManagerId, toManager,
-        null, null,
         convertedDto.transfer_reason, convertedDto.estimated_ship_date || null, convertedDto.estimated_arrival_date || null, null, null, null,
-        'pending_from', null,
-        null, null, null,
-        null, null, null,
-        null, null, null, null,
-        null, null, null, null,
-        totalItems, totalQuantity, 'single',
+        'pending_from',
+        totalItems, totalQuantity, 'single'
       ]);
       
       for (const item of convertedDto.items) {
@@ -254,7 +243,7 @@ export class TransferOrderService {
     try {
       await connection.execute(
         `UPDATE equipment_transfer_orders 
-         SET status = 'pending_to', 
+         SET status = 'shipping', 
              from_approved_at = NOW(), 
              from_approved_by = ?,
              from_approval_comment = ?,
@@ -300,28 +289,41 @@ export class TransferOrderService {
     }
   }
 
-  async confirmShipping(id: string, shippingNo: string, shippedBy: string, attachment?: string): Promise<boolean> {
-    console.log(`[TransferOrderService] confirmShipping 被调用: id=${id}, shippingNo=${shippingNo}, shippedBy=${shippedBy}, attachment=${attachment}`);
+  async confirmShipping(id: string, shippingNo: string, shippedBy: string, attachment?: string, itemImages?: { item_id: string; images: string[] }[], packageImages?: string[], shippedAt?: string): Promise<boolean> {
+    console.log(`[TransferOrderService] confirmShipping 被调用: id=${id}, shippingNo=${shippingNo}, shippedBy=${shippedBy}, shippedAt=${shippedAt}`);
     
     const connection = await db.beginTransaction();
 
     try {
-      // 更新调拨单状态
       await connection.execute(
         `UPDATE equipment_transfer_orders 
          SET status = 'receiving', 
-             shipped_at = NOW(), 
+             shipped_at = ?, 
              shipped_by = ?,
              shipping_no = ?,
              shipping_attachment = ?,
+             shipping_package_images = ?,
              updated_at = NOW()
          WHERE id = ?`,
-        [shippedBy, shippingNo, attachment || null, id]
+        [shippedAt || new Date(), shippedBy, shippingNo, attachment || null, packageImages ? JSON.stringify(packageImages) : null, id]
       );
       
       console.log(`[TransferOrderService] 调拨单状态已更新为 receiving: ${id}`);
       
-      // 将设备状态改为运输中（transferring）
+      if (itemImages && itemImages.length > 0) {
+        for (const item of itemImages) {
+          if (item.images && item.images.length > 0) {
+            await connection.execute(
+              `UPDATE equipment_transfer_order_items 
+               SET shipping_images = ?, updated_at = NOW()
+               WHERE id = ?`,
+              [JSON.stringify(item.images), item.item_id]
+            );
+          }
+        }
+        console.log(`[TransferOrderService] 已更新 ${itemImages.length} 个明细的发货图片`);
+      }
+      
       await this.setEquipmentStatusToTransferring(connection, id);
       
       await connection.commit();
@@ -377,7 +379,10 @@ export class TransferOrderService {
       if (item.equipment_id) {
         // 仪器类：有 equipment_id
         const [equipmentRows] = await connection.query<any>(
-          `SELECT * FROM equipment_instances WHERE id = ?`,
+          `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
+           FROM equipment_instances ei
+           JOIN equipment_models em ON ei.model_id = em.id
+           WHERE ei.id = ?`,
           [item.equipment_id]
         );
         const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
@@ -413,13 +418,20 @@ export class TransferOrderService {
         
         if (!fromLocationId || !fromLocationType) continue;
         
-        // 查找调出位置的设备记录
-        const [equipmentRows] = await connection.query<any>(
-          `SELECT * FROM equipment_instances 
-           WHERE equipment_name = ? AND model_no = ? AND category = ? AND manage_code = ?
-             AND location_id = ?`,
-          [item.equipment_name, item.model_no, item.category, item.manage_code, fromLocationId]
-        );
+        // 查找调出位置的设备记录（JOIN equipment_models表获取设备信息）
+        let query = `SELECT ei.*, em.name as equipment_name, em.model_no, em.brand, em.category, em.unit 
+           FROM equipment_instances ei
+           JOIN equipment_models em ON ei.model_id = em.id
+           WHERE em.name = ? AND em.model_no = ? AND em.category = ? AND ei.location_id = ?`;
+        let queryParams = [item.equipment_name, item.model_no, item.category, fromLocationId];
+        
+        // 只有当manage_code不为null时才使用这个条件
+        if (item.manage_code) {
+          query += ` AND ei.manage_code = ?`;
+          queryParams.push(item.manage_code);
+        }
+        
+        const [equipmentRows] = await connection.query<any>(query, queryParams);
         const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
         
         if (!equipment) {
@@ -451,25 +463,20 @@ export class TransferOrderService {
         const transferringEquipmentId = uuidv4();
         await connection.execute(
           `INSERT INTO equipment_instances 
-          (id, equipment_name, model_no, brand, category, unit, quantity, serial_number, manage_code, 
+          (id, model_id, quantity, serial_number, manage_code, 
            health_status, usage_status, location_status, location_id, keeper_id, 
            purchase_date, purchase_price, calibration_expiry, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transferringEquipmentId,
-            item.equipment_name,
-            item.model_no,
-            item.brand,
-            item.category,
-            item.unit,
+            equipment.model_id,
             transferQuantity,
             null,
-            item.manage_code + '-transferring',
+            item.manage_code ? item.manage_code + '-transferring' : null,
             'normal',
             'in_use', // 运输中视为使用中，不可用
             'transferring',
             'transferring', // 使用特殊标识表示运输中
-            null,
             null,
             null,
             null,
@@ -482,16 +489,29 @@ export class TransferOrderService {
   }
 
   // 别名方法，供路由调用
-  async shipOrder(id: string, userId: string, userName: string, params: { shipped_at?: string; shipping_no?: string; shipping_attachment?: string }): Promise<TransferOrder> {
-    await this.confirmShipping(id, params.shipping_no || '', userId, params.shipping_attachment);
+  async shipOrder(id: string, userId: string, userName: string, params: { 
+    shipped_at?: string; 
+    shipping_no?: string; 
+    shipping_attachment?: string;
+    item_images?: { item_id: string; images: string[] }[];
+    package_images?: string[];
+  }): Promise<TransferOrder> {
+    await this.confirmShipping(id, params.shipping_no || '', userId, params.shipping_attachment, params.item_images, params.package_images, params.shipped_at);
     const order = await this.getById(id);
     if (!order) throw new Error('调拨单不存在');
     return order;
   }
 
   // 别名方法，供路由调用
-  async receiveOrder(id: string, userId: string, userName: string, params: { received_at?: string; receive_status?: string; receive_comment?: string }): Promise<TransferOrder> {
-    await this.confirmReceiving(id, userId, params.receive_status || 'normal', params.receive_comment);
+  async receiveOrder(id: string, userId: string, userName: string, params: { 
+    received_at?: string; 
+    receive_status?: string; 
+    receive_comment?: string;
+    item_images?: { item_id: string; images: string[] }[];
+    package_images?: string[];
+    received_items?: { item_id: string; received_quantity: number }[];
+  }): Promise<TransferOrder> {
+    await this.confirmReceiving(id, userId, params.receive_status || 'normal', params.receive_comment, params.item_images, params.package_images, params.received_items);
     const order = await this.getById(id);
     if (!order) throw new Error('调拨单不存在');
     return order;
@@ -529,24 +549,110 @@ export class TransferOrderService {
     return order;
   }
 
-  async confirmReceiving(id: string, receivedBy: string, status: string, comment?: string): Promise<boolean> {
+  async confirmReceiving(id: string, receivedBy: string, status: string, comment?: string, itemImages?: { item_id: string; images: string[] }[], packageImages?: string[], receivedItems?: { item_id: string; received_quantity: number }[]): Promise<boolean> {
     const connection = await db.beginTransaction();
 
     try {
-      await connection.execute(
-        `UPDATE equipment_transfer_orders 
-         SET status = 'completed', 
-             received_at = NOW(), 
-             received_by = ?,
-             receive_status = ?,
-             receive_comment = ?,
-             updated_at = NOW()
-         WHERE id = ?`,
-        [receivedBy, status, comment || null, id]
+      const [orderRows] = await connection.query<any>(
+        `SELECT * FROM equipment_transfer_orders WHERE id = ?`,
+        [id]
       );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
       
-      // 更新设备实例的位置（从运输中转移到目标位置）
-      await this.updateEquipmentLocationFromTransferring(connection, id);
+      if (!order) {
+        throw new Error('调拨单不存在');
+      }
+      
+      const [itemRows] = await connection.query<any>(
+        `SELECT * FROM equipment_transfer_order_items WHERE order_id = ?`,
+        [id]
+      );
+      const items = itemRows || [];
+      
+      let isPartialReceive = false;
+      let totalRequested = 0;
+      let totalReceived = 0;
+      
+      if (receivedItems && receivedItems.length > 0) {
+        for (const item of items) {
+          totalRequested += item.quantity || 0;
+          const receivedItem = receivedItems.find(ri => ri.item_id === item.id);
+          if (receivedItem) {
+            totalReceived += receivedItem.received_quantity;
+            if (receivedItem.received_quantity < item.quantity) {
+              isPartialReceive = true;
+            }
+            await connection.execute(
+              `UPDATE equipment_transfer_order_items 
+               SET received_quantity = ?, status = ?, updated_at = NOW()
+               WHERE id = ?`,
+              [receivedItem.received_quantity, 'transferred', item.id]
+            );
+          } else {
+            totalReceived += 0;
+            isPartialReceive = true;
+            await connection.execute(
+              `UPDATE equipment_transfer_order_items 
+               SET received_quantity = 0, status = 'returned', updated_at = NOW()
+               WHERE id = ?`,
+              [item.id]
+            );
+          }
+        }
+      } else {
+        totalRequested = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+        totalReceived = totalRequested;
+      }
+      
+      if (isPartialReceive) {
+        await connection.execute(
+          `UPDATE equipment_transfer_orders 
+           SET status = 'partial_received', 
+               received_at = NOW(), 
+               received_by = ?,
+               receive_status = ?,
+               receive_comment = ?,
+               receiving_package_images = ?,
+               total_received_quantity = ?,
+               updated_at = NOW()
+           WHERE id = ?`,
+          [receivedBy, 'partial', comment || null, packageImages ? JSON.stringify(packageImages) : null, totalReceived, id]
+        );
+      } else {
+        await connection.execute(
+          `UPDATE equipment_transfer_orders 
+           SET status = 'completed', 
+               received_at = NOW(), 
+               received_by = ?,
+               receive_status = ?,
+               receive_comment = ?,
+               receiving_package_images = ?,
+               total_received_quantity = ?,
+               updated_at = NOW()
+           WHERE id = ?`,
+          [receivedBy, status || 'normal', comment || null, packageImages ? JSON.stringify(packageImages) : null, totalReceived, id]
+        );
+      }
+      
+      if (itemImages && itemImages.length > 0) {
+        for (const item of itemImages) {
+          if (item.images && item.images.length > 0) {
+            await connection.execute(
+              `UPDATE equipment_transfer_order_items 
+               SET receiving_images = ?, updated_at = NOW()
+               WHERE id = ?`,
+              [JSON.stringify(item.images), item.item_id]
+            );
+          }
+        }
+        console.log(`[TransferOrderService] 已更新 ${itemImages.length} 个明细的收货图片`);
+      }
+      
+      if (isPartialReceive) {
+        await this.partialTransferEquipment(connection, id, receivedItems || [], items);
+      } else {
+        await this.updateEquipmentLocationFromTransferring(connection, id);
+      }
       
       await connection.commit();
       return true;
@@ -559,15 +665,380 @@ export class TransferOrderService {
     }
   }
 
+  private async partialTransferEquipment(connection: any, transferOrderId: string, receivedItems: { item_id: string; received_quantity: number }[], allItems: any[]): Promise<void> {
+    try {
+      const [orderRows] = await connection.query<any>(
+        `SELECT * FROM equipment_transfer_orders WHERE id = ?`,
+        [transferOrderId]
+      );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
+      
+      if (!order) {
+        return;
+      }
+      
+      let toLocationId = null;
+      let toLocationType = null;
+      let toKeeperId = null;
+      
+      if (order.to_location_type === 'warehouse') {
+        toLocationId = order.to_warehouse_id;
+        toLocationType = 'warehouse';
+        const [warehouseRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM warehouses WHERE id = ?',
+          [toLocationId]
+        );
+        const warehouse = warehouseRows && warehouseRows.length > 0 ? warehouseRows[0] : null;
+        if (warehouse) {
+          toKeeperId = warehouse.manager_id;
+        }
+      } else {
+        toLocationId = order.to_project_id;
+        toLocationType = 'project';
+        const [projectRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM projects WHERE id = ?',
+          [toLocationId]
+        );
+        const project = projectRows && projectRows.length > 0 ? projectRows[0] : null;
+        if (project) {
+          toKeeperId = project.manager_id;
+        }
+      }
+      
+      let fromLocationId = null;
+      let fromLocationType = null;
+      let fromKeeperId = null;
+      
+      if (order.from_location_type === 'warehouse') {
+        fromLocationId = order.from_warehouse_id;
+        fromLocationType = 'warehouse';
+        const [warehouseRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM warehouses WHERE id = ?',
+          [fromLocationId]
+        );
+        const warehouse = warehouseRows && warehouseRows.length > 0 ? warehouseRows[0] : null;
+        if (warehouse) {
+          fromKeeperId = warehouse.manager_id;
+        }
+      } else {
+        fromLocationId = order.from_project_id;
+        fromLocationType = 'project';
+        const [projectRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM projects WHERE id = ?',
+          [fromLocationId]
+        );
+        const project = projectRows && projectRows.length > 0 ? projectRows[0] : null;
+        if (project) {
+          fromKeeperId = project.manager_id;
+        }
+      }
+      
+      for (const item of allItems) {
+        const receivedItem = receivedItems.find(ri => ri.item_id === item.id);
+        const receivedQty = receivedItem?.received_quantity || 0;
+        const returnQty = (item.quantity || 0) - receivedQty;
+        
+        if (receivedQty > 0) {
+          if (item.equipment_id && item.category === 'instrument') {
+            await connection.execute(
+              `UPDATE equipment_instances 
+               SET location_id = ?, 
+                   location_status = ?,
+                   usage_status = ?,
+                   keeper_id = ?,
+                   updated_at = NOW()
+               WHERE id = ?`,
+              [toLocationId, toLocationType === 'warehouse' ? 'warehouse' : 'in_project', toLocationType === 'warehouse' ? 'idle' : 'in_use', toKeeperId, item.equipment_id]
+            );
+            console.log(`[TransferOrderService] 仪器类设备已转移到目标位置: ${item.equipment_id}, 数量: ${receivedQty}`);
+          } else {
+            const [transferringEquipmentRows] = await connection.query<any>(
+              `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
+               FROM equipment_instances ei
+               JOIN equipment_models em ON ei.model_id = em.id
+               WHERE ei.location_id = 'transferring' 
+                 AND em.category = ? 
+                 AND em.name = ? 
+                 AND em.model_no = ?`,
+              [item.category, item.equipment_name, item.model_no]
+            );
+            const transferringEquipment = transferringEquipmentRows && transferringEquipmentRows.length > 0 ? transferringEquipmentRows[0] : null;
+            
+            if (transferringEquipment) {
+              const [existingEquipmentRows] = await connection.query<{ id: string; quantity: number }>(
+                `SELECT ei.id, ei.quantity 
+                 FROM equipment_instances ei
+                 JOIN equipment_models em ON ei.model_id = em.id
+                 WHERE ei.location_id = ? 
+                   AND em.category = ? AND em.name = ? AND em.model_no = ?`,
+                [toLocationId, transferringEquipment.category, transferringEquipment.equipment_name, transferringEquipment.model_no]
+              );
+              const existingEquipment = existingEquipmentRows && existingEquipmentRows.length > 0 ? existingEquipmentRows[0] : null;
+              
+              if (existingEquipment) {
+                await connection.execute(
+                  `UPDATE equipment_instances 
+                   SET quantity = quantity + ?, 
+                       usage_status = ?,
+                       keeper_id = ?,
+                       updated_at = NOW()
+                   WHERE id = ?`,
+                  [receivedQty, toLocationType === 'warehouse' ? 'idle' : 'in_use', toKeeperId, existingEquipment.id]
+                );
+                console.log(`[TransferOrderService] 目标位置数量已更新: ${existingEquipment.id} (+${receivedQty})`);
+                
+                const remainingQty = (transferringEquipment.quantity || 0) - receivedQty;
+                if (remainingQty <= 0) {
+                  await connection.execute(
+                    'DELETE FROM equipment_instances WHERE id = ?',
+                    [transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备记录已删除: ${transferringEquipment.id}`);
+                } else {
+                  await connection.execute(
+                    `UPDATE equipment_instances 
+                     SET quantity = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [remainingQty, transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备数量已更新: ${transferringEquipment.id} (${transferringEquipment.quantity} -> ${remainingQty})`);
+                }
+              } else {
+                const newEquipmentId = uuidv4();
+                await connection.execute(
+                  `INSERT INTO equipment_instances 
+                  (id, model_id, quantity, serial_number, manage_code, 
+                   health_status, usage_status, location_status, location_id, keeper_id, 
+                   purchase_date, purchase_price, calibration_expiry, notes)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    newEquipmentId,
+                    transferringEquipment.model_id,
+                    receivedQty,
+                    null,
+                    transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : null,
+                    transferringEquipment.health_status,
+                    toLocationType === 'warehouse' ? 'idle' : 'in_use',
+                    toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
+                    toLocationId,
+                    toKeeperId,
+                    transferringEquipment.purchase_date,
+                    transferringEquipment.purchase_price,
+                    transferringEquipment.calibration_expiry,
+                    transferringEquipment.notes
+                  ]
+                );
+                console.log(`[TransferOrderService] 目标位置已创建新记录: ${newEquipmentId} (数量: ${receivedQty})`);
+                
+                const remainingQty = (transferringEquipment.quantity || 0) - receivedQty;
+                if (remainingQty <= 0) {
+                  await connection.execute(
+                    'DELETE FROM equipment_instances WHERE id = ?',
+                    [transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备记录已删除: ${transferringEquipment.id}`);
+                } else {
+                  await connection.execute(
+                    `UPDATE equipment_instances 
+                     SET quantity = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [remainingQty, transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备数量已更新: ${transferringEquipment.id} (${transferringEquipment.quantity} -> ${remainingQty})`);
+                }
+              }
+            }
+          }
+        }
+        
+        if (returnQty > 0) {
+          if (item.equipment_id && item.category === 'instrument') {
+            await connection.execute(
+              `UPDATE equipment_instances 
+               SET location_id = ?, 
+                   location_status = ?,
+                   usage_status = 'idle',
+                   keeper_id = ?,
+                   updated_at = NOW()
+               WHERE id = ?`,
+              [fromLocationId, fromLocationType === 'warehouse' ? 'warehouse' : 'in_project', fromKeeperId, item.equipment_id]
+            );
+            console.log(`[TransferOrderService] 仪器类设备已返回原位置: ${item.equipment_id}, 数量: ${returnQty}`);
+          } else {
+            const [transferringEquipmentRows] = await connection.query<any>(
+              `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
+               FROM equipment_instances ei
+               JOIN equipment_models em ON ei.model_id = em.id
+               WHERE ei.location_id = 'transferring' 
+                 AND em.category = ? 
+                 AND em.name = ? 
+                 AND em.model_no = ?`,
+              [item.category, item.equipment_name, item.model_no]
+            );
+            const transferringEquipment = transferringEquipmentRows && transferringEquipmentRows.length > 0 ? transferringEquipmentRows[0] : null;
+            
+            if (transferringEquipment) {
+              const [existingEquipmentRows] = await connection.query<{ id: string; quantity: number }>(
+                `SELECT ei.id, ei.quantity 
+                 FROM equipment_instances ei
+                 JOIN equipment_models em ON ei.model_id = em.id
+                 WHERE ei.location_id = ? 
+                   AND em.category = ? AND em.name = ? AND em.model_no = ?`,
+                [fromLocationId, transferringEquipment.category, transferringEquipment.equipment_name, transferringEquipment.model_no]
+              );
+              const existingEquipment = existingEquipmentRows && existingEquipmentRows.length > 0 ? existingEquipmentRows[0] : null;
+              
+              if (existingEquipment) {
+                await connection.execute(
+                  `UPDATE equipment_instances 
+                   SET quantity = quantity + ?, 
+                       usage_status = 'idle',
+                       keeper_id = ?,
+                       updated_at = NOW()
+                   WHERE id = ?`,
+                  [returnQty, fromKeeperId, existingEquipment.id]
+                );
+                console.log(`[TransferOrderService] 原位置数量已更新: ${existingEquipment.id} (+${returnQty})`);
+                
+                const remainingQty = (transferringEquipment.quantity || 0) - returnQty;
+                if (remainingQty <= 0) {
+                  await connection.execute(
+                    'DELETE FROM equipment_instances WHERE id = ?',
+                    [transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备记录已删除: ${transferringEquipment.id}`);
+                } else {
+                  await connection.execute(
+                    `UPDATE equipment_instances 
+                     SET quantity = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [remainingQty, transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备数量已更新: ${transferringEquipment.id} (${transferringEquipment.quantity} -> ${remainingQty})`);
+                }
+              } else {
+                const newEquipmentId = uuidv4();
+                await connection.execute(
+                  `INSERT INTO equipment_instances 
+                  (id, model_id, quantity, serial_number, manage_code, 
+                   health_status, usage_status, location_status, location_id, keeper_id, 
+                   purchase_date, purchase_price, calibration_expiry, notes)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    newEquipmentId,
+                    transferringEquipment.model_id,
+                    returnQty,
+                    null,
+                    transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : null,
+                    transferringEquipment.health_status,
+                    'idle',
+                    fromLocationType === 'warehouse' ? 'warehouse' : 'in_project',
+                    fromLocationId,
+                    fromKeeperId,
+                    transferringEquipment.purchase_date,
+                    transferringEquipment.purchase_price,
+                    transferringEquipment.calibration_expiry,
+                    transferringEquipment.notes
+                  ]
+                );
+                console.log(`[TransferOrderService] 原位置已创建新记录: ${newEquipmentId} (数量: ${returnQty})`);
+                
+                const remainingQty = (transferringEquipment.quantity || 0) - returnQty;
+                if (remainingQty <= 0) {
+                  await connection.execute(
+                    'DELETE FROM equipment_instances WHERE id = ?',
+                    [transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备记录已删除: ${transferringEquipment.id}`);
+                } else {
+                  await connection.execute(
+                    `UPDATE equipment_instances 
+                     SET quantity = ?, updated_at = NOW()
+                     WHERE id = ?`,
+                    [remainingQty, transferringEquipment.id]
+                  );
+                  console.log(`[TransferOrderService] 运输中设备数量已更新: ${transferringEquipment.id} (${transferringEquipment.quantity} -> ${remainingQty})`);
+                }
+              }
+            }
+          }
+        }
+        
+        if (item.category !== 'instrument' && item.equipment_id) {
+          await connection.execute(
+            'DELETE FROM equipment_instances WHERE id = ?',
+            [item.equipment_id]
+          );
+          console.log(`[TransferOrderService] 运输中设备记录已删除: ${item.equipment_id}`);
+        }
+      }
+    } catch (error) {
+      console.error('部分转移设备失败:', error);
+      throw error;
+    }
+  }
+
+  async confirmPartialReceive(id: string, confirmedBy: string): Promise<boolean> {
+    const connection = await db.beginTransaction();
+    
+    try {
+      await connection.execute(
+        `UPDATE equipment_transfer_orders 
+         SET status = 'completed', 
+             updated_at = NOW()
+         WHERE id = ?`,
+        [id]
+      );
+      
+      await connection.commit();
+      console.log(`[TransferOrderService] 部分收货已确认完成: ${id}`);
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      console.error('确认部分收货失败:', error);
+      return false;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async returnToShipping(id: string, returnedBy: string, comment?: string): Promise<boolean> {
+    const connection = await db.beginTransaction();
+    
+    try {
+      await connection.execute(
+        `UPDATE equipment_transfer_orders 
+         SET status = 'shipping', 
+             return_comment = ?,
+             returned_at = NOW(),
+             returned_by = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [comment || null, returnedBy, id]
+      );
+      
+      await connection.commit();
+      console.log(`[TransferOrderService] 已回退到发货状态: ${id}`);
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      console.error('回退到发货状态失败:', error);
+      return false;
+    } finally {
+      connection.release();
+    }
+  }
+
   async rejectOrder(id: string, rejectedBy: string, comment: string): Promise<boolean> {
     const connection = await db.beginTransaction();
 
     try {
       // 获取调拨单信息
-      const order = await connection.queryOne<any>(
+      const [orderRows] = await connection.query<any>(
         `SELECT * FROM equipment_transfer_orders WHERE id = ?`,
         [id]
       );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
       
       if (!order) {
         throw new Error('调拨单不存在');
@@ -613,10 +1084,11 @@ export class TransferOrderService {
 
     try {
       // 获取调拨单信息
-      const order = await connection.queryOne<any>(
+      const [orderRows] = await connection.query<any>(
         `SELECT * FROM equipment_transfer_orders WHERE id = ?`,
         [id]
       );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
       
       if (!order) {
         throw new Error('调拨单不存在');
@@ -684,13 +1156,28 @@ export class TransferOrderService {
       // 确定调出位置信息
       let fromLocationId = null;
       let fromLocationType = null;
+      let fromKeeperId = null;
       
       if (order.from_location_type === 'warehouse') {
         fromLocationId = order.from_warehouse_id;
         fromLocationType = 'warehouse';
+        const [warehouseRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM warehouses WHERE id = ?',
+          [fromLocationId]
+        );
+        if (warehouseRows && warehouseRows.length > 0) {
+          fromKeeperId = warehouseRows[0].manager_id;
+        }
       } else {
         fromLocationId = order.from_project_id;
         fromLocationType = 'project';
+        const [projectRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM projects WHERE id = ?',
+          [fromLocationId]
+        );
+        if (projectRows && projectRows.length > 0) {
+          fromKeeperId = projectRows[0].manager_id;
+        }
       }
       
       // 处理每个设备
@@ -699,7 +1186,10 @@ export class TransferOrderService {
         
         // 获取设备信息
           const [equipmentRows] = await connection.query<any>(
-            `SELECT * FROM equipment_instances WHERE id = ?`,
+            `SELECT ei.*, em.name as equipment_name, em.model_no, em.category, em.brand, em.unit 
+             FROM equipment_instances ei
+             JOIN equipment_models em ON ei.model_id = em.id
+             WHERE ei.id = ?`,
             [item.equipment_id]
           );
           const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
@@ -716,23 +1206,25 @@ export class TransferOrderService {
              SET location_id = ?, 
                  location_status = ?,
                  usage_status = 'idle',
+                 keeper_id = ?,
                  updated_at = NOW()
              WHERE id = ?`,
-            [fromLocationId, fromLocationType === 'warehouse' ? 'warehouse' : 'in_project', item.equipment_id]
+            [fromLocationId, fromLocationType === 'warehouse' ? 'warehouse' : 'in_project', fromKeeperId, item.equipment_id]
           );
-          console.log(`[TransferOrderService] 仪器类设备已返回调出位置: ${item.equipment_id}`);
+          console.log(`[TransferOrderService] 仪器类设备已返回调出位置: ${item.equipment_id}, 保管人: ${fromKeeperId}`);
         } else {
           // 假负载/线缆类：按数量处理
           const transferQuantity = item.quantity || 1;
           
           // 1. 查找运输中的设备记录
           const [transferringEquipmentRows] = await connection.query<{ id: string; quantity: number }>(
-            `SELECT id, quantity 
-             FROM equipment_instances 
-             WHERE location_id = 'transferring' 
-               AND category = ? 
-               AND equipment_name = ? 
-               AND model_no = ?`,
+            `SELECT ei.id, ei.quantity 
+             FROM equipment_instances ei
+             JOIN equipment_models em ON ei.model_id = em.id
+             WHERE ei.location_id = 'transferring' 
+               AND em.category = ? 
+               AND em.name = ? 
+               AND em.model_no = ?`,
             [equipment.category, equipment.equipment_name, equipment.model_no]
           );
           const transferringEquipment = transferringEquipmentRows && transferringEquipmentRows.length > 0 ? transferringEquipmentRows[0] : null;
@@ -751,10 +1243,11 @@ export class TransferOrderService {
           
           // 3. 检查调出位置是否已存在相同设备
             const [existingEquipmentRows] = await connection.query<{ id: string; quantity: number }>(
-              `SELECT id, quantity 
-               FROM equipment_instances 
-               WHERE location_id = ? 
-                 AND category = ? AND equipment_name = ? AND model_no = ?`,
+              `SELECT ei.id, ei.quantity 
+               FROM equipment_instances ei
+               JOIN equipment_models em ON ei.model_id = em.id
+               WHERE ei.location_id = ? 
+                 AND em.category = ? AND em.name = ? AND em.model_no = ?`,
               [fromLocationId, equipment.category, equipment.equipment_name, equipment.model_no]
             );
             const existingEquipment = existingEquipmentRows && existingEquipmentRows.length > 0 ? existingEquipmentRows[0] : null;
@@ -765,27 +1258,24 @@ export class TransferOrderService {
               `UPDATE equipment_instances 
                SET quantity = quantity + ?, 
                    usage_status = 'idle',
+                   keeper_id = ?,
                    updated_at = NOW()
                WHERE id = ?`,
-              [transferQuantity, existingEquipment.id]
+              [transferQuantity, fromKeeperId, existingEquipment.id]
             );
-            console.log(`[TransferOrderService] 调出位置数量已合并: ${existingEquipment.id} (+${transferQuantity})`);
+            console.log(`[TransferOrderService] 调出位置数量已合并: ${existingEquipment.id} (+${transferQuantity}), 保管人: ${fromKeeperId}`);
           } else {
             // 5. 不存在相同设备，创建新记录
             const newEquipmentId = uuidv4();
             await connection.execute(
               `INSERT INTO equipment_instances 
-              (id, equipment_name, model_no, brand, category, unit, quantity, serial_number, manage_code, 
+              (id, model_id, quantity, serial_number, manage_code, 
                health_status, usage_status, location_status, location_id, keeper_id, 
                purchase_date, purchase_price, calibration_expiry, notes)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 newEquipmentId,
-                equipment.equipment_name,
-                equipment.model_no,
-                equipment.brand,
-                equipment.category,
-                equipment.unit,
+                equipment.model_id,
                 transferQuantity,
                 null,
                 equipment.manage_code,
@@ -793,14 +1283,14 @@ export class TransferOrderService {
                 'idle',
                 fromLocationType === 'warehouse' ? 'warehouse' : 'in_project',
                 fromLocationId,
-                null,
+                fromKeeperId,
                 equipment.purchase_date,
                 equipment.purchase_price,
                 equipment.calibration_expiry,
                 equipment.notes
               ]
             );
-            console.log(`[TransferOrderService] 调出位置已创建新记录: ${newEquipmentId} (数量: ${transferQuantity})`);
+            console.log(`[TransferOrderService] 调出位置已创建新记录: ${newEquipmentId} (数量: ${transferQuantity}), 保管人: ${fromKeeperId}`);
           }
         }
       }
@@ -843,6 +1333,35 @@ export class TransferOrderService {
         `SELECT * FROM equipment_transfer_order_items WHERE order_id = ?`,
         [id]
       );
+      
+      // 为仪器类设备获取配件清单
+      for (const item of items) {
+        if (item.category === 'instrument' && item.equipment_id) {
+          const accessories = await db.query<any>(
+            `SELECT 
+              ea.id,
+              ea.host_equipment_id,
+              ea.accessory_id,
+              ea.accessory_name,
+              ea.accessory_model,
+              ea.accessory_category,
+              ea.quantity as accessory_quantity,
+              ea.is_required,
+              ea.notes as accessory_notes,
+              eai.serial_number,
+              eai.manage_code as accessory_manage_code,
+              eai.health_status as accessory_health_status,
+              eai.usage_status as accessory_usage_status
+            FROM equipment_accessories ea
+            LEFT JOIN equipment_accessory_instances eai ON ea.accessory_id = eai.id
+            WHERE ea.host_equipment_id = ?`,
+            [item.equipment_id]
+          );
+          item.accessories = accessories || [];
+        } else {
+          item.accessories = [];
+        }
+      }
       
       return {
         ...order,
@@ -1025,13 +1544,28 @@ export class TransferOrderService {
       // 确定目标位置信息
       let toLocationId = null;
       let toLocationType = null;
+      let toKeeperId = null;
       
       if (order.to_location_type === 'warehouse') {
         toLocationId = order.to_warehouse_id;
         toLocationType = 'warehouse';
+        const [warehouseRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM warehouses WHERE id = ?',
+          [toLocationId]
+        );
+        if (warehouseRows && warehouseRows.length > 0) {
+          toKeeperId = warehouseRows[0].manager_id;
+        }
       } else {
         toLocationId = order.to_project_id;
         toLocationType = 'project';
+        const [projectRows] = await connection.query<{ manager_id: string }>(
+          'SELECT manager_id FROM projects WHERE id = ?',
+          [toLocationId]
+        );
+        if (projectRows && projectRows.length > 0) {
+          toKeeperId = projectRows[0].manager_id;
+        }
       }
       
       // 更新设备实例的位置
@@ -1056,23 +1590,25 @@ export class TransferOrderService {
              SET location_id = ?, 
                  location_status = ?,
                  usage_status = ?,
+                 keeper_id = ?,
                  updated_at = NOW()
              WHERE id = ?`,
-            [toLocationId, toLocationType === 'warehouse' ? 'warehouse' : 'in_project', toLocationType === 'warehouse' ? 'idle' : 'in_use', item.equipment_id]
+            [toLocationId, toLocationType === 'warehouse' ? 'warehouse' : 'in_project', toLocationType === 'warehouse' ? 'idle' : 'in_use', toKeeperId, item.equipment_id]
           );
-          console.log(`[TransferOrderService] 仪器类设备位置已更新: ${item.equipment_id} -> ${toLocationType}:${toLocationId}`);
+          console.log(`[TransferOrderService] 仪器类设备位置已更新: ${item.equipment_id} -> ${toLocationType}:${toLocationId}, 保管人: ${toKeeperId}`);
         } else {
           // 假负载/线缆类：按数量管理，需要处理数量合并
           const transferQuantity = item.quantity || 1;
           
           // 1. 查找运输中的设备记录
-          const [transferringEquipmentRows] = await connection.query<{ id: string; quantity: number }>(
-            `SELECT id, quantity 
-             FROM equipment_instances 
-             WHERE location_id = 'transferring' 
-               AND category = ? 
-               AND equipment_name = ? 
-               AND model_no = ?`,
+          const [transferringEquipmentRows] = await connection.query<any>(
+            `SELECT ei.* 
+             FROM equipment_instances ei
+             JOIN equipment_models em ON ei.model_id = em.id
+             WHERE ei.location_id = 'transferring' 
+               AND em.category = ? 
+               AND em.name = ? 
+               AND em.model_no = ?`,
             [item.category, item.equipment_name, item.model_no]
           );
           const transferringEquipment = transferringEquipmentRows && transferringEquipmentRows.length > 0 ? transferringEquipmentRows[0] : null;
@@ -1105,38 +1641,34 @@ export class TransferOrderService {
               `UPDATE equipment_instances 
                SET quantity = quantity + ?, 
                    usage_status = ?,
+                   keeper_id = ?,
                    updated_at = NOW()
                WHERE id = ?`,
-              [transferQuantity, toLocationType === 'warehouse' ? 'idle' : 'in_use', existingEquipment.id]
+              [transferQuantity, toLocationType === 'warehouse' ? 'idle' : 'in_use', toKeeperId, existingEquipment.id]
             );
-            console.log(`[TransferOrderService] 目标位置数量已合并: ${existingEquipment.id} (+${transferQuantity})`);
+            console.log(`[TransferOrderService] 目标位置数量已合并: ${existingEquipment.id} (+${transferQuantity}), 保管人: ${toKeeperId}`);
           } else {
             // 5. 不存在相同设备，创建新记录
             const newEquipmentId = uuidv4();
-            const suffix = Math.floor(Math.random() * 9000) + 1000;
             await connection.execute(
               `INSERT INTO equipment_instances 
-              (id, equipment_name, model_no, brand, category, unit, quantity, serial_number, manage_code, 
+              (id, model_id, quantity, serial_number, manage_code, 
                health_status, usage_status, location_status, location_id, keeper_id)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 newEquipmentId,
-                item.equipment_name,
-                item.model_no,
-                item.brand,
-                item.category,
-                item.unit,
+                transferringEquipment.model_id,
                 transferQuantity,
                 null,
-                item.manage_code + '-' + suffix,
-                'normal',
+                transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : null,
+                transferringEquipment.health_status,
                 toLocationType === 'warehouse' ? 'idle' : 'in_use',
                 toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
                 toLocationId,
-                null
+                toKeeperId
               ]
             );
-            console.log(`[TransferOrderService] 目标位置已创建新记录: ${newEquipmentId} (数量: ${transferQuantity})`);
+            console.log(`[TransferOrderService] 目标位置已创建新记录: ${newEquipmentId} (数量: ${transferQuantity}), 保管人: ${toKeeperId}`);
           }
         }
       }

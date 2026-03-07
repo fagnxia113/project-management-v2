@@ -2,7 +2,10 @@ import { enhancedWorkflowEngine } from './EnhancedWorkflowEngine.js';
 import { equipmentRepairService } from './EquipmentRepairService.js';
 import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
 import { equipmentInboundService } from './EquipmentInboundService.js';
+import { TransferOrderService } from './TransferOrderService.js';
 import { instanceService } from './InstanceService.js';
+
+const transferOrderService = new TransferOrderService();
 
 export class WorkflowEventListener {
   private listenersSetup = false;
@@ -64,6 +67,8 @@ export class WorkflowEventListener {
             return;
           }
           await this.handleScrapSaleOrderApproval(instance.business_id, params, task.node_id);
+        } else if (definitionKey === 'equipment-transfer' || definitionKey === 'preset-equipment-transfer') {
+          await this.handleTransferOrderApproval(instance, params, task.node_id);
         }
       } catch (error) {
         console.error('[WorkflowEventListener] Error handling task.completed event:', error);
@@ -142,6 +147,61 @@ export class WorkflowEventListener {
       }
     } catch (error) {
       console.error(`[WorkflowEventListener] Error handling scrap/sale order ${orderId} approval:`, error);
+      throw error;
+    }
+  }
+
+  private async handleTransferOrderApproval(instance: any, params: any, nodeId: string): Promise<void> {
+    try {
+      const action = params.action;
+      const operator = params.operator;
+      const comment = params.comment;
+      const formData = instance.variables?.formData || {};
+      const transferOrderId = formData.transferOrderId;
+
+      if (!transferOrderId) {
+        console.log('[WorkflowEventListener] No transferOrderId in formData, skipping');
+        return;
+      }
+
+      console.log(`[WorkflowEventListener] Processing transfer order ${transferOrderId}, nodeId: ${nodeId}, action: ${action}`);
+
+      if (nodeId === 'from-location-manager' || nodeId === 'from_manager' || nodeId === 'from-manager' || nodeId === 'from-manager-approval') {
+        if (action === 'approve' || action === 'approved') {
+          await transferOrderService.approveFromLocation(transferOrderId, operator.id, comment);
+          console.log(`[WorkflowEventListener] Transfer order ${transferOrderId} approved by from manager`);
+        } else if (action === 'reject' || action === 'rejected') {
+          await transferOrderService.rejectOrder(transferOrderId, operator.id, comment || '');
+          console.log(`[WorkflowEventListener] Transfer order ${transferOrderId} rejected by from manager`);
+        }
+      } else if (nodeId === 'shipping' || nodeId === 'ship') {
+        if (action === 'approve' || action === 'approved') {
+          const shipFormData = params.formData || {};
+          await transferOrderService.shipOrder(transferOrderId, operator.id, operator.name, {
+            shipped_at: shipFormData.shipped_at,
+            shipping_no: shipFormData.shipping_no,
+            shipping_attachment: shipFormData.shipping_attachment,
+            item_images: shipFormData.item_images,
+            package_images: shipFormData.package_images
+          });
+          console.log(`[WorkflowEventListener] Transfer order ${transferOrderId} shipped`);
+        }
+      } else if (nodeId === 'to-location-manager' || nodeId === 'receiving' || nodeId === 'receive') {
+        if (action === 'approve' || action === 'approved') {
+          const receiveFormData = params.formData || {};
+          await transferOrderService.receiveOrder(transferOrderId, operator.id, operator.name, {
+            received_at: receiveFormData.received_at,
+            receive_status: receiveFormData.receive_status,
+            receive_comment: receiveFormData.receive_comment,
+            item_images: receiveFormData.item_images,
+            package_images: receiveFormData.package_images,
+            received_items: receiveFormData.receive_items || receiveFormData.received_items
+          });
+          console.log(`[WorkflowEventListener] Transfer order ${transferOrderId} received`);
+        }
+      }
+    } catch (error) {
+      console.error(`[WorkflowEventListener] Error handling transfer order approval:`, error);
       throw error;
     }
   }

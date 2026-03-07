@@ -1,12 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { InboundOrderService } from '../services/InboundOrderService.js';
-import { EquipmentPrincipalService } from '../services/EquipmentPrincipalService.js';
-import { EquipmentPositionService } from '../services/EquipmentPositionService.js';
 
 const router = Router();
 const inboundOrderService = new InboundOrderService();
-const principalService = new EquipmentPrincipalService();
-const positionService = new EquipmentPositionService();
 
 router.post('/', async (req: Request, res: Response) => {
   try {

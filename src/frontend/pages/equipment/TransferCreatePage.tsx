@@ -15,6 +15,7 @@ interface Equipment {
   location_status: string
   location_id: string
   location_name?: string
+  main_image?: string
 }
 
 interface Warehouse {
@@ -71,6 +72,7 @@ export default function TransferCreatePage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   useEffect(() => {
     loadBaseData()
@@ -654,7 +656,19 @@ export default function TransferCreatePage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredEquipment.map(eq => (
                       <tr key={eq.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm">{eq.equipment_name}</td>
+                        <td className="px-4 py-3 text-sm relative">
+                          <div className="flex items-center gap-2 group">
+                            {eq.main_image && (
+                              <img 
+                                src={eq.main_image} 
+                                alt={eq.equipment_name}
+                                className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-500"
+                                onClick={() => setPreviewImage(eq.main_image!)}
+                              />
+                            )}
+                            <span>{eq.equipment_name}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-sm">{eq.model_no}</td>
                         <td className="px-4 py-3 text-sm">
                           <span className={`px-2 py-1 rounded text-xs ${
@@ -686,6 +700,25 @@ export default function TransferCreatePage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60]"
+          onClick={() => setPreviewImage(null)}
+        >
+          <img 
+            src={previewImage} 
+            alt="预览"
+            className="max-w-[80vw] max-h-[80vh] object-contain rounded-lg"
+          />
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-4 right-4 text-white text-2xl hover:text-gray-300"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
