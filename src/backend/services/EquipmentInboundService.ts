@@ -6,23 +6,41 @@ export class EquipmentInboundService {
     try {
       console.log(`[EquipmentInboundService] 开始处理流程实例: ${instanceId}`);
 
-      const [instances] = await db.query(
+      const instances = await db.query(
         `SELECT id, initiator_id, initiator_name, variables, business_id
          FROM workflow_instances 
          WHERE id = ? AND definition_key = 'equipment-inbound'`,
         [instanceId]
       );
 
-      if (!instances || instances.length === 0) {
+      console.log(`[EquipmentInboundService] 查询结果数量: ${instances.length}`);
+      console.log(`[EquipmentInboundService] instances类型: ${typeof instances}`);
+      console.log(`[EquipmentInboundService] instances是否为数组: ${Array.isArray(instances)}`);
+
+      if (!instances || !Array.isArray(instances) || instances.length === 0) {
         console.log(`[EquipmentInboundService] 流程实例不存在: ${instanceId}`);
         return null;
       }
 
       const instance = instances[0];
       
-      if (instance.business_id) {
+      if (!instance) {
+        console.log(`[EquipmentInboundService] instance为undefined，无法继续`);
+        return null;
+      }
+      
+      console.log(`[EquipmentInboundService] 查询到的实例:`, JSON.stringify(instance, null, 2));
+      console.log(`[EquipmentInboundService] instance是否存在: ${instance !== undefined}`);
+      console.log(`[EquipmentInboundService] instance.variables是否存在: ${instance?.variables !== undefined}`);
+      
+      if (instance && instance.business_id) {
         console.log(`[EquipmentInboundService] 流程实例已关联业务ID: ${instance.business_id}`);
         return instance.business_id;
+      }
+
+      if (!instance) {
+        console.log(`[EquipmentInboundService] instance为undefined，无法继续`);
+        return null;
       }
 
       let formData = instance.variables;
@@ -35,8 +53,6 @@ export class EquipmentInboundService {
         id: instance.initiator_id,
         name: instance.initiator_name
       };
-
-      console.log(`[EquipmentInboundService] formData:`, JSON.stringify(formData, null, 2));
 
       if (!formData.items || !Array.isArray(formData.items) || formData.items.length === 0) {
         console.log(`[EquipmentInboundService] 没有设备明细，跳过`);
@@ -91,6 +107,65 @@ export class EquipmentInboundService {
         }
       }
 
+      // 创建入库单 items
+      for (const item of formData.items) {
+        const itemId = uuidv4();
+        const modelName = item.equipment_name || item.name;
+        const modelNo = item.model_no || item.model;
+        const category = item.category;
+        const unit = item.unit || '台';
+        const quantity = item.quantity || 1;
+        const purchasePrice = item.purchase_price || 0;
+        const totalPrice = item.total_price || (purchasePrice * quantity);
+        const serialNumbers = item.serial_numbers || null;
+        const certificateNo = item.certificate_no || null;
+        const certificateIssuer = item.certificate_issuer || null;
+        const certificateExpiryDate = item.certificate_expiry_date || null;
+        const accessoryDesc = item.accessory_desc || null;
+        const manufacturer = item.manufacturer || null;
+        const technicalParams = item.technical_params || null;
+        const itemNotes = item.item_notes || null;
+        const technicalDoc = item.technical_doc || null;
+        const attachment = item.attachment || null;
+
+        await db.query(
+          `INSERT INTO equipment_inbound_items 
+           (id, order_id, equipment_name, model_no, brand, category, unit,
+            quantity, purchase_price, serial_numbers, certificate_no, certificate_issuer, certificate_expiry_date, accessory_desc, manufacturer, technical_params, item_notes, technical_doc, attachment, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            itemId,
+            inboundOrderId,
+            modelName,
+            modelNo,
+            null,
+            category,
+            unit,
+            quantity,
+            purchasePrice,
+            serialNumbers,
+            certificateNo,
+            certificateIssuer,
+            certificateExpiryDate,
+            accessoryDesc,
+            manufacturer,
+            technicalParams,
+            itemNotes,
+            technicalDoc,
+            attachment,
+            'inbound'
+          ]
+        );
+
+        // 暂存图片信息和配件信息，等设备实例创建后再关联
+        const mainImages = item.main_images || [];
+        const accessoryImages = item.accessory_images || [];
+        const accessoryList = item.accessory_list || [];
+      }
+
+      console.log(`[EquipmentInboundService] 入库单 items 创建成功`);
+
+      // 创建设备台账
       for (const item of formData.items) {
         const modelName = item.equipment_name || item.name;
         const modelNo = item.model_no || item.model;
@@ -104,7 +179,6 @@ export class EquipmentInboundService {
 
         if (existingModels && existingModels.length > 0) {
           modelId = existingModels[0].id;
-          console.log(`[EquipmentInboundService] 使用现有型号: ${modelName} (${modelNo})`);
         } else {
           modelId = uuidv4();
           await db.query(
@@ -113,12 +187,12 @@ export class EquipmentInboundService {
              VALUES (?, ?, ?, ?, ?, NOW())`,
             [modelId, modelName, modelNo, category, item.unit || '台']
           );
-          console.log(`[EquipmentInboundService] 创建型号: ${modelName} (${modelNo})`);
         }
 
         const quantity = item.quantity || 1;
-        const accessories = item.accessories && item.accessories.length > 0 
-          ? JSON.stringify(item.accessories) 
+        const accessoryList = item.accessory_list || [];
+        const accessories = accessoryList.length > 0 
+          ? JSON.stringify(accessoryList) 
           : null;
 
         const mainImages = item.main_images || [];
@@ -153,6 +227,7 @@ export class EquipmentInboundService {
               ]
             );
 
+            // 处理设备图片
             for (const imageUrl of mainImages) {
               if (imageUrl) {
                 await db.query(
@@ -171,6 +246,33 @@ export class EquipmentInboundService {
                   [uuidv4(), instanceId, imageUrl]
                 );
               }
+            }
+
+            // 处理配件清单 - 创建配件实例并关联到设备实例
+            for (const accessory of accessoryList) {
+              const accessoryId = uuidv4();
+              const accessoryManageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
+              
+              // 创建配件实例，直接关联到主机设备
+              await db.query(
+                `INSERT INTO equipment_accessory_instances 
+                 (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, manage_code, host_equipment_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  accessoryId,
+                  accessory.accessory_name,
+                  accessory.accessory_model || null,
+                  null,
+                  category,
+                  accessory.accessory_unit || '个',
+                  accessory.accessory_quantity,
+                  null,
+                  0,
+                  null,
+                  accessoryManageCode,
+                  instanceId
+                ]
+              );
             }
           }
           console.log(`[EquipmentInboundService] 创建 ${quantity} 台仪器设备: ${modelName}`);
@@ -203,6 +305,7 @@ export class EquipmentInboundService {
             ]
           );
 
+          // 处理设备图片
           for (const imageUrl of mainImages) {
             if (imageUrl) {
               await db.query(
@@ -221,6 +324,33 @@ export class EquipmentInboundService {
                 [uuidv4(), instanceId, imageUrl]
               );
             }
+          }
+
+          // 处理配件清单 - 创建配件实例并关联到设备实例
+          for (const accessory of accessoryList) {
+            const accessoryId = uuidv4();
+            const accessoryManageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
+            
+            // 创建配件实例，直接关联到主机设备
+            await db.query(
+              `INSERT INTO equipment_accessory_instances 
+               (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, manage_code, host_equipment_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                accessoryId,
+                accessory.accessory_name,
+                accessory.accessory_model || null,
+                null,
+                category,
+                accessory.accessory_unit || '个',
+                accessory.accessory_quantity,
+                null,
+                0,
+                null,
+                accessoryManageCode,
+                instanceId
+              ]
+            );
           }
           console.log(`[EquipmentInboundService] 创建汇总记录: ${modelName}, 数量: ${quantity}`);
         }

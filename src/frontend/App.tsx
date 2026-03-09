@@ -15,6 +15,7 @@ const EquipmentListPage = lazy(() => import('./pages/equipment/EquipmentListPage
 const EquipmentDetailPage = lazy(() => import('./pages/equipment/EquipmentDetailPage'))
 const EquipmentStatisticsPage = lazy(() => import('./pages/equipment/EquipmentStatisticsPage'))
 const ScrapSaleListPage = lazy(() => import('./pages/equipment/ScrapSaleListPage'))
+const TransferListPage = lazy(() => import('./pages/equipment/TransferListPage'))
 const TransferCreatePage = lazy(() => import('./pages/equipment/TransferCreatePage'))
 const TransferDetailPage = lazy(() => import('./pages/equipment/TransferDetailPage'))
 const RepairCreatePage = lazy(() => import('./pages/equipment/RepairCreatePage'))
@@ -132,6 +133,7 @@ function App() {
           <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
           <Route path="/equipment/repairs/create" element={<RepairCreatePage />} />
           <Route path="/equipment/scrap-sales/create" element={<ScrapSaleCreatePage />} />
+          <Route path="/equipment/transfers/list" element={<TransferListPage />} />
           <Route path="/equipment/transfers/create" element={<TransferCreatePage />} />
           <Route path="/equipment/transfers/:id" element={<TransferDetailPage />} />
           <Route path="/personnel" element={<PersonnelListPage />} />

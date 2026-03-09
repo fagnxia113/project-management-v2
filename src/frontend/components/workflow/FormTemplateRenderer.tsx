@@ -939,7 +939,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
       case 'user':
         let userDisplayValue = value ?? ''
         
-        if (field.name === 'fromManagerId' && value) {
+        if (field.name === 'warehouse_manager_id' && warehouseManager) {
+          userDisplayValue = warehouseManager.name
+        } else if (field.name === 'fromManagerId' && value) {
           if (userMap[value]) {
             userDisplayValue = userMap[value]
           }
@@ -2058,6 +2060,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      console.log('[FormTemplateRenderer] 点击添加设备明细按钮')
+                      console.log('[FormTemplateRenderer] field.name:', field.name)
+                      console.log('[FormTemplateRenderer] arrayValue:', arrayValue)
+                      console.log('[FormTemplateRenderer] arrayConfig.fields:', arrayConfig.fields)
+                      
                       const newItem: any = {}
                       ;(Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []).forEach((f: any) => {
                         if (f.type === 'array') {
@@ -2069,6 +2076,10 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                       newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                       newItem.isCustomName = false
                       newItem.isCustomModel = false
+                      
+                      console.log('[FormTemplateRenderer] newItem:', newItem)
+                      console.log('[FormTemplateRenderer] 调用 onChange，参数:', field.name, [...arrayValue, newItem])
+                      
                       onChange(field.name, [...arrayValue, newItem])
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"

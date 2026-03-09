@@ -993,7 +993,26 @@ export default function EquipmentDetailPage() {
               </div>
               <div>
                 <label className="text-sm text-gray-500">附件</label>
-                <div className="text-sm font-medium text-gray-900">{equipment.attachment || '-'}</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {equipment.attachments && equipment.attachments.length > 0 ? (
+                    <ul className="mt-2 space-y-2">
+                      {equipment.attachments.map((attachment, index) => (
+                        <li key={index}>
+                          <a 
+                            href={attachment.url || attachment.file_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            {attachment.name || attachment.file_name || `附件 ${index + 1}`}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    '-'
+                  )}
+                </div>
               </div>
             </div>
           </div>

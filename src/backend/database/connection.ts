@@ -27,7 +27,10 @@ class Database {
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
         connectTimeout: 60000,
-        charset: 'utf8mb4'
+        charset: 'utf8mb4',
+        multipleStatements: false,
+        namedPlaceholders: true,
+        flags: '+MULTI_STATEMENTS,-FOUND_ROWS'
       });
 
       // 测试连接

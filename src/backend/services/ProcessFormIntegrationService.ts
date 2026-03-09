@@ -16,6 +16,7 @@ import { equipmentRepairService } from './EquipmentRepairService.js';
 import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
 import { formDataValidator } from './FormDataValidator.js';
 import { db } from '../database/connection.js';
+import { notificationService } from './NotificationService.js';
 
 interface ProcessFormPreset {
   id: string;
@@ -730,6 +731,31 @@ export class ProcessFormIntegrationService {
               await instanceService.updateInstance(instance.id, { business_id: project.id });
               
               console.log(`[ProcessFormIntegrationService] 项目创建成功: ${project.id}`);
+              
+              // 发送抄送通知给项目经理
+              if (cleanedFormData.manager_id) {
+                try {
+                  const manager = await db.queryOne<{ id: string; name: string; user_id: string }>(
+                    'SELECT id, name, user_id FROM employees WHERE id = ?',
+                    [cleanedFormData.manager_id]
+                  );
+                  
+                  if (manager) {
+                    await notificationService.sendNotification({
+                      user_id: manager.user_id,
+                      user_name: manager.name,
+                      type: 'in_app',
+                      title: '项目审批通过',
+                      content: `您申请的项目"${cleanedFormData.name}"已审批通过，项目编号：${project.id}`,
+                      priority: 'normal',
+                      link: `/projects/${project.id}`
+                    });
+                    console.log(`[ProcessFormIntegrationService] 已发送抄送通知给项目经理: ${manager.name}`);
+                  }
+                } catch (notifyError) {
+                  console.error(`[ProcessFormIntegrationService] 发送抄送通知失败:`, notifyError);
+                }
+              }
               
               // 移除事件监听器
               enhancedWorkflowEngine.off('process.ended', eventHandler);

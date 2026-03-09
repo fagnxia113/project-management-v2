@@ -31,11 +31,13 @@ app.use(cors({
       'http://localhost:3001',
       'http://localhost:3002',
       'http://localhost:3003',
+      'http://localhost:3004',
       'http://localhost:5173',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
       'http://127.0.0.1:3002',
       'http://127.0.0.1:3003',
+      'http://127.0.0.1:3004',
       'http://127.0.0.1:5173',
       'https://foqyyjbxijhb.sealosbja.site'
     ]
@@ -72,9 +74,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../../uploads')))
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
-
-app.use(notFoundHandler)
-app.use(errorHandler)
 
 async function initializeDefaultWorkflowDefinitions() {
   try {
@@ -123,6 +122,14 @@ async function startServer() {
     await schedulerService.start()
     
     workflowEventListener.setupListeners()
+    
+    // 确保 enhancedWorkflowRoutes 的事件监听器在 workflowEventListener.setupListeners() 之后设置
+    const enhancedWorkflowRoutes = await import('./routes/enhancedWorkflowRoutes.js')
+    app.use('/api/workflow/v2', enhancedWorkflowRoutes.default)
+    
+    // 404 和错误处理中间件必须在所有路由之后
+    app.use(notFoundHandler)
+    app.use(errorHandler)
     
     const server = app.listen(PORT, () => {
       logger.info(`服务器运行在 http://localhost:${PORT}`)

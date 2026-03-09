@@ -8,6 +8,7 @@ import authRouter from './auth.js'
 import organizationRouter from './organization.js'
 import employeesRouter from './employees.js'
 import equipmentRouter from './equipment.js'
+import equipmentImagesRouter from './equipment-images.js'
 import warehouseRouter from './warehouse.js'
 import inboundRouter from './inbound.js'
 import transferRouter from './transfer.js'
@@ -23,6 +24,8 @@ import adminRouter from './admin.js'
 import debugRouter from './debug.js'
 import migrateRouter from './migrate.js'
 import healthRouter from './health.js'
+import performanceRoutes from './performanceRoutes.js'
+import formTemplateRoutes from './formTemplateRoutes.js'
 
 const router = Router()
 
@@ -32,13 +35,16 @@ router.use('/workflow', workflowRouter)
 router.use('/workflow', workflowAdminRouter)
 router.use('/workflow/v2', enhancedWorkflowRouter)
 router.use('/workflow/form-presets', processFormsRouter)
+router.use('/workflow/performance', performanceRoutes)
+router.use('/workflow/form-templates', formTemplateRoutes)
 router.use('/auth', authRouter)
 router.use('/organization', organizationRouter)
 router.use('/personnel', employeesRouter)
+router.use('/equipment/transfers', transferRouter)
 router.use('/equipment', equipmentRouter)
+router.use('/equipment/images', equipmentImagesRouter)
 router.use('/warehouses', warehouseRouter)
 router.use('/equipment/inbounds', inboundRouter)
-router.use('/equipment/transfers', transferRouter)
 router.use('/equipment/repairs', repairsRouter)
 router.use('/equipment/scrap-sales', scrapSalesRouter)
 router.use('/projects', projectsRouter)

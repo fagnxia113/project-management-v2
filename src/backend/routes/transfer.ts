@@ -89,10 +89,12 @@ router.put('/:id/approve', async (req: Request, res: Response) => {
 
 router.put('/:id/ship', async (req: Request, res: Response) => {
   try {
+    console.log('[TransferRoute] 发货API被调用:', req.params.id, req.body);
     const userId = (req as any).user?.id || 'system';
     const userName = (req as any).user?.name || '系统';
     const { shipped_at, shipping_no, shipping_attachment, item_images, package_images } = req.body;
     
+    console.log('[TransferRoute] 准备调用shipOrder方法');
     const order = await transferOrderService.shipOrder(req.params.id, userId, userName, {
       shipped_at,
       shipping_no,
@@ -100,8 +102,10 @@ router.put('/:id/ship', async (req: Request, res: Response) => {
       item_images,
       package_images
     });
+    console.log('[TransferRoute] shipOrder方法执行完成');
     res.json({ success: true, data: order });
   } catch (error: any) {
+    console.error('[TransferRoute] 发货API错误:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

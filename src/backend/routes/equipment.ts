@@ -3,6 +3,11 @@ import { equipmentService } from '../services/EquipmentService.js';
 
 const router = Router();
 
+router.use((req, res, next) => {
+  console.log('[EquipmentRoute] 收到请求:', req.method, req.path, req.params);
+  next();
+});
+
 // --- Instances ---
 router.get('/instances', async (req: Request, res: Response) => {
   try {

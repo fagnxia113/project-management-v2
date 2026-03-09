@@ -13,7 +13,7 @@ router.use(authenticate);
 router.get('/notifications', async (req: Request, res: Response) => {
   try {
     const { is_read, type, limit } = req.query;
-    const userId = req.user!.userId;
+    const userId = req.user!.id;
     
     const notifications = await notificationService.getUserNotifications(
       userId,

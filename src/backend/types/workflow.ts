@@ -29,6 +29,20 @@ export interface ApprovalConfig {
     completionCondition?: string;
   };
   formConfig?: TaskFormConfig;
+  notifyConfig?: NotifyConfig;
+}
+
+export interface NotifyConfig {
+  enabled: boolean;
+  notifyOn: 'approved' | 'rejected' | 'both';
+  notifyTargets: Array<{
+    type: 'initiator' | 'manager' | 'form_field' | 'fixed';
+    value?: string;
+  }>;
+  message?: {
+    approved?: string;
+    rejected?: string;
+  };
 }
 
 export interface TaskFormConfig {

@@ -96,7 +96,13 @@ const getMenus = (role: string): MenuItem[] => {
       children: [
         { label: '设备台账', path: '/equipment' },
         { label: '仓库管理', path: '/warehouses' },
-        { label: '设备调拨', path: '/equipment/transfers/create' },
+        { 
+          label: '设备调拨',
+          children: [
+            { label: '调拨列表', path: '/equipment/transfers/list' },
+            { label: '创建调拨', path: '/equipment/transfers/create' }
+          ]
+        },
       ]
     },
     

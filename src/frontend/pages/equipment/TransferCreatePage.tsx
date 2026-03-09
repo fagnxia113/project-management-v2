@@ -149,23 +149,11 @@ export default function TransferCreatePage() {
       
       if (fromLocationType === 'warehouse') {
         const warehouse = warehouses.find(w => w.id === fromLocationId)
-        const employeeId = warehouse?.manager_id || ''
-        
-        // 获取员工对应的用户ID
-        if (employeeId) {
-          const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          const result = await response.json()
-          if (result.success) {
-            managerId = result.data.userId
-          }
-        }
+        managerId = warehouse?.manager_id || ''
       } else {
         const project = projects.find(p => p.id === fromLocationId)
         const employeeId = project?.manager_id || ''
         
-        // 获取员工对应的用户ID
         if (employeeId) {
           const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -190,23 +178,11 @@ export default function TransferCreatePage() {
       
       if (toLocationType === 'warehouse') {
         const warehouse = warehouses.find(w => w.id === toLocationId)
-        const employeeId = warehouse?.manager_id || ''
-        
-        // 获取员工对应的用户ID
-        if (employeeId) {
-          const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          const result = await response.json()
-          if (result.success) {
-            managerId = result.data.userId
-          }
-        }
+        managerId = warehouse?.manager_id || ''
       } else {
         const project = projects.find(p => p.id === toLocationId)
         const employeeId = project?.manager_id || ''
         
-        // 获取员工对应的用户ID
         if (employeeId) {
           const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
             headers: { 'Authorization': `Bearer ${token}` }

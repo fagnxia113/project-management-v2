@@ -1769,7 +1769,9 @@ export class UnifiedFormService {
             label: '总金额',
             type: 'number',
             required: false,
-            placeholder: '请输入总金额'
+            disabled: true,
+            readonly: true,
+            placeholder: '系统自动计算'
           },
           {
             id: 'field-items',

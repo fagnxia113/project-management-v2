@@ -93,10 +93,9 @@ export const checkTaskPermission = (options: WorkflowPermissionOptions = {}) => 
 
     try {
       const task = await db.queryOne<any>(
-        `SELECT t.*, i.initiator_id, i.initiator_name, e.user_id as assignee_user_id
+        `SELECT t.*, i.initiator_id, i.initiator_name
          FROM workflow_tasks t
          LEFT JOIN workflow_instances i ON t.instance_id = i.id
-         LEFT JOIN employees e ON t.assignee_id = e.id
          WHERE t.id = ?`,
         [id]
       )
@@ -105,8 +104,8 @@ export const checkTaskPermission = (options: WorkflowPermissionOptions = {}) => 
         return res.status(404).json({ error: '任务不存在' })
       }
 
-      // 获取实际的assignee_user_id（如果存在）
-      const actualAssigneeId = task.assignee_user_id || task.assignee_id
+      // assignee_id 已经是用户ID，直接使用
+      const actualAssigneeId = task.assignee_id
 
       // 对于认领任务，检查任务状态和候选人
       if (!options.requireAssignee && task.status === 'created') {
@@ -128,6 +127,12 @@ export const checkTaskPermission = (options: WorkflowPermissionOptions = {}) => 
       }
 
       if (options.requireAssignee && actualAssigneeId !== userId) {
+        console.log('[checkTaskPermission] 权限检查失败:', {
+          actualAssigneeId,
+          userId,
+          taskAssigneeId: task.assignee_id,
+          taskStatus: task.status
+        });
         await executionLogger.log({
           executionId: task.instance_id,
           action: 'permission_denied',

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { API_URL } from '../../config/api'
+import { useUser } from '../../contexts/UserContext'
 
 interface Notification {
   id: string
@@ -10,7 +11,7 @@ interface Notification {
   content: string
   priority: 'low' | 'normal' | 'high' | 'urgent'
   link: string
-  is_read: boolean
+  is_read: number | boolean
   read_at: string
   created_at: string
 }
@@ -30,6 +31,7 @@ const priorityColors: Record<string, string> = {
 }
 
 export default function NotificationCenterPage() {
+  const { user } = useUser()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [unreadOnly, setUnreadOnly] = useState(false)
@@ -37,14 +39,19 @@ export default function NotificationCenterPage() {
 
   useEffect(() => {
     loadNotifications()
-  }, [unreadOnly])
+  }, [unreadOnly, user])
 
   const loadNotifications = async () => {
+    if (!user?.id) return
     try {
       setLoading(true)
-      const userId = 'current-user'
-      const url = `${API_URL.NOTIFICATIONS.LIST}?user_id=${userId}${unreadOnly ? '&is_read=false' : ''}`
-      const res = await fetch(url)
+      const token = localStorage.getItem('token')
+      const url = `${API_URL.NOTIFICATIONS.LIST}${unreadOnly ? '?is_read=false' : ''}`
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.data || [])
@@ -58,7 +65,13 @@ export default function NotificationCenterPage() {
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      await fetch(API_URL.NOTIFICATIONS.MARK_READ(id), { method: 'POST' })
+      const token = localStorage.getItem('token')
+      await fetch(API_URL.NOTIFICATIONS.MARK_READ(id), { 
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       loadNotifications()
     } catch (error) {
       console.error('标记已读失败:', error)
@@ -66,11 +79,16 @@ export default function NotificationCenterPage() {
   }
 
   const handleMarkAllAsRead = async () => {
+    if (!user?.id) return
     try {
+      const token = localStorage.getItem('token')
       await fetch(API_URL.NOTIFICATIONS.MARK_ALL_READ, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: 'current-user' })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: user.id })
       })
       loadNotifications()
     } catch (error) {

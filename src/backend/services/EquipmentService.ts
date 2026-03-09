@@ -25,6 +25,7 @@ export interface EquipmentInstance {
     accessory_desc?: string;
     notes?: string;
     technical_doc?: string;
+    accessories?: any[];
 }
 
 export class EquipmentService {
@@ -71,6 +72,48 @@ export class EquipmentService {
             WHERE i.id = ?`, 
             [id]
         );
+        
+        if (res) {
+            // 处理附件信息，将JSON字符串转换为数组
+            if (res.attachment) {
+                try {
+                    res.attachments = JSON.parse(res.attachment);
+                } catch (error) {
+                    console.error('[EquipmentService] 附件信息解析失败:', error);
+                    res.attachments = [];
+                }
+            } else {
+                res.attachments = [];
+            }
+            
+            // 获取配件数据
+            try {
+                const accessories = await db.query(
+                    `SELECT 
+                        eai.id,
+                        eai.accessory_name,
+                        eai.model_no as accessory_model,
+                        eai.quantity as accessory_quantity,
+                        eai.category as accessory_category,
+                        eai.health_status as accessory_health_status,
+                        eai.usage_status as accessory_usage_status,
+                        eai.manage_code as accessory_manage_code,
+                        eai.brand as accessory_brand,
+                        eai.unit as accessory_unit,
+                        eai.serial_number as accessory_serial_number,
+                        eai.notes as accessory_notes
+                    FROM equipment_accessory_instances eai
+                    WHERE eai.host_equipment_id = ?`,
+                    [id]
+                );
+                
+                res.accessories = accessories || [];
+            } catch (error) {
+                console.error('[EquipmentService] 获取配件数据失败:', error);
+                res.accessories = [];
+            }
+        }
+        
         return res || undefined;
     }
 
@@ -157,6 +200,33 @@ export class EquipmentService {
        ORDER BY i.created_at DESC LIMIT ? OFFSET ?`,
             [...params, pageSize, offset]
         );
+        
+        // 为每个设备获取配件数据
+        for (const item of data) {
+            try {
+                const accessories = await db.query(
+                    `SELECT 
+                        ea.id,
+                        ea.accessory_id,
+                        ea.accessory_name,
+                        ea.accessory_model,
+                        ea.quantity as accessory_quantity,
+                        ea.accessory_category,
+                        eai.health_status as accessory_health_status,
+                        eai.usage_status as accessory_usage_status,
+                        eai.manage_code as accessory_manage_code
+                    FROM equipment_accessories ea
+                    LEFT JOIN equipment_accessory_instances eai ON ea.accessory_id = eai.id
+                    WHERE ea.host_equipment_id = ?`,
+                    [item.id]
+                );
+                
+                item.accessories = accessories || [];
+            } catch (error) {
+                console.error('[EquipmentService] 获取配件数据失败:', error);
+                item.accessories = [];
+            }
+        }
 
         return { data, total, totalPages: Math.ceil(total / pageSize) };
     }

@@ -410,6 +410,14 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
         }
       },
       {
+        id: 'transfer-shipping',
+        type: 'serviceTask',
+        name: '更新设备状态为运输中',
+        config: {
+          serviceType: 'transferShipping'
+        }
+      },
+      {
         id: 'to-location-manager',
         type: 'userTask',
         name: '调入位置负责人审批',
@@ -429,6 +437,14 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
         actions: {
           allowed: ['approve', 'return', 'transfer', 'delegate', 'saveDraft'],
           defaultAction: 'approve'
+        }
+      },
+      {
+        id: 'transfer-receiving',
+        type: 'serviceTask',
+        name: '更新设备位置',
+        config: {
+          serviceType: 'transferReceiving'
         }
       },
       {
@@ -452,12 +468,24 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       {
         id: 'edge-2',
         source: 'from-location-manager',
-        target: 'to-location-manager',
+        target: 'transfer-shipping',
         type: 'sequenceFlow'
       },
       {
         id: 'edge-3',
+        source: 'transfer-shipping',
+        target: 'to-location-manager',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-4',
         source: 'to-location-manager',
+        target: 'transfer-receiving',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-5',
+        source: 'transfer-receiving',
         target: 'end-approved',
         type: 'sequenceFlow'
       }
@@ -875,6 +903,14 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
         }
       },
       {
+        id: 'create-equipment',
+        type: 'serviceTask',
+        name: '创建设备台账',
+        config: {
+          serviceType: 'createEquipment'
+        }
+      },
+      {
         id: 'end-approved',
         type: 'endEvent',
         name: '审批通过'
@@ -895,6 +931,12 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
       {
         id: 'edge-2',
         source: 'warehouse-manager',
+        target: 'create-equipment',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-3',
+        source: 'create-equipment',
         target: 'end-approved',
         type: 'sequenceFlow'
       }
@@ -1568,6 +1610,14 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
         }
       },
       {
+        id: 'repair-shipping',
+        type: 'serviceTask',
+        name: '更新设备状态为维修中',
+        config: {
+          serviceType: 'repairShipping'
+        }
+      },
+      {
         id: 'receiving',
         type: 'userTask',
         name: '确认接收',
@@ -1584,6 +1634,14 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
         actions: {
           allowed: ['approve', 'saveDraft'],
           defaultAction: 'approve'
+        }
+      },
+      {
+        id: 'repair-receiving',
+        type: 'serviceTask',
+        name: '恢复设备状态',
+        config: {
+          serviceType: 'repairReceiving'
         }
       },
       {
@@ -1613,12 +1671,24 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
       {
         id: 'edge-3',
         source: 'shipping',
-        target: 'receiving',
+        target: 'repair-shipping',
         type: 'sequenceFlow'
       },
       {
         id: 'edge-4',
+        source: 'repair-shipping',
+        target: 'receiving',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-5',
         source: 'receiving',
+        target: 'repair-receiving',
+        type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-6',
+        source: 'repair-receiving',
         target: 'end-approved',
         type: 'sequenceFlow'
       }

@@ -459,24 +459,25 @@ export class TransferOrderService {
           console.log(`[TransferOrderService] 调出位置数量已减少: ${equipment.id} (${currentQuantity} -> ${currentQuantity - transferQuantity})`);
         }
         
-        // 创建运输中的设备记录（虚拟位置，location_id = 'transferring'）
+        // 创建运输中的设备记录（location_status = 'transferring', location_id = NULL）
         const transferringEquipmentId = uuidv4();
+        const transferringManageCode = item.manage_code ? item.manage_code + '-transferring' : `TRANS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         await connection.execute(
           `INSERT INTO equipment_instances 
           (id, model_id, quantity, serial_number, manage_code, 
            health_status, usage_status, location_status, location_id, keeper_id, 
            purchase_date, purchase_price, calibration_expiry, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transferringEquipmentId,
             equipment.model_id,
             transferQuantity,
             null,
-            item.manage_code ? item.manage_code + '-transferring' : null,
+            transferringManageCode,
             'normal',
             'in_use', // 运输中视为使用中，不可用
             'transferring',
-            'transferring', // 使用特殊标识表示运输中
+            null, // 运输中位置ID为NULL
             null,
             null,
             null,
@@ -496,9 +497,16 @@ export class TransferOrderService {
     item_images?: { item_id: string; images: string[] }[];
     package_images?: string[];
   }): Promise<TransferOrder> {
-    await this.confirmShipping(id, params.shipping_no || '', userId, params.shipping_attachment, params.item_images, params.package_images, params.shipped_at);
+    console.log(`[TransferOrderService] shipOrder 被调用: id=${id}, userId=${userId}, userName=${userName}, params=`, params);
+    const success = await this.confirmShipping(id, params.shipping_no || '', userId, params.shipping_attachment, params.item_images, params.package_images, params.shipped_at);
+    console.log(`[TransferOrderService] confirmShipping 执行完成，结果: ${success}`);
+    if (!success) {
+      throw new Error('发货失败');
+    }
+    console.log(`[TransferOrderService] confirmShipping 执行完成，开始查询调拨单: ${id}`);
     const order = await this.getById(id);
     if (!order) throw new Error('调拨单不存在');
+    console.log(`[TransferOrderService] shipOrder 执行完成: ${id}`);
     return order;
   }
 
@@ -756,7 +764,7 @@ export class TransferOrderService {
               `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
                FROM equipment_instances ei
                JOIN equipment_models em ON ei.model_id = em.id
-               WHERE ei.location_id = 'transferring' 
+               WHERE ei.location_status = 'transferring' 
                  AND em.category = ? 
                  AND em.name = ? 
                  AND em.model_no = ?`,
@@ -816,7 +824,7 @@ export class TransferOrderService {
                     transferringEquipment.model_id,
                     receivedQty,
                     null,
-                    transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : null,
+                    transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : `EQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     transferringEquipment.health_status,
                     toLocationType === 'warehouse' ? 'idle' : 'in_use',
                     toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
@@ -869,7 +877,7 @@ export class TransferOrderService {
               `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
                FROM equipment_instances ei
                JOIN equipment_models em ON ei.model_id = em.id
-               WHERE ei.location_id = 'transferring' 
+               WHERE ei.location_status = 'transferring' 
                  AND em.category = ? 
                  AND em.name = ? 
                  AND em.model_no = ?`,
@@ -929,7 +937,7 @@ export class TransferOrderService {
                     transferringEquipment.model_id,
                     returnQty,
                     null,
-                    transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : null,
+                    transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : `EQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     transferringEquipment.health_status,
                     'idle',
                     fromLocationType === 'warehouse' ? 'warehouse' : 'in_project',
@@ -1221,7 +1229,7 @@ export class TransferOrderService {
             `SELECT ei.id, ei.quantity 
              FROM equipment_instances ei
              JOIN equipment_models em ON ei.model_id = em.id
-             WHERE ei.location_id = 'transferring' 
+             WHERE ei.location_status = 'transferring' 
                AND em.category = ? 
                AND em.name = ? 
                AND em.model_no = ?`,
@@ -1605,7 +1613,7 @@ export class TransferOrderService {
             `SELECT ei.* 
              FROM equipment_instances ei
              JOIN equipment_models em ON ei.model_id = em.id
-             WHERE ei.location_id = 'transferring' 
+             WHERE ei.location_status = 'transferring' 
                AND em.category = ? 
                AND em.name = ? 
                AND em.model_no = ?`,
@@ -1660,7 +1668,7 @@ export class TransferOrderService {
                 transferringEquipment.model_id,
                 transferQuantity,
                 null,
-                transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : null,
+                transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : `EQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 transferringEquipment.health_status,
                 toLocationType === 'warehouse' ? 'idle' : 'in_use',
                 toLocationType === 'warehouse' ? 'warehouse' : 'in_project',

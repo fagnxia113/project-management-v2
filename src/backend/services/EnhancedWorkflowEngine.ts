@@ -21,6 +21,7 @@ import { executionLogger } from './ExecutionLogger.js';
 import { performanceMonitor } from './PerformanceMonitor.js';
 import { logger } from '../utils/logger.js';
 import { db } from '../database/connection.js';
+import { equipmentInboundService } from './EquipmentInboundService.js';
 
 // 流程引擎配置
 interface WorkflowEngineConfig {
@@ -817,6 +818,16 @@ export class EnhancedWorkflowEngine {
       // 如果serviceType未定义，根据节点ID判断服务类型
       if (serviceType === 'createEmployee' || node.id === 'create-employee') {
         await this.executeCreateEmployeeService(instance, serviceConfig);
+      } else if (serviceType === 'createEquipment' || node.id === 'create-equipment') {
+        await this.executeCreateEquipmentService(instance, serviceConfig);
+      } else if (serviceType === 'transferShipping' || node.id === 'transfer-shipping') {
+        await this.executeTransferShippingService(instance, serviceConfig);
+      } else if (serviceType === 'transferReceiving' || node.id === 'transfer-receiving') {
+        await this.executeTransferReceivingService(instance, serviceConfig);
+      } else if (serviceType === 'repairShipping' || node.id === 'repair-shipping') {
+        await this.executeRepairShippingService(instance, serviceConfig);
+      } else if (serviceType === 'repairReceiving' || node.id === 'repair-receiving') {
+        await this.executeRepairReceivingService(instance, serviceConfig);
       }
 
       // 找到下一个节点并继续执行
@@ -1038,6 +1049,501 @@ export class EnhancedWorkflowEngine {
     return result ? result.count > 0 : false;
   }
 
+  /**
+   * 执行创建设备服务任务
+   */
+  private async executeCreateEquipmentService(
+    instance: WorkflowInstance,
+    config: any
+  ): Promise<void> {
+    try {
+      console.log('[EnhancedWorkflowEngine] 开始执行创建设备服务任务');
+      
+      const formData = instance.variables?.formData || {};
+      
+      logger.debug('创建设备服务 - formData', { formData })
+      
+      // 调用设备入库服务创建设备台账
+      await equipmentInboundService.createEquipmentFromWorkflow(instance.id);
+      
+      logger.info(`设备台账创建成功: 流程实例 ${instance.id}`);
+    } catch (error) {
+      logger.error('创建设备服务任务执行失败', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行设备调拨发货服务任务
+   */
+  private async executeTransferShippingService(
+    instance: WorkflowInstance,
+    config: any
+  ): Promise<void> {
+    try {
+      console.log('[EnhancedWorkflowEngine] 开始执行设备调拨发货服务任务');
+      
+      const formData = instance.variables?.formData || {};
+      const businessId = instance.business_id;
+      
+      logger.debug('设备调拨发货服务 - formData', { formData, businessId })
+      
+      if (!businessId) {
+        logger.error('业务ID为空，无法执行调拨发货服务')
+        return;
+      }
+      
+      const [orderRows] = await db.query<any>(
+        'SELECT * FROM equipment_transfer_orders WHERE id = ?',
+        [businessId]
+      );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
+      
+      if (!order) {
+        logger.error('调拨单不存在', { businessId })
+        return;
+      }
+      
+      const [itemRows] = await db.query<any>(
+        'SELECT * FROM equipment_transfer_order_items WHERE order_id = ?',
+        [businessId]
+      );
+      const items = itemRows || [];
+      
+      for (const item of items) {
+        if (item.equipment_id) {
+          await db.execute(
+            `UPDATE equipment_instances 
+             SET location_status = 'transferring', 
+                 location_id = NULL, 
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [item.equipment_id]
+          );
+          console.log(`[EnhancedWorkflowEngine] 仪器类设备状态已更新为运输中: ${item.equipment_id}`);
+        } else {
+          const transferQuantity = item.quantity || 1;
+          
+          let fromLocationId = null;
+          if (order.from_location_type === 'warehouse') {
+            fromLocationId = order.from_warehouse_id;
+          } else if (order.from_location_type === 'project') {
+            fromLocationId = order.from_project_id;
+          }
+          
+          if (!fromLocationId) continue;
+          
+          const [equipmentRows] = await db.query<any>(
+            `SELECT ei.*, em.name as equipment_name, em.model_no, em.brand, em.category, em.unit 
+             FROM equipment_instances ei
+             JOIN equipment_models em ON ei.model_id = em.id
+             WHERE em.name = ? AND em.model_no = ? AND em.category = ? AND ei.location_id = ?`,
+            [item.equipment_name, item.model_no, item.category, fromLocationId]
+          );
+          const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
+          
+          if (!equipment) {
+            console.log(`[EnhancedWorkflowEngine] 未找到调出位置的设备记录: ${item.equipment_name} ${item.model_no}`);
+            continue;
+          }
+          
+          const currentQuantity = equipment.quantity || 1;
+          
+          if (currentQuantity <= transferQuantity) {
+            await db.execute(
+              'DELETE FROM equipment_instances WHERE id = ?',
+              [equipment.id]
+            );
+          } else {
+            await db.execute(
+              `UPDATE equipment_instances 
+               SET quantity = quantity - ?, updated_at = NOW()
+               WHERE id = ?`,
+              [transferQuantity, equipment.id]
+            );
+          }
+          
+          const transferringEquipmentId = uuidv4();
+          const transferringManageCode = item.manage_code ? item.manage_code + '-transferring' : `TRANS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          await db.execute(
+            `INSERT INTO equipment_instances 
+            (id, model_id, quantity, serial_number, manage_code, 
+             health_status, usage_status, location_status, location_id, keeper_id, 
+             purchase_date, purchase_price, calibration_expiry, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              transferringEquipmentId,
+              equipment.model_id,
+              transferQuantity,
+              null,
+              transferringManageCode,
+              'normal',
+              'in_use',
+              'transferring',
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ]
+          );
+          console.log(`[EnhancedWorkflowEngine] 已创建运输中设备记录: ${transferringEquipmentId}`);
+        }
+      }
+      
+      await db.execute(
+        `UPDATE equipment_transfer_orders 
+         SET status = 'receiving', 
+             shipped_at = NOW(), 
+             updated_at = NOW()
+         WHERE id = ?`,
+        [businessId]
+      );
+      
+      logger.info(`设备调拨发货服务执行成功: 流程实例 ${instance.id}`);
+    } catch (error) {
+      logger.error('设备调拨发货服务任务执行失败', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行设备调拨收货服务任务
+   */
+  private async executeTransferReceivingService(
+    instance: WorkflowInstance,
+    config: any
+  ): Promise<void> {
+    try {
+      console.log('[EnhancedWorkflowEngine] 开始执行设备调拨收货服务任务');
+      
+      const formData = instance.variables?.formData || {};
+      const businessId = instance.business_id;
+      
+      logger.debug('设备调拨收货服务 - formData', { formData, businessId })
+      
+      if (!businessId) {
+        logger.error('业务ID为空，无法执行调拨收货服务')
+        return;
+      }
+      
+      const [orderRows] = await db.query<any>(
+        'SELECT * FROM equipment_transfer_orders WHERE id = ?',
+        [businessId]
+      );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
+      
+      if (!order) {
+        logger.error('调拨单不存在', { businessId })
+        return;
+      }
+      
+      let toLocationId = null;
+      let toLocationType = null;
+      if (order.to_location_type === 'warehouse') {
+        toLocationId = order.to_warehouse_id;
+        toLocationType = 'warehouse';
+      } else if (order.to_location_type === 'project') {
+        toLocationId = order.to_project_id;
+        toLocationType = 'project';
+      }
+      
+      if (!toLocationId) {
+        logger.error('调入位置ID为空', { order })
+        return;
+      }
+      
+      const [itemRows] = await db.query<any>(
+        'SELECT * FROM equipment_transfer_order_items WHERE order_id = ?',
+        [businessId]
+      );
+      const items = itemRows || [];
+      
+      for (const item of items) {
+        if (item.equipment_id) {
+          await db.execute(
+            `UPDATE equipment_instances 
+             SET location_status = ?, 
+                 location_id = ?, 
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [toLocationType === 'warehouse' ? 'warehouse' : 'in_project', toLocationId, item.equipment_id]
+          );
+          console.log(`[EnhancedWorkflowEngine] 仪器类设备位置已更新: ${item.equipment_id}`);
+        } else {
+          const transferQuantity = item.quantity || 1;
+          
+          const [transferringRows] = await db.query<any>(
+            `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
+             FROM equipment_instances ei
+             JOIN equipment_models em ON ei.model_id = em.id
+             WHERE em.name = ? AND em.model_no = ? AND em.category = ? AND ei.location_status = 'transferring'`,
+            [item.equipment_name, item.model_no, item.category]
+          );
+          const transferringEquipment = transferringRows && transferringRows.length > 0 ? transferringRows[0] : null;
+          
+          if (transferringEquipment) {
+            await db.execute(
+              'DELETE FROM equipment_instances WHERE id = ?',
+              [transferringEquipment.id]
+            );
+          }
+          
+          const [existingRows] = await db.query<any>(
+            `SELECT ei.* FROM equipment_instances ei
+             JOIN equipment_models em ON ei.model_id = em.id
+             WHERE em.name = ? AND em.model_no = ? AND em.category = ? AND ei.location_id = ?`,
+            [item.equipment_name, item.model_no, item.category, toLocationId]
+          );
+          const existingEquipment = existingRows && existingRows.length > 0 ? existingRows[0] : null;
+          
+          if (existingEquipment) {
+            await db.execute(
+              `UPDATE equipment_instances 
+               SET quantity = quantity + ?, updated_at = NOW()
+               WHERE id = ?`,
+              [transferQuantity, existingEquipment.id]
+            );
+            console.log(`[EnhancedWorkflowEngine] 调入位置数量已增加: ${existingEquipment.id}`);
+          } else {
+            const [modelRows] = await db.query<any>(
+              `SELECT * FROM equipment_models WHERE name = ? AND model_no = ? AND category = ?`,
+              [item.equipment_name, item.model_no, item.category]
+            );
+            const model = modelRows && modelRows.length > 0 ? modelRows[0] : null;
+            
+            if (model) {
+              const newEquipmentId = uuidv4();
+              await db.execute(
+                `INSERT INTO equipment_instances 
+                (id, model_id, quantity, manage_code, health_status, usage_status, location_status, location_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  newEquipmentId,
+                  model.id,
+                  transferQuantity,
+                  item.manage_code || null,
+                  'normal',
+                  'idle',
+                  toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
+                  toLocationId
+                ]
+              );
+              console.log(`[EnhancedWorkflowEngine] 已创建调入位置设备记录: ${newEquipmentId}`);
+            }
+          }
+        }
+      }
+      
+      await db.execute(
+        `UPDATE equipment_transfer_orders 
+         SET status = 'completed', 
+             received_at = NOW(), 
+             updated_at = NOW()
+         WHERE id = ?`,
+        [businessId]
+      );
+      
+      logger.info(`设备调拨收货服务执行成功: 流程实例 ${instance.id}`);
+    } catch (error) {
+      logger.error('设备调拨收货服务任务执行失败', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行设备维修发货服务任务
+   */
+  private async executeRepairShippingService(
+    instance: WorkflowInstance,
+    config: any
+  ): Promise<void> {
+    try {
+      console.log('[EnhancedWorkflowEngine] 开始执行设备维修发货服务任务');
+      
+      const formData = instance.variables?.formData || {};
+      const businessId = instance.business_id;
+      
+      logger.debug('设备维修发货服务 - formData', { formData, businessId })
+      
+      if (!businessId) {
+        logger.error('业务ID为空，无法执行维修发货服务')
+        return;
+      }
+      
+      const [orderRows] = await db.query<any>(
+        'SELECT * FROM equipment_repair_orders WHERE id = ?',
+        [businessId]
+      );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
+      
+      if (!order) {
+        logger.error('维修单不存在', { businessId })
+        return;
+      }
+      
+      const repairQuantity = order.repair_quantity || 1;
+      
+      if (order.equipment_category === 'instrument') {
+        await db.execute(
+          `UPDATE equipment_instances 
+           SET location_id = 'repairing', 
+               health_status = 'repairing',
+               location_status = 'repairing',
+               updated_at = NOW()
+           WHERE id = ?`,
+          [order.equipment_id]
+        );
+        console.log(`[EnhancedWorkflowEngine] 仪器类设备状态已更新为维修中: ${order.equipment_id}`);
+      } else {
+        const [equipmentRows] = await db.query<any>(
+          `SELECT * FROM equipment_instances WHERE id = ?`,
+          [order.equipment_id]
+        );
+        const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
+        
+        if (!equipment) {
+          logger.error('设备不存在', { equipment_id: order.equipment_id })
+          return;
+        }
+        
+        await db.execute(
+          `UPDATE equipment_instances SET quantity = quantity - ? WHERE id = ?`,
+          [repairQuantity, order.equipment_id]
+        );
+        
+        const repairingId = uuidv4();
+        await db.execute(
+          `INSERT INTO equipment_instances 
+          (id, equipment_name, model_no, brand, category, unit, quantity, manage_code, 
+           health_status, usage_status, location_status, location_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            repairingId,
+            equipment.equipment_name,
+            equipment.model_no,
+            equipment.brand,
+            equipment.category,
+            equipment.unit,
+            repairQuantity,
+            equipment.manage_code + '-repairing',
+            'repairing',
+            'idle',
+            'repairing',
+            'repairing'
+          ]
+        );
+        console.log(`[EnhancedWorkflowEngine] 已创建维修中设备记录: ${repairingId}`);
+      }
+      
+      await db.execute(
+        `UPDATE equipment_repair_orders 
+         SET status = 'repairing', 
+             shipped_at = NOW(), 
+             updated_at = NOW()
+         WHERE id = ?`,
+        [businessId]
+      );
+      
+      logger.info(`设备维修发货服务执行成功: 流程实例 ${instance.id}`);
+    } catch (error) {
+      logger.error('设备维修发货服务任务执行失败', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * 执行设备维修收货服务任务
+   */
+  private async executeRepairReceivingService(
+    instance: WorkflowInstance,
+    config: any
+  ): Promise<void> {
+    try {
+      console.log('[EnhancedWorkflowEngine] 开始执行设备维修收货服务任务');
+      
+      const formData = instance.variables?.formData || {};
+      const businessId = instance.business_id;
+      
+      logger.debug('设备维修收货服务 - formData', { formData, businessId })
+      
+      if (!businessId) {
+        logger.error('业务ID为空，无法执行维修收货服务')
+        return;
+      }
+      
+      const [orderRows] = await db.query<any>(
+        'SELECT * FROM equipment_repair_orders WHERE id = ?',
+        [businessId]
+      );
+      const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
+      
+      if (!order) {
+        logger.error('维修单不存在', { businessId })
+        return;
+      }
+      
+      const repairQuantity = order.repair_quantity || 1;
+      
+      if (order.equipment_category === 'instrument') {
+        const originalLocationId = order.original_location_id ?? null;
+        const locationStatus = order.original_location_type === 'warehouse' ? 'warehouse' : 'in_project';
+        
+        await db.execute(
+          `UPDATE equipment_instances 
+           SET location_id = ?, 
+               health_status = 'normal',
+               location_status = ?,
+               updated_at = NOW()
+           WHERE id = ?`,
+          [originalLocationId, locationStatus, order.equipment_id]
+        );
+        console.log(`[EnhancedWorkflowEngine] 仪器类设备状态已恢复: ${order.equipment_id}`);
+      } else {
+        const [equipmentRows] = await db.query<any>(
+          `SELECT * FROM equipment_instances WHERE id = ?`,
+          [order.equipment_id]
+        );
+        const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
+        
+        if (!equipment) {
+          logger.error('设备不存在', { equipment_id: order.equipment_id })
+          return;
+        }
+        
+        await db.execute(
+          `DELETE FROM equipment_instances 
+           WHERE location_id = 'repairing' 
+             AND manage_code LIKE '%-repairing'
+             AND equipment_name = ? 
+             AND model_no = ?`,
+          [order.equipment_name, equipment.model_no ?? null]
+        );
+        
+        await db.execute(
+          `UPDATE equipment_instances SET quantity = quantity + ? WHERE id = ?`,
+          [repairQuantity, order.equipment_id]
+        );
+        console.log(`[EnhancedWorkflowEngine] 设备数量已恢复: ${order.equipment_id}`);
+      }
+      
+      await db.execute(
+        `UPDATE equipment_repair_orders 
+         SET status = 'completed', 
+             received_at = NOW(), 
+             updated_at = NOW()
+         WHERE id = ?`,
+        [businessId]
+      );
+      
+      logger.info(`设备维修收货服务执行成功: 流程实例 ${instance.id}`);
+    } catch (error) {
+      logger.error('设备维修收货服务任务执行失败', error as Error);
+      throw error;
+    }
+  }
+
   // ==================== 缓存管理 ====================
 
   private async getCachedDefinition(processKey: string): Promise<WorkflowDefinition> {
@@ -1199,6 +1705,7 @@ export class EnhancedWorkflowEngine {
 
   private async endInstance(instanceId: string, result: string): Promise<void> {
     console.log(`[EnhancedWorkflowEngine] endInstance 被调用: instanceId=${instanceId}, result=${result}`);
+    console.log(`[EnhancedWorkflowEngine] process.ended 事件监听器数量: ${this.eventBus.listenerCount('process.ended')}`);
     try {
       await this.clearCurrentNode(instanceId);
       console.log(`[EnhancedWorkflowEngine] clearCurrentNode 完成`);
