@@ -207,12 +207,13 @@ export class EquipmentInboundService {
               `INSERT INTO equipment_instances 
                (id, model_id, serial_number, manage_code, quantity,
                 health_status, usage_status, location_status, location_id, 
-                purchase_date, purchase_price, calibration_expiry, notes, keeper_id, accessories, created_at)
-               VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                purchase_date, purchase_price, calibration_expiry, notes, keeper_id, accessories,
+                manufacturer, technical_params, certificate_no, certificate_issuer, accessory_desc, created_at)
+               VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
               [
                 instanceId,
                 modelId,
-                item.serial_number || null,
+                item.serial_numbers || item.serial_number || null,
                 manageCode,
                 'normal',
                 'idle',
@@ -223,7 +224,12 @@ export class EquipmentInboundService {
                 item.certificate_expiry_date || null,
                 item.item_notes || null,
                 keeperId,
-                accessories
+                accessories,
+                item.manufacturer || null,
+                item.technical_params || null,
+                item.certificate_no || null,
+                item.certificate_issuer || null,
+                item.accessory_desc || null
               ]
             );
 
@@ -284,12 +290,13 @@ export class EquipmentInboundService {
             `INSERT INTO equipment_instances 
              (id, model_id, serial_number, manage_code, quantity,
               health_status, usage_status, location_status, location_id, 
-              purchase_date, purchase_price, calibration_expiry, notes, keeper_id, accessories, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+              purchase_date, purchase_price, calibration_expiry, notes, keeper_id, accessories,
+              manufacturer, technical_params, certificate_no, certificate_issuer, accessory_desc, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
             [
               instanceId,
               modelId,
-              null,
+              item.serial_numbers || item.serial_number || null,
               manageCode,
               quantity,
               'normal',
@@ -301,7 +308,12 @@ export class EquipmentInboundService {
               item.certificate_expiry_date || null,
               item.item_notes || null,
               keeperId,
-              accessories
+              accessories,
+              item.manufacturer || null,
+              item.technical_params || null,
+              item.certificate_no || null,
+              item.certificate_issuer || null,
+              item.accessory_desc || null
             ]
           );
 

@@ -448,6 +448,30 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
         }
       },
       {
+        id: 'receive-gateway',
+        type: 'exclusiveGateway',
+        name: '收货状态判断',
+        config: {
+          gatewayConfig: {
+            conditions: [
+              {
+                id: 'condition-partial',
+                name: '异常收货',
+                expression: '${formData.receive_status === "partial"}',
+                targetNode: 'from-location-manager'
+              },
+              {
+                id: 'condition-normal',
+                name: '正常收货',
+                expression: '${formData.receive_status !== "partial"}',
+                targetNode: 'end-approved'
+              }
+            ],
+            defaultFlow: 'end-approved'
+          }
+        }
+      },
+      {
         id: 'end-approved',
         type: 'endEvent',
         name: '审批通过'
@@ -486,8 +510,22 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       {
         id: 'edge-5',
         source: 'transfer-receiving',
-        target: 'end-approved',
+        target: 'receive-gateway',
         type: 'sequenceFlow'
+      },
+      {
+        id: 'edge-6',
+        source: 'receive-gateway',
+        target: 'from-location-manager',
+        type: 'sequenceFlow',
+        condition: '${formData.receive_status === "partial"}'
+      },
+      {
+        id: 'edge-7',
+        source: 'receive-gateway',
+        target: 'end-approved',
+        type: 'sequenceFlow',
+        condition: '${formData.receive_status !== "partial"}'
       }
     ]
   },
@@ -1005,15 +1043,7 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
       visibleOn: ['start', 'warehouse-manager'],
       editableOn: ['start']
     },
-    {
-      name: 'total_price',
-      label: '总金额',
-      type: 'number',
-      required: false,
-      placeholder: '请输入总金额',
-      visibleOn: ['start', 'warehouse-manager'],
-      editableOn: ['start']
-    },
+
     {
       name: 'items',
       label: '设备明细',

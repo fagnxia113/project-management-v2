@@ -409,6 +409,65 @@ export class ApproverResolver {
     }
   }
 
+  /**
+   * 根据位置类型和位置ID获取负责人
+   * 支持仓库和项目两种位置类型
+   */
+  private async resolveLocationManager(locationType: string, locationId: string): Promise<Approver[]> {
+    try {
+      console.log('[ApproverResolver] resolveLocationManager: 查询位置负责人', { locationType, locationId });
+      
+      if (!locationType || !locationId) {
+        console.log('[ApproverResolver] resolveLocationManager: 缺少位置类型或位置ID');
+        return [];
+      }
+      
+      let managerId: string | null = null;
+      
+      if (locationType === 'warehouse') {
+        // 从warehouses表获取仓库管理员
+        const warehouse = await db.queryOne<any>(
+          `SELECT manager_id FROM warehouses WHERE id = ? AND status = 'active'`,
+          [locationId]
+        );
+        
+        if (warehouse) {
+          managerId = warehouse.manager_id;
+        }
+      } else if (locationType === 'project') {
+        // 从projects表获取项目经理
+        const project = await db.queryOne<any>(
+          `SELECT manager_id FROM projects WHERE id = ? AND status = 'active'`,
+          [locationId]
+        );
+        
+        if (project) {
+          managerId = project.manager_id;
+        }
+      }
+      
+      if (!managerId) {
+        console.log('[ApproverResolver] resolveLocationManager: 位置未配置负责人', { locationType, locationId });
+        return [];
+      }
+      
+      console.log('[ApproverResolver] resolveLocationManager: 找到负责人ID', { managerId });
+      
+      // 获取负责人详细信息
+      const user = await this.getUserInfo(managerId);
+      
+      if (user) {
+        console.log('[ApproverResolver] resolveLocationManager: 返回负责人信息', user);
+        return [user];
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('[ApproverResolver] resolveLocationManager: 获取位置负责人失败', error);
+      return [];
+    }
+  }
+
   private async resolvePreviousHandler(context: ProcessContext): Promise<Approver[]> {
     if (!context.currentTask) {
       return [];

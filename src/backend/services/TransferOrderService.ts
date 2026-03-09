@@ -466,22 +466,32 @@ export class TransferOrderService {
           `INSERT INTO equipment_instances 
           (id, model_id, quantity, serial_number, manage_code, 
            health_status, usage_status, location_status, location_id, keeper_id, 
-           purchase_date, purchase_price, calibration_expiry, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           purchase_date, purchase_price, calibration_expiry, notes, 
+           manufacturer, technical_params, certificate_no, certificate_issuer, 
+           accessory_desc, technical_doc, attachment) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transferringEquipmentId,
             equipment.model_id,
             transferQuantity,
-            null,
+            equipment.serial_number,
             transferringManageCode,
             'normal',
             'in_use', // 运输中视为使用中，不可用
             'transferring',
             null, // 运输中位置ID为NULL
             null,
-            null,
-            null,
-            null
+            equipment.purchase_date,
+            equipment.purchase_price,
+            equipment.calibration_expiry,
+            equipment.notes,
+            equipment.manufacturer,
+            equipment.technical_params,
+            equipment.certificate_no,
+            equipment.certificate_issuer,
+            equipment.accessory_desc,
+            equipment.technical_doc,
+            equipment.attachment
           ]
         );
         console.log(`[TransferOrderService] 已创建运输中设备记录: ${transferringEquipmentId} (数量: ${transferQuantity})`);
@@ -817,13 +827,15 @@ export class TransferOrderService {
                   `INSERT INTO equipment_instances 
                   (id, model_id, quantity, serial_number, manage_code, 
                    health_status, usage_status, location_status, location_id, keeper_id, 
-                   purchase_date, purchase_price, calibration_expiry, notes)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                   purchase_date, purchase_price, calibration_expiry, notes, 
+                   manufacturer, technical_params, certificate_no, certificate_issuer, 
+                   accessory_desc, technical_doc, attachment) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                   [
                     newEquipmentId,
                     transferringEquipment.model_id,
                     receivedQty,
-                    null,
+                    transferringEquipment.serial_number,
                     transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : `EQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     transferringEquipment.health_status,
                     toLocationType === 'warehouse' ? 'idle' : 'in_use',
@@ -833,7 +845,14 @@ export class TransferOrderService {
                     transferringEquipment.purchase_date,
                     transferringEquipment.purchase_price,
                     transferringEquipment.calibration_expiry,
-                    transferringEquipment.notes
+                    transferringEquipment.notes,
+                    transferringEquipment.manufacturer,
+                    transferringEquipment.technical_params,
+                    transferringEquipment.certificate_no,
+                    transferringEquipment.certificate_issuer,
+                    transferringEquipment.accessory_desc,
+                    transferringEquipment.technical_doc,
+                    transferringEquipment.attachment
                   ]
                 );
                 console.log(`[TransferOrderService] 目标位置已创建新记录: ${newEquipmentId} (数量: ${receivedQty})`);
@@ -930,13 +949,15 @@ export class TransferOrderService {
                   `INSERT INTO equipment_instances 
                   (id, model_id, quantity, serial_number, manage_code, 
                    health_status, usage_status, location_status, location_id, keeper_id, 
-                   purchase_date, purchase_price, calibration_expiry, notes)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                   purchase_date, purchase_price, calibration_expiry, notes, 
+                   manufacturer, technical_params, certificate_no, certificate_issuer, 
+                   accessory_desc, technical_doc, attachment) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                   [
                     newEquipmentId,
                     transferringEquipment.model_id,
                     returnQty,
-                    null,
+                    transferringEquipment.serial_number,
                     transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : `EQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     transferringEquipment.health_status,
                     'idle',
@@ -946,7 +967,14 @@ export class TransferOrderService {
                     transferringEquipment.purchase_date,
                     transferringEquipment.purchase_price,
                     transferringEquipment.calibration_expiry,
-                    transferringEquipment.notes
+                    transferringEquipment.notes,
+                    transferringEquipment.manufacturer,
+                    transferringEquipment.technical_params,
+                    transferringEquipment.certificate_no,
+                    transferringEquipment.certificate_issuer,
+                    transferringEquipment.accessory_desc,
+                    transferringEquipment.technical_doc,
+                    transferringEquipment.attachment
                   ]
                 );
                 console.log(`[TransferOrderService] 原位置已创建新记录: ${newEquipmentId} (数量: ${returnQty})`);
@@ -1280,7 +1308,7 @@ export class TransferOrderService {
               (id, model_id, quantity, serial_number, manage_code, 
                health_status, usage_status, location_status, location_id, keeper_id, 
                purchase_date, purchase_price, calibration_expiry, notes)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 newEquipmentId,
                 equipment.model_id,
@@ -1661,19 +1689,33 @@ export class TransferOrderService {
             await connection.execute(
               `INSERT INTO equipment_instances 
               (id, model_id, quantity, serial_number, manage_code, 
-               health_status, usage_status, location_status, location_id, keeper_id)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               health_status, usage_status, location_status, location_id, keeper_id, 
+               purchase_date, purchase_price, calibration_expiry, notes, 
+               manufacturer, technical_params, certificate_no, certificate_issuer, 
+               accessory_desc, technical_doc, attachment)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 newEquipmentId,
                 transferringEquipment.model_id,
                 transferQuantity,
-                null,
+                transferringEquipment.serial_number,
                 transferringEquipment.manage_code ? transferringEquipment.manage_code.replace('-transferring', '') + '-' + uuidv4().substring(0, 8) : `EQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 transferringEquipment.health_status,
                 toLocationType === 'warehouse' ? 'idle' : 'in_use',
                 toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
                 toLocationId,
-                toKeeperId
+                toKeeperId,
+                transferringEquipment.purchase_date,
+                transferringEquipment.purchase_price,
+                transferringEquipment.calibration_expiry,
+                transferringEquipment.notes,
+                transferringEquipment.manufacturer,
+                transferringEquipment.technical_params,
+                transferringEquipment.certificate_no,
+                transferringEquipment.certificate_issuer,
+                transferringEquipment.accessory_desc,
+                transferringEquipment.technical_doc,
+                transferringEquipment.attachment
               ]
             );
             console.log(`[TransferOrderService] 目标位置已创建新记录: ${newEquipmentId} (数量: ${transferQuantity}), 保管人: ${toKeeperId}`);

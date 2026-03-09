@@ -26,8 +26,21 @@ import migrateRouter from './migrate.js'
 import healthRouter from './health.js'
 import performanceRoutes from './performanceRoutes.js'
 import formTemplateRoutes from './formTemplateRoutes.js'
+import { db } from '../database/connection.js'
 
 const router = Router()
+
+// 临时路由：检查表结构
+router.get('/check-table', async (req, res) => {
+  try {
+    await db.connect()
+    const columns = await db.query('SHOW COLUMNS FROM equipment_instances')
+    res.json({ columns })
+    await db.close()
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
 
 router.use('/data', dataRouter)
 router.use('/metadata', metadataRouter)

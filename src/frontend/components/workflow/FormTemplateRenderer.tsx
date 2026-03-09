@@ -629,16 +629,29 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                           </label>
                           {renderArrayFieldInput(subField, item, index, (subFieldName: string, subFieldValue: any) => {
                             const newArray = [...arrayValue]
-                            newArray[index] = { ...newArray[index], [subFieldName]: subFieldValue }
                             
-                            if (subFieldName === 'category' && subFieldValue === 'instrument') {
-                              newArray[index].quantity = 1
-                            }
-                            
-                            if (subFieldName === 'purchase_price' || subFieldName === 'quantity') {
-                              const price = subFieldName === 'purchase_price' ? subFieldValue : (newArray[index].purchase_price || 0)
-                              const qty = subFieldName === 'quantity' ? subFieldValue : (newArray[index].quantity || 0)
-                              newArray[index].total_price = price * qty
+                            // 当更改设备类别时，清空所有其他字段
+                            if (subFieldName === 'category') {
+                              // 创建一个新对象，只保留ID和类别
+                              const resetItem: any = {
+                                id: newArray[index].id,
+                                category: subFieldValue
+                              }
+                              
+                              // 对于仪器类，默认数量为1
+                              if (subFieldValue === 'instrument') {
+                                resetItem.quantity = 1
+                              }
+                              
+                              newArray[index] = resetItem
+                            } else {
+                              newArray[index] = { ...newArray[index], [subFieldName]: subFieldValue }
+                              
+                              if (subFieldName === 'purchase_price' || subFieldName === 'quantity') {
+                                const price = subFieldName === 'purchase_price' ? subFieldValue : (newArray[index].purchase_price || 0)
+                                const qty = subFieldName === 'quantity' ? subFieldValue : (newArray[index].quantity || 0)
+                                newArray[index].total_price = price * qty
+                              }
                             }
                             
                             onChange(field.name, newArray)
@@ -860,6 +873,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         } else if (field.name === 'warehouse_id' && Object.keys(warehouseMap).length > 0) {
           // 仓库字段使用仓库映射
           selectOptions = Object.entries(warehouseMap).map(([id, name]) => ({ label: name, value: id }))
+          if (value && warehouseMap[value]) {
+            displayValue = warehouseMap[value]
+          }
         } else if (field.name === 'fromLocationType' || field.name === 'toLocationType') {
           // 位置类型字段
           selectOptions = [
@@ -2054,53 +2070,22 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
           return (
             <div key={field.name} className="bg-white shadow rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">{field.label}</h2>
-                {!isReadonly && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      console.log('[FormTemplateRenderer] 点击添加设备明细按钮')
-                      console.log('[FormTemplateRenderer] field.name:', field.name)
-                      console.log('[FormTemplateRenderer] arrayValue:', arrayValue)
-                      console.log('[FormTemplateRenderer] arrayConfig.fields:', arrayConfig.fields)
-                      
-                      const newItem: any = {}
-                      ;(Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []).forEach((f: any) => {
-                        if (f.type === 'array') {
-                          newItem[f.name] = []
-                        } else {
-                          newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : (f.type === 'number' ? 0 : '')
-                        }
-                      })
-                      newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-                      newItem.isCustomName = false
-                      newItem.isCustomModel = false
-                      
-                      console.log('[FormTemplateRenderer] newItem:', newItem)
-                      console.log('[FormTemplateRenderer] 调用 onChange，参数:', field.name, [...arrayValue, newItem])
-                      
-                      onChange(field.name, [...arrayValue, newItem])
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    + 添加设备明细
-                  </button>
-                )}
               </div>
 
               {arrayValue.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  暂无设备明细，点击上方按钮添加
+                <div className="text-center py-6 text-gray-500">
+                  暂无设备明细，点击下方按钮添加
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {arrayValue.map((item: any, index: number) => (
-                    <div key={item.id || index} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
+                    <div key={item.id || index} className="border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-700">设备 {index + 1}</span>
                         {!isReadonly && (
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-3">
                             <button
                               type="button"
                               onClick={() => {
@@ -2108,8 +2093,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                 newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                                 onChange(field.name, [...arrayValue.slice(0, index + 1), newItem, ...arrayValue.slice(index + 1)])
                               }}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
+                              className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
                             >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
                               复制
                             </button>
                             <button
@@ -2118,20 +2106,23 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                 const newArray = arrayValue.filter((_: any, i: number) => i !== index)
                                 onChange(field.name, newArray)
                               }}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              className="text-red-600 hover:text-red-800 text-sm flex items-center gap-1"
                             >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
                               删除
                             </button>
                           </div>
                         )}
                       </div>
-                      <div className="space-y-5">
+                      <div className="space-y-4">
                         <div>
-                          <div className="flex items-center gap-2 mb-3">
+                          <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">基本信息</h4>
                           </div>
-                          <div className="grid grid-cols-4 gap-3">
+                          <div className="grid grid-cols-4 gap-2">
                             {(() => {
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                               return fields.map((subField: any) => {
@@ -2185,11 +2176,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                         </div>
 
                         <div>
-                          <div className="flex items-center gap-2 mb-3">
+                          <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">详细信息</h4>
                           </div>
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             {(() => {
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                               const isInstrument = item.category === 'instrument'
@@ -2197,7 +2188,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                               if (isInstrument) {
                                 return (
                                   <>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-2">
                                       {fields.filter((f: any) => ['manufacturer', 'technical_params'].includes(f.name)).map((subField: any) => (
                                         <div key={subField.name}>
                                           <label className="block text-sm font-medium text-gray-700 mb-0.5">
@@ -2212,12 +2203,12 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                         </div>
                                       ))}
                                     </div>
-                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
-                                      <div className="flex items-center gap-2 mb-3">
+                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-100">
+                                      <div className="flex items-center gap-2 mb-2">
                                         <div className="w-0.5 h-4 bg-blue-500 rounded-full"></div>
                                         <h5 className="text-sm font-medium text-blue-800">校准证书信息</h5>
                                       </div>
-                                      <div className="grid grid-cols-4 gap-3">
+                                      <div className="grid grid-cols-4 gap-2">
                                         {fields.filter((f: any) => ['serial_numbers', 'certificate_no', 'certificate_issuer', 'certificate_expiry_date'].includes(f.name)).map((subField: any) => (
                                           <div key={subField.name}>
                                             <label className="block text-sm font-medium text-gray-700 mb-0.5">
@@ -2233,7 +2224,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                         ))}
                                       </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-2">
                                       {fields.filter((f: any) => ['accessory_desc', 'item_notes'].includes(f.name)).map((subField: any) => (
                                         <div key={subField.name}>
                                           <label className="block text-sm font-medium text-gray-700 mb-0.5">
@@ -2253,7 +2244,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                               }
                               
                               return (
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-2 gap-2">
                                   {fields.filter((f: any) => ['manufacturer', 'technical_params', 'accessory_desc', 'item_notes'].includes(f.name)).map((subField: any) => (
                                     <div key={subField.name}>
                                       <label className="block text-sm font-medium text-gray-700 mb-0.5">
@@ -2274,11 +2265,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                         </div>
 
                         <div>
-                          <div className="flex items-center gap-2 mb-3">
+                          <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">图片信息</h4>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-2 gap-3">
                             {(() => {
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                               return fields.map((subField: any) => {
@@ -2289,7 +2280,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                 const imageAccept = subField.accept || 'image/*'
                                 
                                 return (
-                                  <div key={subField.name} className="border border-gray-200 rounded-lg p-3">
+                                  <div key={subField.name} className="border border-gray-200 rounded-lg p-2">
                                     <span className="text-sm font-medium text-gray-700">{imageLabel}</span>
                                     {imageValue.length > 0 && (
                                       <div className="grid grid-cols-3 gap-2 mt-2 mb-2">
@@ -2370,7 +2361,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                         </div>
 
                         <div>
-                          <div className="flex items-center gap-2 mb-3">
+                          <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">附件信息</h4>
                           </div>
@@ -2474,7 +2465,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                           
                           return (
                             <div className="border-b border-gray-200 pb-3">
-                              <div className="flex items-center gap-2 mb-3">
+                              <div className="flex items-center gap-2 mb-2">
                                 <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                                 <h4 className="text-base font-semibold text-gray-800">配件清单</h4>
                               </div>
@@ -2495,25 +2486,28 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                       }
                                       onChange(field.name, newArray)
                                     }}
-                                    className="text-blue-600 hover:text-blue-800 text-sm"
+                                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
                                   >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
                                     + 添加配件
                                   </button>
                                 )}
                               </div>
                               {accessoryValue.length === 0 ? (
-                                <div className="text-center py-1 text-gray-400 text-sm">
+                                <div className="text-center py-2 text-gray-400 text-sm">
                                   暂无配件
                                 </div>
                               ) : (
-                                <div className="space-y-1">
+                                <div className="space-y-2">
                                   {accessoryValue.map((accItem: any, accIndex: number) => (
-                                    <div key={accIndex} className="bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-500 w-6 flex-shrink-0">{accIndex + 1}</span>
-                                        <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-1">
-                                          <div className="flex items-center gap-1">
-                                            <label className="text-xs text-gray-600 whitespace-nowrap">配件名称:</label>
+                                    <div key={accIndex} className="bg-white border border-gray-200 rounded-lg p-2 shadow-sm hover:shadow-md transition-shadow">
+                                      <div className="flex items-start gap-3">
+                                        <span className="text-sm font-medium text-gray-600 w-8 flex-shrink-0">{accIndex + 1}</span>
+                                        <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-2">
+                                          <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-medium text-gray-500">配件名称</label>
                                             <input
                                               type="text"
                                               value={accItem.accessory_name || ''}
@@ -2528,11 +2522,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 onChange(field.name, newArray)
                                               }}
                                               disabled={isReadonly}
-                                              className="flex-1 text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                                              className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
                                             />
                                           </div>
-                                          <div className="flex items-center gap-1">
-                                            <label className="text-xs text-gray-600 whitespace-nowrap">规格型号:</label>
+                                          <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-medium text-gray-500">规格型号</label>
                                             <input
                                               type="text"
                                               value={accItem.accessory_model || ''}
@@ -2547,11 +2541,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 onChange(field.name, newArray)
                                               }}
                                               disabled={isReadonly}
-                                              className="flex-1 text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                                              className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
                                             />
                                           </div>
-                                          <div className="flex items-center gap-1">
-                                            <label className="text-xs text-gray-600 whitespace-nowrap">数量:</label>
+                                          <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-medium text-gray-500">数量</label>
                                             <input
                                               type="number"
                                               value={accItem.accessory_quantity || ''}
@@ -2566,11 +2560,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 onChange(field.name, newArray)
                                               }}
                                               disabled={isReadonly}
-                                              className="w-16 text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                                              className="w-full max-w-[120px] text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
                                             />
                                           </div>
-                                          <div className="flex items-center gap-1">
-                                            <label className="text-xs text-gray-600 whitespace-nowrap">单位:</label>
+                                          <div className="flex flex-col gap-1">
+                                            <label className="text-xs font-medium text-gray-500">单位</label>
                                             <select
                                               value={accItem.accessory_unit || ''}
                                               onChange={(e) => {
@@ -2584,19 +2578,19 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 onChange(field.name, newArray)
                                               }}
                                               disabled={isReadonly}
-                                              className="w-14 text-xs border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                                              className="w-full max-w-[100px] text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
                                             >
                                               <option value="">-</option>
-                                              <option value="piece">个</option>
-                                              <option value="set">套</option>
-                                              <option value="item">件</option>
-                                              <option value="unit">台</option>
-                                              <option value="handle">把</option>
-                                              <option value="root">根</option>
-                                              <option value="block">块</option>
-                                              <option value="sheet">张</option>
-                                              <option value="strip">条</option>
-                                              <option value="branch">支</option>
+                                              <option value="个">个</option>
+                                              <option value="套">套</option>
+                                              <option value="件">件</option>
+                                              <option value="台">台</option>
+                                              <option value="把">把</option>
+                                              <option value="根">根</option>
+                                              <option value="块">块</option>
+                                              <option value="张">张</option>
+                                              <option value="条">条</option>
+                                              <option value="支">支</option>
                                             </select>
                                           </div>
                                         </div>
@@ -2611,9 +2605,12 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                               }
                                               onChange(field.name, newArray)
                                             }}
-                                            className="text-red-500 hover:text-red-700 text-sm w-5 flex-shrink-0"
+                                            className="flex-shrink-0 text-red-500 hover:text-red-700 p-1.5"
+                                            title="删除配件"
                                           >
-                                            ×
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
                                           </button>
                                         )}
                                       </div>
@@ -2627,6 +2624,39 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+              {!isReadonly && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      console.log('[FormTemplateRenderer] 点击添加设备明细按钮')
+                      console.log('[FormTemplateRenderer] field.name:', field.name)
+                      console.log('[FormTemplateRenderer] arrayValue:', arrayValue)
+                      console.log('[FormTemplateRenderer] arrayConfig.fields:', arrayConfig.fields)
+                      
+                      const newItem: any = {}
+                      ;(Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []).forEach((f: any) => {
+                        if (f.type === 'array') {
+                          newItem[f.name] = []
+                        } else {
+                          newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : (f.type === 'number' ? 0 : '')
+                        }
+                      })
+                      newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                      newItem.isCustomName = false
+                      newItem.isCustomModel = false
+                      
+                      console.log('[FormTemplateRenderer] newItem:', newItem)
+                      console.log('[FormTemplateRenderer] 调用 onChange，参数:', field.name, [...arrayValue, newItem])
+                      
+                      onChange(field.name, [...arrayValue, newItem])
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center"
+                  >
+                    + 添加设备明细
+                  </button>
                 </div>
               )}
             </div>

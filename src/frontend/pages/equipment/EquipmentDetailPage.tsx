@@ -35,7 +35,6 @@ interface Equipment {
   id: string
   equipment_name: string
   model_no: string
-  brand: string
   manufacturer: string | null
   technical_params: string | null
   category: 'instrument' | 'fake_load' | 'cable'
@@ -237,9 +236,6 @@ function RepairCreateModal({ isOpen, onClose, currentEquipment }: RepairCreateMo
                       型号
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      品牌
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       类别
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -263,9 +259,6 @@ function RepairCreateModal({ isOpen, onClose, currentEquipment }: RepairCreateMo
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {eq.model_no}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {eq.brand}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {getCategoryLabel(eq.category)}
@@ -319,9 +312,6 @@ function RepairCreateModal({ isOpen, onClose, currentEquipment }: RepairCreateMo
                       型号
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      品牌
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       类别
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -340,9 +330,6 @@ function RepairCreateModal({ isOpen, onClose, currentEquipment }: RepairCreateMo
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {eq.model_no}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {eq.brand}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {getCategoryLabel(eq.category)}
@@ -751,10 +738,6 @@ export default function EquipmentDetailPage() {
                   <div>
                     <label className="text-sm text-gray-500">型号</label>
                     <div className="text-sm font-medium text-gray-900">{equipment?.model_no || '-'}</div>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-500">品牌</label>
-                    <div className="text-sm font-medium text-gray-900">{equipment?.brand || '-'}</div>
                   </div>
                   <div>
                     <label className="text-sm text-gray-500">生产厂家</label>

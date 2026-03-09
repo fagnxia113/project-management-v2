@@ -13,7 +13,6 @@ interface Equipment {
   model_id: string
   equipment_name: string
   model_no: string
-  brand: string | null
   manufacturer: string | null
   technical_params: string | null
   category: 'instrument' | 'fake_load' | 'cable'
@@ -365,7 +364,6 @@ export default function EquipmentListPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">数量</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[60px]">单位</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">类别</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">品牌</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">生产厂家</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">技术参数</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">健康状态</th>
@@ -460,9 +458,6 @@ export default function EquipmentListPage() {
                       </td>
                       <td className="px-6 py-4">
                         {getCategoryBadge(item.category)}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {item.brand || '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {item.manufacturer || '-'}

@@ -59,8 +59,8 @@ export class EquipmentService {
                 m.category,
                 m.brand,
                 m.unit,
-                m.manufacturer,
-                m.technical_params,
+                i.manufacturer,
+                i.technical_params,
                 CASE 
                     WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
                     WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
@@ -304,8 +304,8 @@ export class EquipmentService {
                 m.model_no,
                 m.category,
                 m.brand,
-                m.manufacturer,
-                m.technical_params,
+                i.manufacturer,
+                i.technical_params,
                 m.unit,
                 CASE 
                     WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
@@ -347,8 +347,8 @@ export class EquipmentService {
                 m.model_no,
                 m.category,
                 m.brand,
-                m.manufacturer,
-                m.technical_params,
+                i.manufacturer,
+                i.technical_params,
                 m.unit,
                 CASE 
                     WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)

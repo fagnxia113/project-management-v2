@@ -679,15 +679,27 @@ export default function WorkflowDetailPage() {
       if (isEquipmentTransfer && currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to'))) {
         // 收集每个设备的实收数量
         const receiveItems: { item_id: string; received_quantity: number }[] = []
-        const inputs = document.querySelectorAll('input[data-item-id]') as NodeListOf<HTMLInputElement>
-        inputs.forEach(input => {
-          const itemId = input.dataset.itemId
-          const expectedQty = parseInt(input.dataset.expectedQty || '0')
-          const receivedQty = parseInt(input.value) || 0
-          if (itemId) {
-            receiveItems.push({ item_id: itemId, received_quantity: Math.min(receivedQty, expectedQty) })
+        if (receiveStatus === 'normal') {
+          // 正常收货，使用默认的发货数量
+          if (transferOrder?.items) {
+            transferOrder.items.forEach((item: any) => {
+              if (item.id) {
+                receiveItems.push({ item_id: item.id, received_quantity: item.quantity })
+              }
+            })
           }
-        })
+        } else {
+          // 异常收货，从输入框中收集实际收到的数量
+          const inputs = document.querySelectorAll('input[data-item-id]') as NodeListOf<HTMLInputElement>
+          inputs.forEach(input => {
+            const itemId = input.dataset.itemId
+            const expectedQty = parseInt(input.dataset.expectedQty || '0')
+            const receivedQty = parseInt(input.value) || 0
+            if (itemId) {
+              receiveItems.push({ item_id: itemId, received_quantity: Math.min(receivedQty, expectedQty) })
+            }
+          })
+        }
         
         completeParams.formData = {
           receive_status: receiveStatus === 'normal' ? 'normal' : 'exception',
@@ -2301,6 +2313,7 @@ export default function WorkflowDetailPage() {
                                   const el = e.target
                                   el.style.borderColor = val !== item.quantity ? 'border-orange-400' : 'border-gray-300'
                                 }}
+                                disabled={receiveStatus === 'normal'}
                                 data-item-id={item.id}
                                 data-expected-qty={item.quantity}
                               />
