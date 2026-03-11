@@ -18,6 +18,8 @@ interface TransferItem {
   notes: string | null
   shipping_images?: string[]
   receiving_images?: string[]
+  accessories?: any[]
+  accessory_desc?: string
 }
 
 interface TransferOrder {
@@ -28,7 +30,7 @@ interface TransferOrder {
   applicant: string
   applicant_id: string
   apply_date: string
-  
+
   from_location_type: 'warehouse' | 'project'
   from_warehouse_id: string | null
   from_warehouse_name: string | null
@@ -36,7 +38,7 @@ interface TransferOrder {
   from_project_name: string | null
   from_manager: string | null
   from_manager_id: string | null
-  
+
   to_location_type: 'warehouse' | 'project'
   to_warehouse_id: string | null
   to_warehouse_name: string | null
@@ -44,32 +46,32 @@ interface TransferOrder {
   to_project_name: string | null
   to_manager: string | null
   to_manager_id: string | null
-  
+
   total_items: number
   total_quantity: number
-  
+
   transfer_reason: string
   estimated_ship_date: string | null
   estimated_arrival_date: string | null
   transport_method: string | null
   tracking_no: string | null
   notes: string | null
-  
+
   status: string
-  
+
   from_approved_at: string | null
   from_approved_by: string | null
   from_approval_comment: string | null
-  
+
   to_approved_at: string | null
   to_approved_by: string | null
   to_approval_comment: string | null
-  
+
   shipped_at: string | null
   shipped_by: string | null
   shipping_no: string | null
   shipping_attachment: string | null
-  
+
   received_at: string | null
   received_by: string | null
   receive_status: string | null
@@ -78,10 +80,10 @@ interface TransferOrder {
   return_comment?: string | null
   returned_at?: string | null
   returned_by?: string | null
-  
+
   shipping_package_images?: string[]
   receiving_package_images?: string[]
-  
+
   items: TransferItem[]
 }
 
@@ -99,7 +101,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
   const [showReturnDialog, setShowReturnDialog] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [uploadingImages, setUploadingImages] = useState(false)
-  
+
   const [shippingData, setShippingData] = useState({
     shipped_at: '',
     shipping_no: '',
@@ -107,14 +109,14 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
     item_images: [] as { item_id: string; images: string[] }[],
     package_images: [] as string[]
   })
-  
+
   const [receivingData, setReceivingData] = useState({
     received_items: [] as { item_id: string; received_quantity: number }[],
     item_images: [] as { item_id: string; images: string[] }[],
     package_images: [] as string[],
     receive_comment: ''
   })
-  
+
   const [returnData, setReturnData] = useState({
     return_comment: ''
   })
@@ -132,9 +134,9 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const result = await response.json()
-      
+
       console.log('[EquipmentTransferForm] API response:', result)
-      
+
       if (result.success) {
         console.log('[EquipmentTransferForm] Order loaded:', result.data)
         console.log('[EquipmentTransferForm] Order items:', result.data?.items)
@@ -157,7 +159,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       formData.append('image', file)
       formData.append('image_type', 'transfer')
       formData.append('business_type', 'transfer')
-      
+
       const response = await fetch(`${API_URL.BASE}/api/equipment/images/upload`, {
         method: 'POST',
         headers: {
@@ -165,7 +167,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
         },
         body: formData
       })
-      
+
       const result = await response.json()
       if (result.success && result.data?.image_url) {
         return result.data.image_url
@@ -185,13 +187,13 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       const url = await handleImageUpload(files[i])
       if (url) urls.push(url)
     }
-    
+
     setShippingData(prev => {
       const existing = prev.item_images.find(img => img.item_id === itemId)
       if (existing) {
         return {
           ...prev,
-          item_images: prev.item_images.map(img => 
+          item_images: prev.item_images.map(img =>
             img.item_id === itemId ? { ...img, images: [...img.images, ...urls] } : img
           )
         }
@@ -209,7 +211,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       const url = await handleImageUpload(files[i])
       if (url) urls.push(url)
     }
-    
+
     setShippingData(prev => ({
       ...prev,
       package_images: [...prev.package_images, ...urls]
@@ -218,7 +220,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
 
   const handleConfirmShip = async () => {
     if (!order) return
-    
+
     setSubmitting(true)
     try {
       const token = localStorage.getItem('token')
@@ -236,7 +238,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
           package_images: shippingData.package_images
         })
       })
-      
+
       const result = await response.json()
       if (result.success) {
         alert('发货成功')
@@ -261,13 +263,13 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       const url = await handleImageUpload(files[i])
       if (url) urls.push(url)
     }
-    
+
     setReceivingData(prev => {
       const existing = prev.item_images.find(img => img.item_id === itemId)
       if (existing) {
         return {
           ...prev,
-          item_images: prev.item_images.map(img => 
+          item_images: prev.item_images.map(img =>
             img.item_id === itemId ? { ...img, images: [...img.images, ...urls] } : img
           )
         }
@@ -285,7 +287,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       const url = await handleImageUpload(files[i])
       if (url) urls.push(url)
     }
-    
+
     setReceivingData(prev => ({
       ...prev,
       package_images: [...prev.package_images, ...urls]
@@ -294,7 +296,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
 
   const handleConfirmReceive = async () => {
     if (!order) return
-    
+
     setSubmitting(true)
     try {
       const token = localStorage.getItem('token')
@@ -311,7 +313,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
           receive_comment: receivingData.receive_comment
         })
       })
-      
+
       const result = await response.json()
       if (result.success) {
         alert('收货成功')
@@ -332,7 +334,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
 
   const handleReturn = async () => {
     if (!order) return
-    
+
     setSubmitting(true)
     try {
       const token = localStorage.getItem('token')
@@ -346,7 +348,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
           return_comment: returnData.return_comment
         })
       })
-      
+
       const result = await response.json()
       if (result.success) {
         alert('已回退到发货状态')
@@ -367,7 +369,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
 
   const handleConfirmPartialReceive = async () => {
     if (!order) return
-    
+
     setSubmitting(true)
     try {
       const token = localStorage.getItem('token')
@@ -378,7 +380,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
           'Authorization': `Bearer ${token}`
         }
       })
-      
+
       const result = await response.json()
       if (result.success) {
         alert('已确认部分收货，调拨单完成')
@@ -427,7 +429,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       cancelled: 'bg-gray-100 text-gray-500',
       withdrawn: 'bg-gray-100 text-gray-500'
     }
-    
+
     const labels: Record<string, string> = {
       draft: '草稿',
       pending_from: '待调出方审批',
@@ -440,7 +442,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
       cancelled: '已取消',
       withdrawn: '已撤回'
     }
-    
+
     return (
       <span className={`px-3 py-1 rounded-full text-sm font-medium ${styles[status] || styles.draft}`}>
         {labels[status] || status}
@@ -559,26 +561,45 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">配件信息</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {order.items && order.items.length > 0 ? order.items.map(item => (
-                <tr key={item.id}>
-                  <td className="px-4 py-2">{item.equipment_name}</td>
-                  <td className="px-4 py-2">{item.model_no}</td>
-                  <td className="px-4 py-2">
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                      item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {getCategoryLabel(item.category)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">{item.manage_code || '-'}</td>
-                  <td className="px-4 py-2">{item.quantity} {item.unit}</td>
-                </tr>
+                <React.Fragment key={item.id}>
+                  <tr>
+                    <td className="px-4 py-2">{item.equipment_name}</td>
+                    <td className="px-4 py-2">{item.model_no}</td>
+                    <td className="px-4 py-2">
+                      <span className={`px-2 py-0.5 rounded text-xs ${item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                        item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                        {getCategoryLabel(item.category)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">{item.manage_code || '-'}</td>
+                    <td className="px-4 py-2 text-gray-600">
+                      {item.category !== 'instrument' ? (item.accessory_desc || '-') : '-'}
+                    </td>
+                    <td className="px-4 py-2">{item.quantity} {item.unit}</td>
+                  </tr>
+                  {item.category === 'instrument' && item.accessories && item.accessories.length > 0 && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={6} className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100">
+                        <div className="flex flex-wrap gap-x-6 gap-y-1">
+                          <span className="font-medium text-blue-600">仪器清单:</span>
+                          {item.accessories.map((acc: any, idx: number) => (
+                            <span key={idx} className="bg-white px-2 py-0.5 rounded border border-gray-200">
+                              {acc.accessory_name} ({acc.accessory_model || '通用'}) x{acc.accessory_quantity}{acc.accessory_unit || '个'}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               )) : (
                 <tr>
                   <td colSpan={5} className="px-4 py-4 text-center text-gray-500">
@@ -637,7 +658,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                 </div>
               )}
             </div>
-            
+
             {order.items.some(item => (item.shipping_images || []).length > 0) && (
               <div className="mb-4">
                 <div className="text-sm text-gray-500 mb-2">设备明细图片</div>
@@ -657,7 +678,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                 </div>
               </div>
             )}
-            
+
             {(order.shipping_package_images || []).length > 0 && (
               <div>
                 <div className="text-sm text-gray-500 mb-2">打包整体图片</div>
@@ -720,7 +741,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                   />
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">设备明细图片</h4>
                 <div className="space-y-4">
@@ -730,11 +751,10 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                         <div>
                           <span className="font-medium">{item.equipment_name}</span>
                           <span className="text-sm text-gray-500 ml-2">{item.model_no}</span>
-                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
-                            item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
                             item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>
+                              'bg-green-100 text-green-700'
+                            }`}>
                             {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
                           </span>
                           {item.category !== 'instrument' && <span className="text-sm text-gray-500 ml-2">x{item.quantity}</span>}
@@ -776,7 +796,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                   ))}
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">打包整体图片</h4>
                 <div className="flex flex-wrap gap-2">
@@ -898,11 +918,10 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                         <div className="flex-1">
                           <span className="font-medium">{item.equipment_name}</span>
                           <span className="text-sm text-gray-500 ml-2">{item.model_no}</span>
-                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
-                            item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
                             item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>
+                              'bg-green-100 text-green-700'
+                            }`}>
                             {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
                           </span>
                         </div>
@@ -941,7 +960,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                   })}
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">设备明细图片</h4>
                 <div className="space-y-4">
@@ -989,7 +1008,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                   ))}
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">打包整体图片</h4>
                 <div className="flex flex-wrap gap-2">
@@ -1019,7 +1038,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                   </label>
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">收货备注</label>
                 <textarea

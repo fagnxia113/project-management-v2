@@ -1,176 +1,174 @@
 import { Router, Request, Response } from 'express';
-import { TransferOrderService } from '../services/TransferOrderService.js';
+import { transferOrderServiceV2 as transferOrderService } from '../services/TransferOrderServiceV2.js';
 
 const router = Router();
-const transferOrderService = new TransferOrderService();
 
+/**
+ * POST /api/equipment/transfers
+ * 创建调拨单
+ */
 router.post('/', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 'system';
     const userName = (req as any).user?.name || '系统';
-    
-    console.log('[Transfer] Creating order:', JSON.stringify(req.body, null, 2));
-    console.log('[Transfer] User:', userId, userName);
-    
+
     const order = await transferOrderService.createOrder(req.body, userId, userName);
     res.status(201).json({ success: true, data: order });
   } catch (error: any) {
-    console.error('[Transfer] Error creating order:', error);
+    console.error('[TransferRoute] Error creating order:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * GET /api/equipment/transfers
+ * 分页获取调拨单列表
+ */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const pageSize = parseInt(req.query.pageSize as string) || 10;
-    const { status, from_project_id, to_project_id, applicant_id } = req.query;
-    
-    const result = await transferOrderService.getOrders({
+    const pageSize = parseInt(req.query.pageSize as string) || 20;
+    const { status, from_warehouse_id, from_project_id, to_warehouse_id, to_project_id, applicant_id, search } = req.query;
+
+    const result = await transferOrderService.getList({
       status: status as string,
+      from_warehouse_id: from_warehouse_id as string,
       from_project_id: from_project_id as string,
+      to_warehouse_id: to_warehouse_id as string,
       to_project_id: to_project_id as string,
       applicant_id: applicant_id as string,
+      search: search as string,
       page,
       pageSize
     });
-    
+
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * GET /api/equipment/transfers/:id
+ * 获取调拨单详情
+ */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const order = await transferOrderService.getById(req.params.id);
-    
+    const order = await transferOrderService.getById(req.params.id as string);
     if (!order) {
       return res.status(404).json({ success: false, error: '调拨单不存在' });
     }
-    
     res.json({ success: true, data: order });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * PUT /api/equipment/transfers/:id/submit
+ * 提交调拨单
+ */
 router.put('/:id/submit', async (req: Request, res: Response) => {
   try {
-    const order = await transferOrderService.submitOrder(req.params.id);
-    res.json({ success: true, data: order });
+    await transferOrderService.submitOrder(req.params.id as string);
+    res.json({ success: true, message: '提交成功' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * PUT /api/equipment/transfers/:id/approve
+ * 审批调拨单
+ */
 router.put('/:id/approve', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 'system';
     const userName = (req as any).user?.name || '系统';
-    const { approved, remark, approve_type } = req.body;
-    
+    const { approved, remark } = req.body;
+
     if (approved) {
-      if (approve_type === 'from') {
-        await transferOrderService.approveFromManager(req.params.id, userId, userName, remark);
-      } else if (approve_type === 'to') {
-        await transferOrderService.approveToManager(req.params.id, userId, userName, remark);
-      } else {
-        await transferOrderService.approveOrder(req.params.id, userId, userName, remark);
-      }
+      await transferOrderService.approveOrder(req.params.id as string, userId, userName, remark);
     } else {
-      await transferOrderService.rejectOrder(req.params.id, userId, userName, remark);
+      await transferOrderService.rejectOrder(req.params.id as string, userId, userName, remark);
     }
-    res.json({ success: true, message: '审批完成' });
+    res.json({ success: true, message: '操作完成' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * PUT /api/equipment/transfers/:id/ship
+ * 发货
+ */
 router.put('/:id/ship', async (req: Request, res: Response) => {
   try {
-    console.log('[TransferRoute] 发货API被调用:', req.params.id, req.body);
     const userId = (req as any).user?.id || 'system';
-    const userName = (req as any).user?.name || '系统';
     const { shipped_at, shipping_no, shipping_attachment, item_images, package_images } = req.body;
-    
-    console.log('[TransferRoute] 准备调用shipOrder方法');
-    const order = await transferOrderService.shipOrder(req.params.id, userId, userName, {
-      shipped_at,
+
+    const order = await transferOrderService.confirmShipping(req.params.id as string, {
       shipping_no,
+      shipped_by: userId,
+      shipped_at,
       shipping_attachment,
       item_images,
       package_images
     });
-    console.log('[TransferRoute] shipOrder方法执行完成');
     res.json({ success: true, data: order });
   } catch (error: any) {
-    console.error('[TransferRoute] 发货API错误:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * PUT /api/equipment/transfers/:id/receive
+ * 收货
+ */
 router.put('/:id/receive', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 'system';
-    const userName = (req as any).user?.name || '系统';
-    const { received_at, receive_status, receive_comment, item_images, package_images, received_items } = req.body;
-    
-    const success = await transferOrderService.confirmReceiving(
-      req.params.id, 
-      userId, 
-      receive_status || 'normal', 
+    const { receive_status, receive_comment, item_images, package_images, received_items } = req.body;
+
+    const success = await transferOrderService.confirmReceiving(req.params.id as string, {
+      received_by: userId,
+      receive_status,
       receive_comment,
       item_images,
       package_images,
       received_items
-    );
+    });
     res.json({ success, message: success ? '收货成功' : '收货失败' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.put('/:id/confirm-partial', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.id || 'system';
-    const success = await transferOrderService.confirmPartialReceive(req.params.id, userId);
-    res.json({ success, message: success ? '确认成功' : '确认失败' });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
+/**
+ * PUT /api/equipment/transfers/:id/return-to-shipping
+ * 从收货中状态回退到发货中
+ */
 router.put('/:id/return-to-shipping', async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || 'system';
     const { return_comment } = req.body;
-    
-    const success = await transferOrderService.returnToShipping(req.params.id, userId, return_comment);
+
+    const success = await transferOrderService.returnToShipping(req.params.id as string, userId, return_comment);
     res.json({ success, message: success ? '回退成功' : '回退失败' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+/**
+ * PUT /api/equipment/transfers/:id/cancel
+ * 取消调拨单
+ */
 router.put('/:id/cancel', async (req: Request, res: Response) => {
   try {
     const { reason } = req.body;
-    const order = await transferOrderService.cancelOrder(req.params.id, reason);
+    const order = await transferOrderService.cancelOrder(req.params.id as string, reason);
     res.json({ success: true, data: order });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.put('/:id/return', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.id || 'system';
-    const userName = (req as any).user?.name || '系统';
-    const { comment } = req.body;
-    
-    const success = await transferOrderService.returnOrder(req.params.id, userId, userName, comment);
-    res.json({ success, message: success ? '回退成功' : '回退失败' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

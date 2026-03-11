@@ -37,13 +37,16 @@ export default function ProjectListPage() {
   const loadProjects = async () => {
     try {
       setLoading(true)
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: '10',
         ...(searchTerm && { search: searchTerm })
       })
 
-      const response = await fetch(`${API_URL.PROJECTS.LIST}?${params}`)
+      const response = await fetch(`${API_URL.PROJECTS.LIST}?${params}`, { headers })
       const result = await response.json()
 
       if (result.success) {
@@ -67,8 +70,12 @@ export default function ProjectListPage() {
     if (!confirm('确定要删除此项目吗？')) return
 
     try {
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      
       const response = await fetch(API_URL.PROJECTS.DETAIL(id), {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
       })
 
       const result = await response.json()

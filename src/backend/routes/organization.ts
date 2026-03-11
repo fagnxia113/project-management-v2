@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { departmentService } from '../services/DepartmentService.js';
-import { positionService } from '../services/PositionService.js';
+import { departmentServiceV2 as departmentService } from '../services/DepartmentServiceV2.js';
+import { positionServiceV2 as positionService } from '../services/PositionServiceV2.js';
 import { thirdPartyConfigService, syncLogService } from '../services/ThirdPartyService.js';
 import { createWeChatWorkAdapter } from '../services/WeChatWorkAdapter.js';
 

@@ -64,6 +64,21 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     }
   }, [formData.warehouse_id])
 
+  useEffect(() => {
+    if (formData.items && Array.isArray(formData.items)) {
+      const total = formData.items.reduce((sum: number, item: any) => {
+        const quantity = item.quantity || 0
+        const price = item.purchase_price || 0
+        return sum + (quantity * price)
+      }, 0)
+      if (formData.total_price !== total) {
+        onChange('total_price', total)
+      }
+    } else if (formData.total_price !== 0) {
+      onChange('total_price', 0)
+    }
+  }, [formData.items])
+
   const loadWarehouseManager = async (warehouseId: string) => {
     try {
       console.log('开始加载仓库管理员，仓库ID:', warehouseId)
@@ -814,17 +829,29 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'number':
       case 'currency':
+        const isFieldDisabled = isReadonly || field.disabled
+        if (field.name === 'total_price') {
+          return fieldWrapper(
+            <input
+              type="text"
+              value={value || '0'}
+              readOnly
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+            />
+          )
+        }
         return fieldWrapper(
           <input
             type="number"
             value={value}
             onChange={(e) => onChange(field.name, e.target.value ? Number(e.target.value) : '')}
             placeholder={field.placeholder || `请输入${field.label}`}
-            readOnly={isReadonly}
+            readOnly={isFieldDisabled}
+            disabled={isFieldDisabled}
             min={field.validation?.min}
             max={field.validation?.max}
             className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              isFieldDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
           />
         )
@@ -861,10 +888,20 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         let displayValue = value ?? ''
 
         // 优先使用动态选项（通过 props 传递）
-        if (field.name === 'department_id' && Object.keys(departmentMap).length > 0) {
-          selectOptions = Object.entries(departmentMap).map(([id, name]) => ({ label: name, value: id }))
-        } else if (field.name === 'position_id' && Object.keys(positionMap).length > 0) {
-          selectOptions = Object.entries(positionMap).map(([id, name]) => ({ label: name, value: id }))
+        if (field.name === 'department_id') {
+          if (Object.keys(departmentMap).length > 0) {
+            selectOptions = Object.entries(departmentMap).map(([id, name]) => ({ label: name, value: id }))
+          }
+          if (value && departmentMap[value]) {
+            displayValue = departmentMap[value]
+          }
+        } else if (field.name === 'position_id') {
+          if (Object.keys(positionMap).length > 0) {
+            selectOptions = Object.entries(positionMap).map(([id, name]) => ({ label: name, value: id }))
+          }
+          if (value && positionMap[value]) {
+            displayValue = positionMap[value]
+          }
         } else if (field.name === 'manager_id' || field.name === 'technical_lead_id') {
           // 项目负责人字段使用用户映射
           if (Object.keys(userMap).length > 0) {

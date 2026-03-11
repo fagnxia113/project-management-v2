@@ -2,8 +2,8 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { equipmentImageService } from '../services/EquipmentImageService.js';
-import { equipmentAccessoryService } from '../services/EquipmentAccessoryService.js';
+import { equipmentImageServiceV2 as equipmentImageService } from '../services/EquipmentImageServiceV2.js';
+import { equipmentAccessoryServiceV2 as equipmentAccessoryService } from '../services/EquipmentAccessoryServiceV2.js';
 
 const router = Router();
 

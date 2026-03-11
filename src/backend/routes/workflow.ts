@@ -892,7 +892,7 @@ router.post('/form-presets/:id/start', async (req: Request, res: Response) => {
     if (result.success) {
       res.status(201).json({ success: true, data: result.data, message: result.message });
     } else {
-      res.status(400).json({ success: false, error: result.message, data: result.data });
+      res.status(400).json({ success: false, message: result.message, error: result.message, data: result.data });
     }
   } catch (error: any) {
     res.status(500).json({ error: error.message });

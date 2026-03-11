@@ -1,0 +1,2455 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model approval_flow_templates {
+  id            String                                @id @db.VarChar(36)
+  name          String                                @db.VarChar(200)
+  category      String                                @db.VarChar(50)
+  category_name String?                               @db.VarChar(50)
+  entity_type   String                                @db.VarChar(50)
+  entity_name   String?                               @db.VarChar(100)
+  status        approval_flow_templates_status?       @default(active)
+  trigger_type  approval_flow_templates_trigger_type? @default(create)
+  create_route  String?                               @db.VarChar(255)
+  nodes         Json?
+  form_fields   Json?
+  description   String?                               @db.Text
+  created_at    DateTime?                             @default(now()) @db.Timestamp(0)
+  updated_at    DateTime?                             @default(now()) @db.Timestamp(0)
+
+  @@index([category], map: "idx_category")
+  @@index([entity_type], map: "idx_entity_type")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model approval_orders {
+  id           String                     @id @db.VarChar(36)
+  order_type   approval_orders_order_type
+  title        String                     @db.VarChar(200)
+  applicant_id String                     @db.VarChar(36)
+  target_id    String?                    @db.VarChar(36)
+  from_id      String?                    @db.VarChar(36)
+  to_id        String?                    @db.VarChar(36)
+  form_data    Json?
+  status       approval_orders_status?    @default(pending)
+  wecom_sp_no  String?                    @db.VarChar(100)
+  created_at   DateTime?                  @default(now()) @db.Timestamp(0)
+  updated_at   DateTime?                  @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model approval_rules {
+  id             String    @id @db.VarChar(36)
+  rule_name      String    @db.VarChar(200)
+  entity_type    String    @db.VarChar(50)
+  rule_condition Json
+  rule_nodes     Json
+  priority       Int?      @default(0)
+  enabled        Int?      @default(1) @db.TinyInt
+  description    String?   @db.Text
+  created_at     DateTime? @default(now()) @db.Timestamp(0)
+  updated_at     DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([enabled], map: "idx_enabled")
+  @@index([entity_type], map: "idx_entity_type")
+  @@index([priority], map: "idx_priority")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model approvals {
+  id                   String            @id @db.VarChar(36)
+  type                 String            @db.VarChar(50)
+  subtype              String?           @db.VarChar(100)
+  title                String            @db.VarChar(300)
+  applicant            String            @db.VarChar(100)
+  applicant_id         String            @db.VarChar(36)
+  target_id            String?           @db.VarChar(36)
+  target_name          String?           @db.VarChar(300)
+  reason               String?           @db.Text
+  form_data            Json?
+  status               approvals_status? @default(pending)
+  current_node         String?           @db.VarChar(100)
+  nodes                Json?
+  audit_logs           Json?
+  workflow_instance_id String?           @db.VarChar(36)
+  created_at           DateTime?         @default(now()) @db.Timestamp(0)
+  updated_at           DateTime?         @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([created_at], map: "idx_created_at")
+  @@index([status], map: "idx_status")
+  @@index([type], map: "idx_type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model customers {
+  id                      String                    @id @db.VarChar(36)
+  customer_no             String                    @unique(map: "customer_no") @db.VarChar(50)
+  name                    String                    @db.VarChar(200)
+  contact                 String                    @db.VarChar(100)
+  phone                   String                    @db.VarChar(20)
+  address                 String?                   @db.Text
+  created_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                 @default(now()) @db.Timestamp(0)
+  type                    customers_type?           @default(direct)
+  project_proposal_orders project_proposal_orders[]
+  projects                projects[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model daily_report_reminders {
+  id             String                         @id @db.VarChar(36)
+  project_id     String?                        @db.VarChar(36)
+  reminder_date  DateTime                       @db.Date
+  reminder_time  DateTime                       @db.Time(0)
+  total_reminded Int?                           @default(0)
+  status         daily_report_reminders_status? @default(pending)
+  details        Json?
+  created_at     DateTime?                      @default(now()) @db.Timestamp(0)
+
+  @@index([project_id], map: "idx_project")
+  @@index([reminder_date], map: "idx_reminder_date")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model daily_reports {
+  id                String                @id @db.VarChar(36)
+  employee_id       String                @db.VarChar(36)
+  report_date       DateTime              @db.Date
+  summary           String                @db.Text
+  plan              String?               @db.Text
+  problems          String?               @db.Text
+  status            daily_reports_status? @default(pending)
+  reviewer_id       String?               @db.VarChar(36)
+  reviewed_at       DateTime?             @db.Timestamp(0)
+  created_at        DateTime?             @default(now()) @db.Timestamp(0)
+  employees         employees             @relation(fields: [employee_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "daily_reports_ibfk_1")
+  timesheet_entries timesheet_entries[]
+
+  @@index([report_date], map: "idx_daily_reports_report_date")
+  @@index([status], map: "idx_daily_reports_status")
+  @@index([report_date], map: "idx_date")
+  @@index([employee_id], map: "idx_employee")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model departments {
+  id                 String              @id @db.VarChar(36)
+  code               String              @unique(map: "code") @db.VarChar(50)
+  name               String              @db.VarChar(100)
+  parent_id          String?             @db.VarChar(36)
+  manager_id         String?             @db.VarChar(36)
+  manager_name       String?             @db.VarChar(100)
+  level              Int?                @default(1)
+  path               String?             @db.VarChar(500)
+  sort_order         Int?                @default(0)
+  status             departments_status? @default(active)
+  description        String?             @db.Text
+  third_party_id     String?             @db.VarChar(100)
+  third_party_source String?             @db.VarChar(50)
+  created_at         DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?           @default(now()) @db.Timestamp(0)
+  employees          employees?          @relation(fields: [manager_id], references: [id], onUpdate: NoAction, map: "fk_dept_manager")
+  departments        departments?        @relation("departmentsTodepartments", fields: [parent_id], references: [id], onUpdate: NoAction, map: "fk_dept_parent")
+  other_departments  departments[]       @relation("departmentsTodepartments")
+  positions          positions[]
+
+  @@index([level], map: "idx_level")
+  @@index([manager_id], map: "idx_manager")
+  @@index([parent_id], map: "idx_parent")
+  @@index([status], map: "idx_status")
+  @@index([third_party_id, third_party_source], map: "idx_third_party")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model employee_offboard_orders {
+  id                                                         String                                 @id @db.VarChar(36)
+  order_no                                                   String                                 @unique(map: "order_no") @db.VarChar(50)
+  applicant_id                                               String                                 @db.VarChar(36)
+  applicant                                                  String                                 @db.VarChar(100)
+  apply_date                                                 DateTime                               @db.Date
+  employee_id                                                String                                 @db.VarChar(36)
+  employee_name                                              String?                                @db.VarChar(100)
+  department                                                 String?                                @db.VarChar(100)
+  position                                                   String?                                @db.VarChar(100)
+  hire_date                                                  DateTime?                              @db.Date
+  offboard_type                                              employee_offboard_orders_offboard_type
+  offboard_reason                                            String                                 @db.Text
+  expected_offboard_date                                     DateTime                               @db.Date
+  handover_person_id                                         String?                                @db.VarChar(36)
+  handover_person                                            String?                                @db.VarChar(100)
+  actual_offboard_date                                       DateTime?                              @db.Date
+  status                                                     employee_offboard_orders_status?       @default(draft)
+  approval_id                                                String?                                @db.VarChar(36)
+  approved_at                                                DateTime?                              @db.Timestamp(0)
+  approved_by                                                String?                                @db.VarChar(36)
+  created_at                                                 DateTime?                              @default(now()) @db.Timestamp(0)
+  updated_at                                                 DateTime?                              @default(now()) @db.Timestamp(0)
+  employees_employee_offboard_orders_applicant_idToemployees employees                              @relation("employee_offboard_orders_applicant_idToemployees", fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_offboard_applicant")
+  employees_employee_offboard_orders_employee_idToemployees  employees                              @relation("employee_offboard_orders_employee_idToemployees", fields: [employee_id], references: [id], onUpdate: NoAction, map: "fk_offboard_employee")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([employee_id], map: "idx_employee")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model employee_onboard_orders {
+  id                  String                                @id @db.VarChar(36)
+  order_no            String                                @unique(map: "order_no") @db.VarChar(50)
+  applicant_id        String                                @db.VarChar(36)
+  applicant           String                                @db.VarChar(100)
+  apply_date          DateTime                              @db.Date
+  name                String                                @db.VarChar(100)
+  gender              employee_onboard_orders_gender?
+  phone               String                                @db.VarChar(20)
+  email               String?                               @db.VarChar(100)
+  id_card             String                                @db.VarChar(18)
+  department          String                                @db.VarChar(100)
+  position            String                                @db.VarChar(100)
+  hire_date           DateTime                              @db.Date
+  employee_type       employee_onboard_orders_employee_type
+  employee_no         String?                               @db.VarChar(50)
+  created_employee_id String?                               @db.VarChar(36)
+  status              employee_onboard_orders_status?       @default(draft)
+  approval_id         String?                               @db.VarChar(36)
+  approved_at         DateTime?                             @db.Timestamp(0)
+  approved_by         String?                               @db.VarChar(36)
+  created_at          DateTime?                             @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?                             @default(now()) @db.Timestamp(0)
+  employees           employees                             @relation(fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_onboard_applicant")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([department], map: "idx_department")
+  @@index([order_no], map: "idx_employee_onboard_orders_order_no")
+  @@index([status], map: "idx_employee_onboard_orders_status")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model employee_transfer_orders {
+  id                                                         String                                 @id @db.VarChar(36)
+  order_no                                                   String                                 @unique(map: "order_no") @db.VarChar(50)
+  applicant_id                                               String                                 @db.VarChar(36)
+  applicant                                                  String                                 @db.VarChar(100)
+  apply_date                                                 DateTime                               @db.Date
+  employee_id                                                String                                 @db.VarChar(36)
+  employee_name                                              String?                                @db.VarChar(100)
+  from_department                                            String?                                @db.VarChar(100)
+  from_position                                              String?                                @db.VarChar(100)
+  transfer_type                                              employee_transfer_orders_transfer_type
+  to_department                                              String                                 @db.VarChar(100)
+  to_position                                                String                                 @db.VarChar(100)
+  transfer_reason                                            String                                 @db.Text
+  effective_date                                             DateTime                               @db.Date
+  status                                                     employee_transfer_orders_status?       @default(draft)
+  approval_id                                                String?                                @db.VarChar(36)
+  approved_at                                                DateTime?                              @db.Timestamp(0)
+  approved_by                                                String?                                @db.VarChar(36)
+  created_at                                                 DateTime?                              @default(now()) @db.Timestamp(0)
+  updated_at                                                 DateTime?                              @default(now()) @db.Timestamp(0)
+  employees_employee_transfer_orders_applicant_idToemployees employees                              @relation("employee_transfer_orders_applicant_idToemployees", fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_transfer_order_applicant")
+  employees_employee_transfer_orders_employee_idToemployees  employees                              @relation("employee_transfer_orders_employee_idToemployees", fields: [employee_id], references: [id], onUpdate: NoAction, map: "fk_transfer_order_employee")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([employee_id], map: "idx_employee")
+  @@index([employee_id], map: "idx_employee_transfer_orders_employee")
+  @@index([order_no], map: "idx_employee_transfer_orders_order_no")
+  @@index([status], map: "idx_employee_transfer_orders_status")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model employees {
+  id                                                                                          String                              @id @db.VarChar(36)
+  employee_no                                                                                 String?                             @unique(map: "employee_no") @db.VarChar(50)
+  name                                                                                        String                              @db.VarChar(100)
+  gender                                                                                      employees_gender?
+  phone                                                                                       String                              @db.VarChar(20)
+  email                                                                                       String?                             @db.VarChar(100)
+  department_id                                                                               String?                             @db.VarChar(36)
+  position                                                                                    String                              @db.VarChar(100)
+  status                                                                                      employees_status?                   @default(active)
+  current_status                                                                              employees_current_status?           @default(on_duty)
+  hire_date                                                                                   DateTime                            @db.Date
+  leave_date                                                                                  DateTime?                           @db.Date
+  role                                                                                        employees_role?                     @default(user)
+  daily_cost                                                                                  Decimal?                            @db.Decimal(10, 2)
+  skills                                                                                      Json?
+  avatar_color                                                                                String?                             @db.VarChar(20)
+  created_at                                                                                  DateTime?                           @default(now()) @db.Timestamp(0)
+  updated_at                                                                                  DateTime?                           @default(now()) @db.Timestamp(0)
+  user_id                                                                                     String?                             @db.VarChar(36)
+  daily_reports                                                                               daily_reports[]
+  departments                                                                                 departments[]
+  employee_offboard_orders_employee_offboard_orders_applicant_idToemployees                   employee_offboard_orders[]          @relation("employee_offboard_orders_applicant_idToemployees")
+  employee_offboard_orders_employee_offboard_orders_employee_idToemployees                    employee_offboard_orders[]          @relation("employee_offboard_orders_employee_idToemployees")
+  employee_onboard_orders                                                                     employee_onboard_orders[]
+  employee_transfer_orders_employee_transfer_orders_applicant_idToemployees                   employee_transfer_orders[]          @relation("employee_transfer_orders_applicant_idToemployees")
+  employee_transfer_orders_employee_transfer_orders_employee_idToemployees                    employee_transfer_orders[]          @relation("employee_transfer_orders_employee_idToemployees")
+  leave_requests                                                                              leave_requests[]
+  project_completion_orders                                                                   project_completion_orders[]
+  project_personnel_transfer_orders_project_personnel_transfer_orders_applicant_idToemployees project_personnel_transfer_orders[] @relation("project_personnel_transfer_orders_applicant_idToemployees")
+  project_personnel_transfer_orders_project_personnel_transfer_orders_employee_idToemployees  project_personnel_transfer_orders[] @relation("project_personnel_transfer_orders_employee_idToemployees")
+  project_proposal_orders_project_proposal_orders_applicant_idToemployees                     project_proposal_orders[]           @relation("project_proposal_orders_applicant_idToemployees")
+  project_proposal_orders_project_proposal_orders_manager_idToemployees                       project_proposal_orders[]           @relation("project_proposal_orders_manager_idToemployees")
+  projects_projects_technical_lead_idToemployees                                              projects[]                          @relation("projects_technical_lead_idToemployees")
+  projects_projects_manager_idToemployees                                                     projects[]                          @relation("projects_manager_idToemployees")
+  task_completion_orders                                                                      task_completion_orders[]
+
+  @@index([department_id], map: "idx_dept")
+  @@index([user_id], map: "idx_employees_user_id")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_accessories {
+  id                 String                                    @id @db.VarChar(36)
+  host_equipment_id  String                                    @db.VarChar(36)
+  accessory_id       String                                    @db.VarChar(36)
+  accessory_name     String?                                   @db.VarChar(200)
+  accessory_model    String?                                   @db.VarChar(100)
+  accessory_category equipment_accessories_accessory_category?
+  quantity           Int?                                      @default(1)
+  is_required        Boolean?                                  @default(false)
+  notes              String?                                   @db.Text
+  created_at         DateTime?                                 @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                                 @default(now()) @db.Timestamp(0)
+
+  @@unique([host_equipment_id, accessory_id], map: "uk_host_accessory")
+  @@index([accessory_id], map: "idx_accessory")
+  @@index([host_equipment_id], map: "idx_host_equipment")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_accessory_instances {
+  id                String                                         @id @db.VarChar(36)
+  accessory_name    String                                         @db.VarChar(200)
+  model_no          String?                                        @db.VarChar(100)
+  brand             String?                                        @db.VarChar(100)
+  category          equipment_accessory_instances_category
+  unit              String?                                        @default("个") @db.VarChar(20)
+  quantity          Int?                                           @default(1)
+  serial_number     String?                                        @db.VarChar(100)
+  manage_code       String?                                        @unique(map: "manage_code") @db.VarChar(50)
+  health_status     equipment_accessory_instances_health_status?   @default(normal)
+  usage_status      equipment_accessory_instances_usage_status?    @default(idle)
+  location_status   equipment_accessory_instances_location_status? @default(warehouse)
+  location_id       String?                                        @db.VarChar(36)
+  host_equipment_id String?                                        @db.VarChar(36)
+  keeper_id         String?                                        @db.VarChar(36)
+  purchase_date     DateTime?                                      @db.Date
+  purchase_price    Decimal?                                       @db.Decimal(12, 2)
+  notes             String?                                        @db.Text
+  created_at        DateTime?                                      @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                                      @default(now()) @db.Timestamp(0)
+
+  @@index([accessory_name, model_no], map: "idx_accessory_name")
+  @@index([host_equipment_id], map: "idx_host_equipment")
+  @@index([location_status, location_id], map: "idx_location")
+}
+
+model equipment_images {
+  id           String                      @id @db.VarChar(36)
+  equipment_id String                      @db.VarChar(36)
+  image_type   equipment_images_image_type @default(main)
+  image_url    String                      @db.VarChar(500)
+  image_name   String?                     @db.VarChar(200)
+  image_size   Int?
+  created_at   DateTime?                   @default(now()) @db.Timestamp(0)
+
+  @@index([equipment_id], map: "idx_equipment_id")
+  @@index([image_type], map: "idx_image_type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_inbound_items {
+  id                       String                            @id @db.VarChar(36)
+  order_id                 String                            @db.VarChar(36)
+  equipment_name           String?                           @db.VarChar(200)
+  serial_number            String?                           @db.VarChar(100)
+  model_name               String?                           @db.VarChar(100)
+  model_no                 String?                           @db.VarChar(100)
+  manufacturer             String?                           @db.VarChar(200)
+  technical_params         String?                           @db.Text
+  item_notes               String?                           @db.Text
+  brand                    String?                           @db.VarChar(100)
+  accessory_desc           String?                           @db.Text
+  technical_doc            String?                           @db.Text
+  attachment               String?                           @db.VarChar(500)
+  status                   equipment_inbound_items_status?   @default(pending)
+  created_at               DateTime?                         @default(now()) @db.Timestamp(0)
+  updated_at               DateTime?                         @default(now()) @db.Timestamp(0)
+  category                 equipment_inbound_items_category?
+  unit                     String?                           @default("台") @db.VarChar(20)
+  quantity                 Int?                              @default(1)
+  purchase_price           Decimal?                          @default(0.00) @db.Decimal(12, 2)
+  certificate_expiry_date  DateTime?                         @db.Date
+  certificate_no           String?                           @db.VarChar(100)
+  certificate_issuer       String?                           @db.VarChar(200)
+  serial_numbers           String?                           @db.Text
+  equipment_inbound_orders equipment_inbound_orders          @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "equipment_inbound_items_ibfk_1")
+
+  @@index([order_id], map: "idx_order_id")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_inbound_orders {
+  id                              String                                           @id @db.VarChar(36)
+  order_no                        String                                           @unique(map: "order_no") @db.VarChar(50)
+  inbound_type                    equipment_inbound_orders_inbound_type?           @default(purchase)
+  applicant_id                    String                                           @db.VarChar(36)
+  applicant                       String                                           @db.VarChar(100)
+  apply_date                      DateTime                                         @db.Date
+  warehouse_id                    String                                           @db.VarChar(36)
+  warehouse_name                  String?                                          @db.VarChar(200)
+  equipment_id                    String?                                          @db.VarChar(36)
+  equipment_code                  String?                                          @db.VarChar(50)
+  equipment_name                  String?                                          @db.VarChar(200)
+  new_equipment_name              String?                                          @db.VarChar(200)
+  new_equipment_model             String?                                          @db.VarChar(100)
+  new_equipment_category          equipment_inbound_orders_new_equipment_category?
+  new_equipment_serial            String?                                          @db.VarChar(100)
+  new_equipment_manufacturer      String?                                          @db.VarChar(200)
+  new_equipment_price             Decimal?                                         @db.Decimal(12, 2)
+  new_equipment_purchase_date     DateTime?                                        @db.Date
+  new_equipment_calibration_cycle Int?
+  inbound_reason                  String                                           @db.Text
+  notes                           String?                                          @db.Text
+  status                          equipment_inbound_orders_status?                 @default(draft)
+  approval_id                     String?                                          @db.VarChar(36)
+  approved_at                     DateTime?                                        @db.Timestamp(0)
+  approved_by                     String?                                          @db.VarChar(36)
+  created_at                      DateTime?                                        @default(now()) @db.Timestamp(0)
+  updated_at                      DateTime?                                        @default(now()) @db.Timestamp(0)
+  supplier                        String?                                          @db.VarChar(200)
+  purchase_date                   DateTime?                                        @db.Date
+  total_amount                    Decimal?                                         @default(0.00) @db.Decimal(12, 2)
+  total_quantity                  Int?                                             @default(0)
+  items_json                      String?                                          @db.Text
+  equipment_inbound_items         equipment_inbound_items[]
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([order_no], map: "idx_order_no")
+  @@index([status], map: "idx_status")
+  @@index([warehouse_id], map: "idx_warehouse")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_instances {
+  id                 String                               @id @db.VarChar(36)
+  model_id           String                               @db.VarChar(36)
+  serial_number      String?                              @db.VarChar(100)
+  factory_serial_no  String?                              @db.VarChar(100)
+  manage_code        String                               @unique(map: "manage_code") @db.VarChar(50)
+  quantity           Int?                                 @default(1)
+  health_status      equipment_instances_health_status?   @default(normal)
+  usage_status       equipment_instances_usage_status?    @default(idle)
+  location_status    equipment_instances_location_status? @default(warehouse)
+  location_id        String?                              @db.VarChar(36)
+  keeper_id          String?                              @db.VarChar(36)
+  purchase_date      DateTime?                            @db.Date
+  purchase_price     Decimal?                             @db.Decimal(12, 2)
+  calibration_expiry DateTime?                            @db.Date
+  certificate_no     String?                              @db.VarChar(100)
+  certificate_issuer String?                              @db.VarChar(200)
+  accessory_desc     String?                              @db.Text
+  notes              String?                              @db.Text
+  technical_doc      String?                              @db.Text
+  attachment         String?                              @db.VarChar(500)
+  accessories        Json?
+  created_at         DateTime?                            @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                            @default(now()) @db.Timestamp(0)
+  has_accessories    Boolean?                             @default(false)
+  accessory_count    Int?                                 @default(0)
+  manufacturer       String?                              @db.VarChar(200)
+  technical_params   String?                              @db.Text
+  equipment_models   equipment_models                     @relation(fields: [model_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "equipment_instances_ibfk_1")
+
+  @@index([health_status], map: "idx_health")
+  @@index([location_id], map: "idx_location")
+  @@index([model_id], map: "idx_model")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_models {
+  id                  String                    @id @db.VarChar(36)
+  category            equipment_models_category
+  name                String                    @db.VarChar(200)
+  model_no            String                    @db.VarChar(100)
+  brand               String?                   @db.VarChar(100)
+  manufacturer        String?                   @db.VarChar(200)
+  unit                String?                   @default("台") @db.VarChar(20)
+  technical_params    String?                   @db.Text
+  calibration_cycle   Int?                      @default(12)
+  created_at          DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?                 @default(now()) @db.Timestamp(0)
+  equipment_instances equipment_instances[]
+
+  @@index([name], map: "idx_name")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_outbound_orders {
+  id                  String                                  @id @db.VarChar(36)
+  order_no            String                                  @unique(map: "order_no") @db.VarChar(50)
+  outbound_type       equipment_outbound_orders_outbound_type
+  applicant_id        String                                  @db.VarChar(36)
+  applicant           String                                  @db.VarChar(100)
+  apply_date          DateTime                                @db.Date
+  warehouse_id        String                                  @db.VarChar(36)
+  warehouse_name      String?                                 @db.VarChar(200)
+  equipment_id        String                                  @db.VarChar(36)
+  equipment_code      String?                                 @db.VarChar(50)
+  equipment_name      String?                                 @db.VarChar(200)
+  equipment_category  String?                                 @db.VarChar(50)
+  target_project_id   String?                                 @db.VarChar(36)
+  target_project_name String?                                 @db.VarChar(200)
+  repair_unit         String?                                 @db.VarChar(200)
+  outbound_reason     String                                  @db.Text
+  notes               String?                                 @db.Text
+  status              equipment_outbound_orders_status?       @default(draft)
+  approval_id         String?                                 @db.VarChar(36)
+  approved_at         DateTime?                               @db.Timestamp(0)
+  approved_by         String?                                 @db.VarChar(36)
+  created_at          DateTime?                               @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?                               @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([target_project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+  @@index([warehouse_id], map: "idx_warehouse")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_repair_orders {
+  id                      String                                 @id @db.VarChar(36)
+  order_no                String                                 @unique(map: "order_no") @db.VarChar(50)
+  applicant_id            String                                 @db.VarChar(36)
+  applicant               String                                 @db.VarChar(100)
+  apply_date              DateTime                               @db.Date
+  equipment_id            String                                 @db.VarChar(36)
+  equipment_code          String?                                @db.VarChar(50)
+  equipment_name          String?                                @db.VarChar(200)
+  equipment_category      String?                                @db.VarChar(50)
+  current_host_status     String?                                @db.VarChar(50)
+  fault_description       String                                 @db.Text
+  fault_cause             String?                                @db.Text
+  repair_type             equipment_repair_orders_repair_type
+  repair_unit             String?                                @db.VarChar(200)
+  estimated_cost          Decimal?                               @default(0.00) @db.Decimal(12, 2)
+  actual_cost             Decimal?                               @default(0.00) @db.Decimal(12, 2)
+  repair_result           equipment_repair_orders_repair_result?
+  repair_completed_at     DateTime?                              @db.Timestamp(0)
+  repair_description      String?                                @db.Text
+  status                  equipment_repair_orders_status?        @default(draft)
+  approval_id             String?                                @db.VarChar(36)
+  approved_at             DateTime?                              @db.Timestamp(0)
+  approved_by             String?                                @db.VarChar(36)
+  created_at              DateTime?                              @default(now()) @db.Timestamp(0)
+  updated_at              DateTime?                              @default(now()) @db.Timestamp(0)
+  repair_quantity         Int?
+  original_location_type  String?                                @db.VarChar(50)
+  original_location_id    String?                                @db.VarChar(36)
+  repair_service_provider String?                                @db.VarChar(200)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([equipment_id], map: "idx_equipment_repair_orders_equipment")
+  @@index([order_no], map: "idx_equipment_repair_orders_order_no")
+  @@index([status], map: "idx_equipment_repair_orders_status")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_scrap_orders {
+  id                 String                                  @id @db.VarChar(36)
+  order_no           String                                  @unique(map: "order_no") @db.VarChar(50)
+  applicant_id       String                                  @db.VarChar(36)
+  applicant          String                                  @db.VarChar(100)
+  apply_date         DateTime                                @db.Date
+  equipment_id       String                                  @db.VarChar(36)
+  equipment_code     String?                                 @db.VarChar(50)
+  equipment_name     String?                                 @db.VarChar(200)
+  equipment_category String?                                 @db.VarChar(50)
+  purchase_date      DateTime?                               @db.Date
+  purchase_price     Decimal?                                @db.Decimal(12, 2)
+  used_years         Decimal?                                @db.Decimal(3, 1)
+  scrap_reason       String                                  @db.Text
+  residual_value     Decimal?                                @default(0.00) @db.Decimal(12, 2)
+  disposal_method    equipment_scrap_orders_disposal_method?
+  disposed_at        DateTime?                               @db.Timestamp(0)
+  disposal_notes     String?                                 @db.Text
+  status             equipment_scrap_orders_status?          @default(draft)
+  approval_id        String?                                 @db.VarChar(36)
+  approved_at        DateTime?                               @db.Timestamp(0)
+  approved_by        String?                                 @db.VarChar(36)
+  created_at         DateTime?                               @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                               @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([equipment_id], map: "idx_equipment_scrap_orders_equipment")
+  @@index([order_no], map: "idx_equipment_scrap_orders_order_no")
+  @@index([status], map: "idx_equipment_scrap_orders_status")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_transfer_details {
+  id                 String                             @id @db.VarChar(36)
+  transfer_id        String                             @db.VarChar(36)
+  equipment_id       String?                            @db.VarChar(36)
+  equipment_name     String?                            @db.VarChar(200)
+  equipment_code     String?                            @db.VarChar(50)
+  model              String?                            @db.VarChar(100)
+  serial_number      String?                            @db.VarChar(100)
+  host_status        String?                            @db.VarChar(50)
+  accessories_status String?                            @db.Text
+  unit               String?                            @db.VarChar(20)
+  image_url          String?                            @db.Text
+  requested_quantity Int?                               @default(1)
+  approved_quantity  Int?                               @default(0)
+  actual_quantity    Int?                               @default(0)
+  reason             String?                            @db.Text
+  notes              String?                            @db.Text
+  status             equipment_transfer_details_status? @default(pending)
+  created_at         DateTime?                          @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                          @default(now()) @db.Timestamp(0)
+
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([status], map: "idx_status")
+  @@index([transfer_id], map: "idx_transfer")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_transfer_order_items {
+  id                String                                  @id @db.VarChar(36)
+  order_id          String                                  @db.VarChar(36)
+  equipment_id      String?                                 @db.VarChar(36)
+  equipment_name    String                                  @db.VarChar(200)
+  model_no          String?                                 @db.VarChar(100)
+  brand             String?                                 @db.VarChar(100)
+  category          equipment_transfer_order_items_category
+  unit              String?                                 @default("台") @db.VarChar(20)
+  manage_code       String?                                 @db.VarChar(50)
+  serial_number     String?                                 @db.VarChar(100)
+  quantity          Int                                     @default(1)
+  received_quantity Int?                                    @default(0)
+  status            equipment_transfer_order_items_status?  @default(pending)
+  notes             String?                                 @db.Text
+  shipping_images   Json?
+  receiving_images  Json?
+  created_at        DateTime?                               @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                               @default(now()) @db.Timestamp(0)
+  accessory_info    Json?
+  accessory_desc    String?                                 @db.Text
+
+  @@index([equipment_id], map: "idx_equipment_id")
+  @@index([order_id], map: "idx_order_id")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_transfer_orders {
+  id                       String                                        @id @db.VarChar(36)
+  order_no                 String                                        @unique(map: "order_no") @db.VarChar(50)
+  transfer_scene           equipment_transfer_orders_transfer_scene
+  transfer_type            equipment_transfer_orders_transfer_type?      @default(single)
+  total_items              Int?                                          @default(1)
+  total_requested_quantity Int?                                          @default(0)
+  total_approved_quantity  Int?                                          @default(0)
+  applicant_id             String                                        @db.VarChar(36)
+  applicant                String?                                       @db.VarChar(100)
+  apply_date               DateTime?                                     @db.Date
+  from_location_type       equipment_transfer_orders_from_location_type?
+  from_warehouse_id        String?                                       @db.VarChar(36)
+  from_warehouse_name      String?                                       @db.VarChar(200)
+  from_project_id          String?                                       @db.VarChar(36)
+  from_project_name        String?                                       @db.VarChar(200)
+  to_location_type         equipment_transfer_orders_to_location_type
+  to_warehouse_id          String?                                       @db.VarChar(36)
+  to_warehouse_name        String?                                       @db.VarChar(200)
+  to_project_id            String?                                       @db.VarChar(36)
+  to_project_name          String?                                       @db.VarChar(200)
+  transfer_reason          String?                                       @db.Text
+  status                   equipment_transfer_orders_status?             @default(pending_from)
+  notes                    String?                                       @db.Text
+  created_at               DateTime?                                     @default(now()) @db.Timestamp(0)
+  updated_at               DateTime?                                     @default(now()) @db.Timestamp(0)
+  shipping_package_images  Json?
+  receiving_package_images Json?
+  from_manager_id          String?                                       @db.VarChar(36)
+  from_manager             String?                                       @db.VarChar(100)
+  to_manager_id            String?                                       @db.VarChar(36)
+  to_manager               String?                                       @db.VarChar(100)
+  equipment_id             String?                                       @db.VarChar(36)
+  equipment_code           String?                                       @db.VarChar(50)
+  equipment_name           String?                                       @db.VarChar(200)
+  equipment_category       equipment_transfer_orders_equipment_category?
+  solution                 String?                                       @db.Text
+  estimated_arrival        DateTime?                                     @db.Date
+  estimated_ship_date      DateTime?                                     @db.Date
+  estimated_arrival_date   DateTime?                                     @db.Date
+  transport_method         String?                                       @db.VarChar(50)
+  tracking_no              String?                                       @db.VarChar(100)
+  approval_id              String?                                       @db.VarChar(36)
+  from_approved_at         DateTime?                                     @db.Timestamp(0)
+  from_approved_by         String?                                       @db.VarChar(36)
+  from_approval_comment    String?                                       @db.Text
+  to_approved_at           DateTime?                                     @db.Timestamp(0)
+  to_approved_by           String?                                       @db.VarChar(36)
+  to_approval_comment      String?                                       @db.Text
+  shipped_at               DateTime?                                     @db.Timestamp(0)
+  shipped_by               String?                                       @db.VarChar(36)
+  shipping_no              String?                                       @db.VarChar(100)
+  shipping_attachment      String?                                       @db.Text
+  received_at              DateTime?                                     @db.Timestamp(0)
+  received_by              String?                                       @db.VarChar(36)
+  receive_status           equipment_transfer_orders_receive_status?
+  receive_comment          String?                                       @db.Text
+  total_received_quantity  Int?                                          @default(0)
+  return_comment           String?                                       @db.Text
+  returned_at              DateTime?                                     @db.DateTime(0)
+  returned_by              String?                                       @db.VarChar(36)
+  total_quantity           Int?                                          @default(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([from_project_id], map: "idx_from_project")
+  @@index([from_warehouse_id], map: "idx_from_warehouse")
+  @@index([status], map: "idx_status")
+  @@index([to_project_id], map: "idx_to_project")
+  @@index([to_warehouse_id], map: "idx_to_warehouse")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model equipment_transfers {
+  id                  String                       @id @db.VarChar(36)
+  transfer_no         String                       @unique(map: "transfer_no") @db.VarChar(50)
+  scenario            equipment_transfers_scenario
+  equipment_id        String                       @db.VarChar(36)
+  equipment_name      String?                      @db.VarChar(200)
+  equipment_code      String?                      @db.VarChar(50)
+  from_warehouse_id   String?                      @db.VarChar(36)
+  from_warehouse_name String?                      @db.VarChar(200)
+  from_project_id     String?                      @db.VarChar(36)
+  from_project_name   String?                      @db.VarChar(200)
+  to_project_id       String                       @db.VarChar(36)
+  to_project_name     String?                      @db.VarChar(200)
+  requester_id        String                       @db.VarChar(36)
+  requester_name      String?                      @db.VarChar(100)
+  reason              String                       @db.Text
+  status              equipment_transfers_status?  @default(pending)
+  expected_date       DateTime?                    @db.Date
+  actual_date         DateTime?                    @db.Date
+  notes               String?                      @db.Text
+  created_at          DateTime?                    @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?                    @default(now()) @db.Timestamp(0)
+  transfer_approvals  transfer_approvals[]
+
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([from_project_id], map: "idx_from_project")
+  @@index([from_warehouse_id], map: "idx_from_warehouse")
+  @@index([requester_id], map: "idx_requester")
+  @@index([scenario], map: "idx_scenario")
+  @@index([status], map: "idx_status")
+  @@index([to_project_id], map: "idx_to_project")
+}
+
+model form_drafts {
+  id           String             @id @db.VarChar(255)
+  user_id      String             @db.VarChar(255)
+  template_id  String             @db.VarChar(255)
+  template_key String             @db.VarChar(255)
+  form_data    Json
+  status       form_drafts_status @default(draft)
+  created_at   DateTime           @db.DateTime(0)
+  updated_at   DateTime           @db.DateTime(0)
+  metadata     Json?
+
+  @@index([status], map: "idx_status")
+  @@index([template_id], map: "idx_template_id")
+  @@index([template_key], map: "idx_template_key")
+  @@index([updated_at], map: "idx_updated_at")
+  @@index([user_id], map: "idx_user_id")
+  @@index([user_id, template_id], map: "idx_user_template")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model leave_requests {
+  id           String                    @id @db.VarChar(36)
+  order_no     String                    @unique(map: "order_no") @db.VarChar(50)
+  applicant_id String                    @db.VarChar(36)
+  applicant    String                    @db.VarChar(100)
+  apply_date   DateTime                  @db.Date
+  project_id   String?                   @db.VarChar(36)
+  project_name String?                   @db.VarChar(200)
+  leave_type   leave_requests_leave_type
+  start_date   DateTime                  @db.Date
+  end_date     DateTime                  @db.Date
+  leave_days   Int
+  leave_reason String                    @db.Text
+  status       leave_requests_status?    @default(draft)
+  approval_id  String?                   @db.VarChar(36)
+  approved_at  DateTime?                 @db.Timestamp(0)
+  approved_by  String?                   @db.VarChar(36)
+  created_at   DateTime?                 @default(now()) @db.Timestamp(0)
+  updated_at   DateTime?                 @default(now()) @db.Timestamp(0)
+  employees    employees                 @relation(fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_leave_applicant")
+  projects     projects?                 @relation(fields: [project_id], references: [id], onUpdate: NoAction, map: "fk_leave_project")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+}
+
+model notifications {
+  id            String                  @id @db.VarChar(36)
+  user_id       String                  @db.VarChar(36)
+  user_name     String?                 @db.VarChar(100)
+  type          notifications_type?     @default(in_app)
+  title         String                  @db.VarChar(200)
+  content       String                  @db.Text
+  priority      notifications_priority? @default(normal)
+  link          String?                 @db.VarChar(255)
+  is_read       Boolean?                @default(false)
+  read_at       DateTime?               @db.Timestamp(0)
+  sent_at       DateTime?               @db.Timestamp(0)
+  status        notifications_status?   @default(pending)
+  error_message String?                 @db.Text
+  created_at    DateTime?               @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model organization {
+  id          String    @id @db.VarChar(36)
+  name        String    @db.VarChar(100)
+  parent_id   String?   @db.VarChar(36)
+  level       Int
+  manager_id  String?   @db.VarChar(36)
+  description String?   @db.Text
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model positions {
+  id                 String            @id @db.VarChar(36)
+  code               String            @unique(map: "code") @db.VarChar(50)
+  name               String            @db.VarChar(100)
+  department_id      String?           @db.VarChar(36)
+  department_name    String?           @db.VarChar(100)
+  level              Int?              @default(1)
+  category           String?           @db.VarChar(50)
+  description        String?           @db.Text
+  requirements       String?           @db.Text
+  status             positions_status? @default(active)
+  sort_order         Int?              @default(0)
+  third_party_id     String?           @db.VarChar(100)
+  third_party_source String?           @db.VarChar(50)
+  created_at         DateTime?         @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?         @default(now()) @db.Timestamp(0)
+  departments        departments?      @relation(fields: [department_id], references: [id], onUpdate: NoAction, map: "fk_position_dept")
+
+  @@index([department_id], map: "idx_department")
+  @@index([level], map: "idx_level")
+  @@index([status], map: "idx_status")
+  @@index([third_party_id, third_party_source], map: "idx_third_party")
+}
+
+model progress_alerts {
+  id                  String                      @id @db.VarChar(36)
+  project_id          String                      @db.VarChar(36)
+  project_name        String?                     @db.VarChar(200)
+  entity_type         progress_alerts_entity_type
+  entity_id           String                      @db.VarChar(36)
+  entity_name         String                      @db.VarChar(200)
+  planned_progress    Int
+  actual_progress     Int
+  deviation           Int
+  deviation_threshold Int
+  alert_level         progress_alerts_alert_level
+  status              progress_alerts_status?     @default(active)
+  manager_id          String?                     @db.VarChar(36)
+  manager_name        String?                     @db.VarChar(100)
+  resolution_note     String?                     @db.Text
+  acknowledged_at     DateTime?                   @db.Timestamp(0)
+  acknowledged_by     String?                     @db.VarChar(36)
+  resolved_at         DateTime?                   @db.Timestamp(0)
+  created_at          DateTime?                   @default(now()) @db.Timestamp(0)
+  updated_at          DateTime?                   @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model project_completion_orders {
+  id                     String                                           @id @db.VarChar(36)
+  order_no               String                                           @unique(map: "order_no") @db.VarChar(50)
+  applicant_id           String                                           @db.VarChar(36)
+  applicant              String                                           @db.VarChar(100)
+  apply_date             DateTime                                         @db.Date
+  project_id             String                                           @db.VarChar(36)
+  project_name           String?                                          @db.VarChar(200)
+  project_manager_id     String?                                          @db.VarChar(36)
+  actual_start_date      DateTime?                                        @db.Date
+  actual_end_date        DateTime                                         @db.Date
+  total_duration         Int?
+  task_completion_status project_completion_orders_task_completion_status
+  incomplete_task_note   String?                                          @db.Text
+  project_result         String                                           @db.Text
+  result_report          Json?
+  acceptance_report      Json?
+  project_budget         Decimal?                                         @db.Decimal(15, 2)
+  actual_cost            Decimal                                          @db.Decimal(15, 2)
+  cost_variance_note     String?                                          @db.Text
+  status                 project_completion_orders_status?                @default(draft)
+  approval_id            String?                                          @db.VarChar(36)
+  approved_at            DateTime?                                        @db.Timestamp(0)
+  approved_by            String?                                          @db.VarChar(36)
+  created_at             DateTime?                                        @default(now()) @db.Timestamp(0)
+  updated_at             DateTime?                                        @default(now()) @db.Timestamp(0)
+  employees              employees                                        @relation(fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_project_comp_applicant")
+  projects               projects                                         @relation(fields: [project_id], references: [id], onUpdate: NoAction, map: "fk_project_comp_project")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+}
+
+model project_personnel {
+  id                String                            @id @db.VarChar(36)
+  project_id        String                            @db.VarChar(36)
+  employee_id       String                            @db.VarChar(36)
+  role_in_project   String?                           @db.VarChar(50)
+  on_duty_status    project_personnel_on_duty_status? @default(on_duty)
+  transfer_in_date  DateTime                          @db.Date
+  transfer_out_date DateTime?                         @db.Date
+  created_at        DateTime?                         @default(now()) @db.Timestamp(0)
+
+  @@unique([project_id, employee_id], map: "uk_proj_emp")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model project_personnel_transfer_orders {
+  id                                                                  String                                          @id @db.VarChar(36)
+  order_no                                                            String                                          @unique(map: "order_no") @db.VarChar(50)
+  transfer_type                                                       project_personnel_transfer_orders_transfer_type
+  applicant_id                                                        String                                          @db.VarChar(36)
+  applicant                                                           String                                          @db.VarChar(100)
+  apply_date                                                          DateTime                                        @db.Date
+  employee_id                                                         String                                          @db.VarChar(36)
+  employee_name                                                       String?                                         @db.VarChar(100)
+  department                                                          String?                                         @db.VarChar(100)
+  position                                                            String?                                         @db.VarChar(100)
+  project_id                                                          String                                          @db.VarChar(36)
+  project_name                                                        String?                                         @db.VarChar(200)
+  project_manager_id                                                  String?                                         @db.VarChar(36)
+  transfer_reason                                                     String                                          @db.Text
+  effective_date                                                      DateTime                                        @db.Date
+  notes                                                               String?                                         @db.Text
+  project_personnel_id                                                String?                                         @db.VarChar(36)
+  status                                                              project_personnel_transfer_orders_status?       @default(draft)
+  approval_id                                                         String?                                         @db.VarChar(36)
+  approved_at                                                         DateTime?                                       @db.Timestamp(0)
+  approved_by                                                         String?                                         @db.VarChar(36)
+  created_at                                                          DateTime?                                       @default(now()) @db.Timestamp(0)
+  updated_at                                                          DateTime?                                       @default(now()) @db.Timestamp(0)
+  employees_project_personnel_transfer_orders_applicant_idToemployees employees                                       @relation("project_personnel_transfer_orders_applicant_idToemployees", fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_pp_transfer_applicant")
+  employees_project_personnel_transfer_orders_employee_idToemployees  employees                                       @relation("project_personnel_transfer_orders_employee_idToemployees", fields: [employee_id], references: [id], onUpdate: NoAction, map: "fk_pp_transfer_employee")
+  projects                                                            projects                                        @relation(fields: [project_id], references: [id], onUpdate: NoAction, map: "fk_pp_transfer_project")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([employee_id], map: "idx_employee")
+  @@index([project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model project_phase_update_orders {
+  id                String                                  @id @db.VarChar(36)
+  order_no          String                                  @unique(map: "order_no") @db.VarChar(50)
+  applicant_id      String                                  @db.VarChar(36)
+  applicant         String                                  @db.VarChar(100)
+  apply_date        DateTime                                @db.Date
+  phase_id          String                                  @db.VarChar(36)
+  project_id        String?                                 @db.VarChar(36)
+  project_name      String?                                 @db.VarChar(200)
+  phase_name        String?                                 @db.VarChar(100)
+  current_status    String?                                 @db.VarChar(50)
+  update_type       project_phase_update_orders_update_type
+  new_status        project_phase_update_orders_new_status
+  actual_start_date DateTime?                               @db.Date
+  actual_end_date   DateTime?                               @db.Date
+  progress          Int?
+  update_reason     String                                  @db.Text
+  status            project_phase_update_orders_status?     @default(draft)
+  approval_id       String?                                 @db.VarChar(36)
+  approved_at       DateTime?                               @db.Timestamp(0)
+  approved_by       String?                                 @db.VarChar(36)
+  created_at        DateTime?                               @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                               @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([phase_id], map: "idx_phase")
+  @@index([project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model project_proposal_orders {
+  id                                                        String                          @id @db.VarChar(36)
+  order_no                                                  String                          @unique(map: "order_no") @db.VarChar(50)
+  applicant_id                                              String                          @db.VarChar(36)
+  applicant                                                 String                          @db.VarChar(100)
+  apply_date                                                DateTime                        @db.Date
+  project_name                                              String                          @db.VarChar(200)
+  manager_id                                                String                          @db.VarChar(36)
+  manager                                                   String?                         @db.VarChar(100)
+  tech_manager_id                                           String?                         @db.VarChar(36)
+  tech_manager                                              String?                         @db.VarChar(100)
+  start_date                                                DateTime                        @db.Date
+  end_date                                                  DateTime?                       @db.Date
+  country                                                   project_proposal_orders_country
+  address                                                   String?                         @db.VarChar(300)
+  description                                               String?                         @db.Text
+  area                                                      Decimal?                        @db.Decimal(10, 2)
+  capacity                                                  Decimal?                        @db.Decimal(10, 2)
+  rack_count                                                Int?
+  rack_power                                                Decimal?                        @db.Decimal(10, 2)
+  power_arch                                                String?                         @db.Text
+  hvac_arch                                                 String?                         @db.Text
+  fire_arch                                                 String?                         @db.Text
+  weak_arch                                                 String?                         @db.Text
+  customer_id                                               String?                         @db.VarChar(36)
+  customer_name                                             String?                         @db.VarChar(200)
+  budget                                                    Decimal?                        @db.Decimal(15, 2)
+  attachments                                               Json?
+  created_project_id                                        String?                         @db.VarChar(36)
+  project_no                                                String?                         @db.VarChar(50)
+  status                                                    project_proposal_orders_status? @default(draft)
+  approval_id                                               String?                         @db.VarChar(36)
+  approved_at                                               DateTime?                       @db.Timestamp(0)
+  approved_by                                               String?                         @db.VarChar(36)
+  created_at                                                DateTime?                       @default(now()) @db.Timestamp(0)
+  updated_at                                                DateTime?                       @default(now()) @db.Timestamp(0)
+  employees_project_proposal_orders_applicant_idToemployees employees                       @relation("project_proposal_orders_applicant_idToemployees", fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_proposal_applicant")
+  customers                                                 customers?                      @relation(fields: [customer_id], references: [id], onUpdate: NoAction, map: "fk_proposal_customer")
+  employees_project_proposal_orders_manager_idToemployees   employees                       @relation("project_proposal_orders_manager_idToemployees", fields: [manager_id], references: [id], onUpdate: NoAction, map: "fk_proposal_manager")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([customer_id], map: "idx_customer")
+  @@index([manager_id], map: "idx_manager")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model projects {
+  id                                              String                              @id @db.VarChar(36)
+  code                                            String                              @unique(map: "code") @db.VarChar(50)
+  name                                            String                              @db.VarChar(200)
+  type                                            projects_type?                      @default(domestic)
+  manager_id                                      String?                             @db.VarChar(36)
+  technical_lead_id                               String?                             @db.VarChar(36)
+  status                                          projects_status?                    @default(proposal)
+  country                                         projects_country?                   @default(dbgenerated("中国"))
+  address                                         String?                             @db.Text
+  progress                                        Int?                                @default(0)
+  start_date                                      DateTime                            @db.Date
+  end_date                                        DateTime?                           @db.Date
+  budget                                          Decimal?                            @default(0.00) @db.Decimal(15, 2)
+  customer_id                                     String?                             @db.VarChar(36)
+  end_customer                                    String?                             @db.VarChar(200)
+  attachments                                     String?                             @db.Text
+  organization_id                                 String?                             @db.VarChar(36)
+  description                                     String?                             @db.Text
+  building_area                                   Decimal?                            @db.Decimal(10, 2)
+  it_capacity                                     Decimal?                            @db.Decimal(10, 2)
+  cabinet_count                                   Int?
+  cabinet_power                                   Decimal?                            @db.Decimal(10, 2)
+  power_architecture                              String?                             @db.Text
+  hvac_architecture                               String?                             @db.Text
+  fire_architecture                               String?                             @db.Text
+  weak_electric_architecture                      String?                             @db.Text
+  created_at                                      DateTime?                           @default(now()) @db.Timestamp(0)
+  updated_at                                      DateTime?                           @default(now()) @db.Timestamp(0)
+  leave_requests                                  leave_requests[]
+  project_completion_orders                       project_completion_orders[]
+  project_personnel_transfer_orders               project_personnel_transfer_orders[]
+  employees_projects_technical_lead_idToemployees employees?                          @relation("projects_technical_lead_idToemployees", fields: [technical_lead_id], references: [id], onUpdate: NoAction, map: "fk_projects_technical_lead")
+  employees_projects_manager_idToemployees        employees?                          @relation("projects_manager_idToemployees", fields: [manager_id], references: [id], onUpdate: NoAction, map: "projects_ibfk_1")
+  customers                                       customers?                          @relation(fields: [customer_id], references: [id], onUpdate: NoAction, map: "projects_ibfk_2")
+  task_completion_orders                          task_completion_orders[]
+  tasks                                           tasks[]
+  timesheet_entries                               timesheet_entries[]
+
+  @@index([customer_id], map: "customer_id")
+  @@index([country], map: "idx_projects_country")
+  @@index([technical_lead_id], map: "idx_projects_technical_lead")
+  @@index([status], map: "idx_status")
+  @@index([manager_id], map: "manager_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model purchase_orders {
+  id                 String                             @id @db.VarChar(36)
+  order_no           String                             @unique(map: "order_no") @db.VarChar(50)
+  applicant_id       String                             @db.VarChar(36)
+  applicant          String                             @db.VarChar(100)
+  apply_date         DateTime                           @db.Date
+  transfer_order_id  String?                            @db.VarChar(36)
+  equipment_category purchase_orders_equipment_category
+  equipment_name     String                             @db.VarChar(200)
+  model_spec         String                             @db.VarChar(200)
+  quantity           Int                                @default(1)
+  estimated_price    Decimal                            @db.Decimal(12, 2)
+  total_price        Decimal?                           @db.Decimal(12, 2)
+  purchase_reason    String                             @db.Text
+  required_date      DateTime                           @db.Date
+  purchase_status    purchase_orders_purchase_status?   @default(pending)
+  actual_price       Decimal?                           @db.Decimal(12, 2)
+  arrival_date       DateTime?                          @db.Date
+  status             purchase_orders_status?            @default(draft)
+  approval_id        String?                            @db.VarChar(36)
+  approved_at        DateTime?                          @db.Timestamp(0)
+  approved_by        String?                            @db.VarChar(36)
+  created_at         DateTime?                          @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                          @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([status], map: "idx_status")
+  @@index([transfer_order_id], map: "idx_transfer")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model purchase_requests {
+  id              String                     @id @db.VarChar(36)
+  request_no      String                     @unique(map: "request_no") @db.VarChar(50)
+  equipment_id    String?                    @db.VarChar(36)
+  equipment_name  String                     @db.VarChar(200)
+  equipment_spec  String?                    @db.VarChar(500)
+  quantity        Int                        @default(1)
+  reason          String                     @db.Text
+  urgency         purchase_requests_urgency? @default(normal)
+  status          purchase_requests_status?  @default(pending)
+  requester_id    String                     @db.VarChar(36)
+  requester_name  String?                    @db.VarChar(100)
+  project_id      String?                    @db.VarChar(36)
+  project_name    String?                    @db.VarChar(200)
+  estimated_price Decimal?                   @db.Decimal(12, 2)
+  actual_price    Decimal?                   @db.Decimal(12, 2)
+  supplier        String?                    @db.VarChar(200)
+  expected_date   DateTime?                  @db.Date
+  actual_date     DateTime?                  @db.Date
+  notes           String?                    @db.Text
+  created_at      DateTime?                  @default(now()) @db.Timestamp(0)
+  updated_at      DateTime?                  @default(now()) @db.Timestamp(0)
+
+  @@index([equipment_id], map: "idx_equipment")
+  @@index([project_id], map: "idx_project")
+  @@index([requester_id], map: "idx_requester")
+  @@index([status], map: "idx_status")
+  @@index([urgency], map: "idx_urgency")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model sync_logs {
+  id                  String               @id @db.VarChar(36)
+  config_id           String               @db.VarChar(36)
+  platform_type       String               @db.VarChar(50)
+  sync_type           sync_logs_sync_type
+  sync_mode           sync_logs_sync_mode? @default(manual)
+  status              sync_logs_status
+  total_count         Int?                 @default(0)
+  success_count       Int?                 @default(0)
+  failed_count        Int?                 @default(0)
+  created_count       Int?                 @default(0)
+  updated_count       Int?                 @default(0)
+  deleted_count       Int?                 @default(0)
+  start_time          DateTime?            @default(now()) @db.Timestamp(0)
+  end_time            DateTime?            @db.Timestamp(0)
+  duration            Int?
+  error_message       String?              @db.Text
+  details             Json?
+  created_at          DateTime?            @default(now()) @db.Timestamp(0)
+  third_party_configs third_party_configs  @relation(fields: [config_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_sync_config")
+
+  @@index([config_id], map: "idx_config")
+  @@index([platform_type], map: "idx_platform")
+  @@index([start_time], map: "idx_start_time")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model system_configs {
+  id          String    @id @db.VarChar(36)
+  key         String    @unique(map: "key") @db.VarChar(100)
+  value       String?   @db.Text
+  description String?   @db.VarChar(500)
+  category    String?   @db.VarChar(50)
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+  updated_at  DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([category], map: "idx_category")
+  @@index([key], map: "idx_key")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model task_assignment_orders {
+  id                 String                                 @id @db.VarChar(36)
+  order_no           String                                 @unique(map: "order_no") @db.VarChar(50)
+  applicant_id       String                                 @db.VarChar(36)
+  applicant          String                                 @db.VarChar(100)
+  apply_date         DateTime                               @db.Date
+  project_id         String                                 @db.VarChar(36)
+  project_name       String?                                @db.VarChar(200)
+  phase_id           String?                                @db.VarChar(36)
+  phase_name         String?                                @db.VarChar(100)
+  wbs_code           String                                 @db.VarChar(50)
+  task_type          task_assignment_orders_task_type
+  task_name          String                                 @db.VarChar(300)
+  parent_task_id     String?                                @db.VarChar(36)
+  task_level         task_assignment_orders_task_level
+  task_description   String?                                @db.Text
+  assignee_id        String                                 @db.VarChar(36)
+  assignee           String                                 @db.VarChar(100)
+  planned_start_date DateTime                               @db.Date
+  planned_end_date   DateTime                               @db.Date
+  task_requirements  String                                 @db.Text
+  receive_status     task_assignment_orders_receive_status? @default(pending)
+  received_at        DateTime?                              @db.Timestamp(0)
+  reject_reason      String?                                @db.Text
+  created_task_id    String?                                @db.VarChar(36)
+  status             task_assignment_orders_status?         @default(draft)
+  approval_id        String?                                @db.VarChar(36)
+  created_at         DateTime?                              @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                              @default(now()) @db.Timestamp(0)
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([assignee_id], map: "idx_assignee")
+  @@index([phase_id], map: "idx_phase")
+  @@index([project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model task_completion_orders {
+  id                 String                                 @id @db.VarChar(36)
+  order_no           String                                 @unique(map: "order_no") @db.VarChar(50)
+  applicant_id       String                                 @db.VarChar(36)
+  applicant          String                                 @db.VarChar(100)
+  apply_date         DateTime                               @db.Date
+  task_id            String                                 @db.VarChar(36)
+  task_name          String?                                @db.VarChar(300)
+  project_id         String?                                @db.VarChar(36)
+  project_name       String?                                @db.VarChar(200)
+  phase_id           String?                                @db.VarChar(36)
+  phase_name         String?                                @db.VarChar(100)
+  assignee_id        String?                                @db.VarChar(36)
+  assignee           String?                                @db.VarChar(100)
+  planned_end_date   DateTime?                              @db.Date
+  current_progress   Int?
+  actual_end_date    DateTime                               @db.Date
+  final_progress     Int                                    @default(100)
+  task_result        String                                 @db.Text
+  result_attachments Json?
+  remaining_issues   String?                                @db.Text
+  quality_score      Decimal?                               @db.Decimal(2, 1)
+  efficiency_score   Decimal?                               @db.Decimal(2, 1)
+  attitude_score     Decimal?                               @db.Decimal(2, 1)
+  overall_score      Decimal?                               @db.Decimal(3, 1)
+  overall_rating     task_completion_orders_overall_rating?
+  evaluation_comment String?                                @db.Text
+  status             task_completion_orders_status?         @default(draft)
+  approval_id        String?                                @db.VarChar(36)
+  approved_at        DateTime?                              @db.Timestamp(0)
+  approved_by        String?                                @db.VarChar(36)
+  created_at         DateTime?                              @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                              @default(now()) @db.Timestamp(0)
+  employees          employees                              @relation(fields: [applicant_id], references: [id], onUpdate: NoAction, map: "fk_task_comp_applicant")
+  projects           projects?                              @relation(fields: [project_id], references: [id], onUpdate: NoAction, map: "fk_task_comp_project")
+  tasks              tasks                                  @relation(fields: [task_id], references: [id], onUpdate: NoAction, map: "fk_task_comp_task")
+
+  @@index([applicant_id], map: "idx_applicant")
+  @@index([assignee_id], map: "idx_assignee")
+  @@index([project_id], map: "idx_project")
+  @@index([status], map: "idx_status")
+  @@index([task_id], map: "idx_task")
+  @@index([order_no], map: "idx_task_completion_orders_order_no")
+  @@index([status], map: "idx_task_completion_orders_status")
+  @@index([task_id], map: "idx_task_completion_orders_task")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tasks {
+  id                     String                   @id @db.VarChar(36)
+  project_id             String                   @db.VarChar(36)
+  parent_id              String?                  @db.VarChar(36)
+  wbs_path               String                   @db.VarChar(255)
+  wbs_code               String                   @db.VarChar(50)
+  name                   String                   @db.VarChar(300)
+  task_type              tasks_task_type?         @default(subtask)
+  description            String?                  @db.Text
+  assignee_id            String?                  @db.VarChar(36)
+  planned_start_date     DateTime                 @db.Date
+  planned_end_date       DateTime                 @db.Date
+  actual_start_date      DateTime?                @db.Date
+  actual_end_date        DateTime?                @db.Date
+  progress               Int?                     @default(0)
+  status                 tasks_status?            @default(unassigned)
+  priority               tasks_priority?          @default(medium)
+  created_at             DateTime?                @default(now()) @db.Timestamp(0)
+  updated_at             DateTime?                @default(now()) @db.Timestamp(0)
+  task_completion_orders task_completion_orders[]
+  projects               projects                 @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "tasks_ibfk_1")
+
+  @@index([assignee_id], map: "idx_assignee")
+  @@index([project_id], map: "idx_project")
+  @@index([wbs_path], map: "idx_wbs")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model third_party_configs {
+  id                String                                @id @db.VarChar(36)
+  platform_type     third_party_configs_platform_type
+  name              String                                @db.VarChar(100)
+  corp_id           String?                               @db.VarChar(100)
+  agent_id          String?                               @db.VarChar(100)
+  app_id            String?                               @db.VarChar(100)
+  app_secret        String?                               @db.VarChar(500)
+  access_token      String?                               @db.VarChar(500)
+  token_expire_time DateTime?                             @db.Timestamp(0)
+  sync_departments  Boolean?                              @default(true)
+  sync_employees    Boolean?                              @default(true)
+  sync_enabled      Boolean?                              @default(false)
+  sync_interval     Int?                                  @default(60)
+  last_sync_time    DateTime?                             @db.Timestamp(0)
+  last_sync_status  third_party_configs_last_sync_status?
+  config            Json?
+  status            third_party_configs_status?           @default(active)
+  created_at        DateTime?                             @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                             @default(now()) @db.Timestamp(0)
+  sync_logs         sync_logs[]
+
+  @@index([platform_type], map: "idx_platform")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model timesheet_entries {
+  id            String        @id @db.VarChar(36)
+  report_id     String        @db.VarChar(36)
+  project_id    String        @db.VarChar(36)
+  task_id       String?       @db.VarChar(36)
+  duration      Decimal       @db.Decimal(4, 1)
+  work_content  String?       @db.Text
+  created_at    DateTime?     @default(now()) @db.Timestamp(0)
+  daily_reports daily_reports @relation(fields: [report_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "timesheet_entries_ibfk_1")
+  projects      projects      @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "timesheet_entries_ibfk_2")
+
+  @@index([project_id], map: "idx_project")
+  @@index([report_id], map: "idx_report")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model transfer_approvals {
+  id                  String                           @id @db.VarChar(36)
+  transfer_id         String                           @db.VarChar(36)
+  approver_type       transfer_approvals_approver_type
+  approver_id         String                           @db.VarChar(36)
+  approver_name       String?                          @db.VarChar(100)
+  status              transfer_approvals_status?       @default(pending)
+  comment             String?                          @db.Text
+  approved_at         DateTime?                        @db.Timestamp(0)
+  created_at          DateTime?                        @default(now()) @db.Timestamp(0)
+  equipment_transfers equipment_transfers              @relation(fields: [transfer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "transfer_approvals_ibfk_1")
+
+  @@index([approver_id], map: "idx_approver")
+  @@index([status], map: "idx_status")
+  @@index([transfer_id], map: "idx_transfer")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users {
+  id         String        @id @db.VarChar(36)
+  username   String        @unique(map: "username") @db.VarChar(50)
+  password   String        @db.VarChar(255)
+  name       String        @db.VarChar(100)
+  email      String?       @db.VarChar(100)
+  role       String?       @db.VarChar(50)
+  status     users_status? @default(active)
+  created_at DateTime?     @default(now()) @db.Timestamp(0)
+  updated_at DateTime?     @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model warehouses {
+  id           String             @id @db.VarChar(36)
+  warehouse_no String             @unique(map: "warehouse_no") @db.VarChar(50)
+  name         String             @db.VarChar(200)
+  type         warehouses_type?   @default(main)
+  location     String             @db.VarChar(200)
+  address      String             @db.Text
+  manager_id   String?            @db.VarChar(36)
+  status       warehouses_status? @default(active)
+  created_at   DateTime?          @default(now()) @db.Timestamp(0)
+  updated_at   DateTime?          @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_approver_rules {
+  id                   String                                @id @db.VarChar(36)
+  definition_id        String?                               @db.VarChar(36)
+  node_id              String?                               @db.VarChar(100)
+  rule_name            String                                @db.VarChar(200)
+  approver_type        workflow_approver_rules_approver_type
+  approver_value       String                                @db.VarChar(500)
+  fallback_type        String?                               @db.VarChar(50)
+  fallback_value       String?                               @db.VarChar(500)
+  priority             Int?                                  @default(0)
+  condition_expression String?                               @db.VarChar(500)
+  enabled              Int?                                  @default(1) @db.TinyInt
+  created_at           DateTime?                             @default(now()) @db.Timestamp(0)
+  updated_at           DateTime?                             @default(now()) @db.Timestamp(0)
+
+  @@index([definition_id], map: "idx_definition")
+  @@index([enabled], map: "idx_enabled")
+  @@index([node_id], map: "idx_node")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_approvers {
+  id            String                       @id @db.VarChar(36)
+  definition_id String                       @db.VarChar(36)
+  node_id       String                       @db.VarChar(100)
+  rule_name     String?                      @db.VarChar(200)
+  rule_type     workflow_approvers_rule_type
+  rule_value    String?                      @db.Text
+  rule_config   Json?
+  enabled       Boolean?                     @default(true)
+  created_at    DateTime?                    @default(now()) @db.Timestamp(0)
+  updated_at    DateTime?                    @default(now()) @db.Timestamp(0)
+
+  @@index([definition_id], map: "idx_definition")
+  @@index([enabled], map: "idx_enabled")
+  @@index([node_id], map: "idx_node")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_definitions {
+  id          String                       @id @db.VarChar(36)
+  key         String                       @db.VarChar(100)
+  name        String                       @db.VarChar(200)
+  version     Int                          @default(1)
+  category    String?                      @db.VarChar(50)
+  entity_type String?                      @db.VarChar(50)
+  bpmn_xml    String?                      @db.MediumText
+  node_config Json?
+  form_schema Json?
+  variables   Json?
+  status      workflow_definitions_status? @default(draft)
+  created_by  String?                      @db.VarChar(36)
+  created_at  DateTime?                    @default(now()) @db.Timestamp(0)
+  updated_at  DateTime?                    @default(now()) @db.Timestamp(0)
+
+  @@unique([key, version], map: "uk_key_version")
+  @@index([category], map: "idx_category")
+  @@index([entity_type], map: "idx_entity_type")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_execution_logs {
+  id           String   @id @db.VarChar(36)
+  execution_id String   @db.VarChar(36)
+  action       String   @db.VarChar(50)
+  process_key  String?  @db.VarChar(100)
+  instance_id  String?  @db.VarChar(36)
+  task_id      String?  @db.VarChar(36)
+  node_id      String?  @db.VarChar(36)
+  node_type    String?  @db.VarChar(50)
+  business_key String?  @db.VarChar(200)
+  initiator    Json?
+  operator     Json?
+  result       String?  @db.VarChar(50)
+  error        String?  @db.Text
+  reason       String?  @db.Text
+  metadata     Json?
+  created_at   DateTime @default(now()) @db.DateTime(0)
+
+  @@index([action], map: "idx_action")
+  @@index([created_at], map: "idx_created_at")
+  @@index([execution_id], map: "idx_execution_id")
+  @@index([instance_id], map: "idx_instance_id")
+  @@index([process_key], map: "idx_process_key")
+  @@index([task_id], map: "idx_task_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_executions {
+  id           String                      @id @db.VarChar(36)
+  instance_id  String                      @db.VarChar(36)
+  parent_id    String?                     @db.VarChar(36)
+  node_id      String                      @db.VarChar(100)
+  node_name    String?                     @db.VarChar(200)
+  node_type    String?                     @db.VarChar(50)
+  variables    Json?
+  status       workflow_executions_status? @default(active)
+  created_at   DateTime?                   @default(now()) @db.Timestamp(0)
+  completed_at DateTime?                   @db.Timestamp(0)
+
+  @@index([instance_id], map: "idx_instance")
+  @@index([node_id], map: "idx_node")
+  @@index([parent_id], map: "idx_parent")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_instance_history {
+  id            String   @id @db.VarChar(36)
+  instance_id   String   @db.VarChar(36)
+  from_status   String?  @db.VarChar(50)
+  to_status     String   @db.VarChar(50)
+  operator_id   String?  @db.VarChar(36)
+  operator_name String?  @db.VarChar(100)
+  reason        String?  @db.Text
+  metadata      Json?
+  created_at    DateTime @default(now()) @db.DateTime(0)
+
+  @@index([created_at], map: "idx_created_at")
+  @@index([instance_id], map: "idx_instance_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_instances {
+  id                 String                     @id @db.VarChar(36)
+  definition_id      String                     @db.VarChar(36)
+  definition_key     String                     @db.VarChar(100)
+  definition_version Int
+  category           String?                    @db.VarChar(50)
+  business_key       String?                    @db.VarChar(100)
+  business_id        String?                    @db.VarChar(36)
+  title              String?                    @db.VarChar(300)
+  initiator_id       String?                    @db.VarChar(36)
+  initiator_name     String?                    @db.VarChar(100)
+  variables          Json?
+  status             workflow_instances_status? @default(running)
+  start_time         DateTime?                  @default(now()) @db.Timestamp(0)
+  end_time           DateTime?                  @db.Timestamp(0)
+  duration           BigInt?
+  result             workflow_instances_result?
+  current_node_id    String?                    @db.VarChar(100)
+  current_node_name  String?                    @db.VarChar(200)
+  created_at         DateTime?                  @default(now()) @db.Timestamp(0)
+  updated_at         DateTime?                  @default(now()) @db.Timestamp(0)
+
+  @@index([business_key, business_id], map: "idx_business")
+  @@index([definition_id], map: "idx_definition")
+  @@index([definition_key], map: "idx_definition_key")
+  @@index([initiator_id], map: "idx_initiator")
+  @@index([start_time], map: "idx_start_time")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_listeners {
+  id             String                           @id @db.VarChar(36)
+  definition_id  String?                          @db.VarChar(36)
+  node_id        String?                          @db.VarChar(100)
+  event_type     workflow_listeners_event_type
+  listener_type  workflow_listeners_listener_type
+  listener_value String                           @db.VarChar(500)
+  enabled        Int?                             @default(1) @db.TinyInt
+  created_at     DateTime?                        @default(now()) @db.Timestamp(0)
+
+  @@index([definition_id], map: "idx_definition")
+  @@index([event_type], map: "idx_event_type")
+  @@index([node_id], map: "idx_node")
+}
+
+model workflow_locks {
+  id          String    @id @db.VarChar(255)
+  lock_key    String    @db.VarChar(255)
+  owner       String    @db.VarChar(255)
+  acquired_at DateTime  @db.DateTime(0)
+  expires_at  DateTime  @db.DateTime(0)
+  created_at  DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([expires_at], map: "idx_expires_at")
+  @@index([lock_key], map: "idx_lock_key")
+  @@index([owner], map: "idx_owner")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_performance_metrics {
+  id          String   @id @db.VarChar(36)
+  process_key String?  @db.VarChar(100)
+  instance_id String?  @db.VarChar(36)
+  operation   String   @db.VarChar(100)
+  duration_ms Int
+  success     Boolean  @default(true)
+  metadata    Json?
+  created_at  DateTime @default(now()) @db.DateTime(0)
+
+  @@index([created_at], map: "idx_created_at")
+  @@index([operation], map: "idx_operation")
+  @@index([process_key], map: "idx_process_key")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_task_history {
+  id            String                        @id @db.VarChar(36)
+  task_id       String                        @db.VarChar(36)
+  instance_id   String                        @db.VarChar(36)
+  node_id       String                        @db.VarChar(100)
+  task_name     String?                       @db.VarChar(200)
+  action        workflow_task_history_action
+  operator_id   String?                       @db.VarChar(36)
+  operator_name String?                       @db.VarChar(100)
+  assignee_id   String?                       @db.VarChar(36)
+  assignee_name String?                       @db.VarChar(100)
+  result        workflow_task_history_result?
+  form_data     Json?
+  target_id     String?                       @db.VarChar(36)
+  target_name   String?                       @db.VarChar(100)
+  comment       String?                       @db.Text
+  created_at    DateTime?                     @default(now()) @db.Timestamp(0)
+
+  @@index([action], map: "idx_action")
+  @@index([created_at], map: "idx_created_at")
+  @@index([instance_id], map: "idx_instance")
+  @@index([operator_id], map: "idx_operator")
+  @@index([task_id], map: "idx_task")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_tasks {
+  id               String                        @id @db.VarChar(36)
+  instance_id      String                        @db.VarChar(36)
+  execution_id     String?                       @db.VarChar(36)
+  node_id          String                        @db.VarChar(100)
+  task_def_key     String?                       @db.VarChar(100)
+  name             String                        @db.VarChar(200)
+  description      String?                       @db.Text
+  assignee_id      String?                       @db.VarChar(36)
+  assignee_name    String?                       @db.VarChar(100)
+  candidate_users  Json?
+  candidate_groups Json?
+  priority         Int?                          @default(50)
+  due_date         DateTime?                     @db.Timestamp(0)
+  claim_time       DateTime?                     @db.Timestamp(0)
+  variables        Json?
+  status           workflow_tasks_status?        @default(created)
+  approval_mode    workflow_tasks_approval_mode? @default(or_sign)
+  vote_threshold   Int?                          @default(1)
+  result           workflow_tasks_result?
+  comment          String?                       @db.Text
+  created_at       DateTime?                     @default(now()) @db.Timestamp(0)
+  started_at       DateTime?                     @db.Timestamp(0)
+  completed_at     DateTime?                     @db.Timestamp(0)
+  duration         BigInt?
+
+  @@index([assignee_id], map: "idx_assignee")
+  @@index([created_at], map: "idx_created_at")
+  @@index([due_date], map: "idx_due_date")
+  @@index([execution_id], map: "idx_execution")
+  @@index([instance_id], map: "idx_instance")
+  @@index([status], map: "idx_status")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model workflow_variable_history {
+  id            String    @id @db.VarChar(36)
+  instance_id   String    @db.VarChar(36)
+  execution_id  String?   @db.VarChar(36)
+  task_id       String?   @db.VarChar(36)
+  variable_name String    @db.VarChar(100)
+  variable_type String?   @db.VarChar(50)
+  old_value     String?   @db.Text
+  new_value     String?   @db.Text
+  operator_id   String?   @db.VarChar(36)
+  created_at    DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([instance_id], map: "idx_instance")
+  @@index([variable_name], map: "idx_variable_name")
+}
+
+enum approval_orders_order_type {
+  equip_transfer
+  person_transfer
+  purchase
+  leave
+}
+
+enum equipment_models_category {
+  instrument
+  fake_load
+  cable
+}
+
+enum third_party_configs_platform_type {
+  wechat_work
+  dingtalk
+  feishu
+}
+
+enum equipment_images_image_type {
+  main
+  accessory
+  transfer_shipping
+  transfer_packed
+  transfer_receiving
+}
+
+enum equipment_inbound_orders_inbound_type {
+  purchase
+  other
+}
+
+enum equipment_outbound_orders_outbound_type {
+  project_use
+  repair
+  scrap
+}
+
+enum equipment_transfer_orders_transfer_scene {
+  A
+  B
+  C
+}
+
+enum equipment_transfers_scenario {
+  A
+  B
+  C
+}
+
+enum project_personnel_transfer_orders_transfer_type {
+  in
+  out
+}
+
+enum transfer_approvals_approver_type {
+  warehouse_manager
+  from_pm
+  to_pm
+  purchase_manager
+}
+
+enum employees_gender {
+  male
+  female
+}
+
+enum equipment_transfer_orders_transfer_type {
+  single
+  batch
+}
+
+enum notifications_type {
+  email
+  sms
+  push
+  in_app
+}
+
+enum progress_alerts_entity_type {
+  project
+  phase
+  task
+}
+
+enum projects_type {
+  domestic
+  foreign
+  rd
+  service
+}
+
+enum sync_logs_sync_type {
+  department
+  employee
+  full
+}
+
+enum warehouses_type {
+  main
+  branch
+  project
+}
+
+enum workflow_listeners_event_type {
+  start
+  end
+  take
+  create
+  assignment
+  complete
+}
+
+enum equipment_accessory_instances_category {
+  instrument
+  fake_load
+  cable
+}
+
+enum project_personnel_on_duty_status {
+  on_duty
+  off_duty
+}
+
+enum sync_logs_sync_mode {
+  manual
+  auto
+}
+
+enum workflow_approver_rules_approver_type {
+  fixed
+  role
+  department
+  superior
+  form_field
+  expression
+  previous_handler
+  initiator
+}
+
+enum workflow_approvers_rule_type {
+  role
+  user
+  expression
+  manager
+  custom
+}
+
+enum workflow_listeners_listener_type {
+  class
+  expression
+  delegate
+}
+
+enum daily_report_reminders_status {
+  pending
+  sent
+  failed
+}
+
+enum equipment_accessories_accessory_category {
+  instrument
+  fake_load
+  cable
+}
+
+enum form_drafts_status {
+  draft
+  auto_saved
+}
+
+enum sync_logs_status {
+  success
+  failed
+  partial
+}
+
+enum transfer_approvals_status {
+  pending
+  approved
+  rejected
+}
+
+enum workflow_task_history_action {
+  create
+  assign
+  claim
+  complete
+  delegate
+  transfer
+  withdraw
+  cancel
+  skip
+}
+
+enum approval_flow_templates_status {
+  draft
+  active
+  archived
+}
+
+enum daily_reports_status {
+  pending
+  approved
+  rejected
+}
+
+enum employee_onboard_orders_gender {
+  male
+  female
+}
+
+enum equipment_instances_health_status {
+  normal
+  slightly_damaged
+  affected_use
+  repairing
+  scrapped
+}
+
+enum equipment_transfer_order_items_category {
+  instrument
+  fake_load
+  cable
+}
+
+enum notifications_priority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum projects_status {
+  proposal
+  in_progress
+  completed
+  paused
+  delayed
+}
+
+enum purchase_orders_equipment_category {
+  instrument
+  fake_load
+}
+
+enum tasks_task_type {
+  milestone
+  subtask
+  process
+}
+
+enum users_status {
+  active
+  inactive
+}
+
+enum approval_flow_templates_trigger_type {
+  create
+  update
+  manual
+}
+
+enum equipment_instances_usage_status {
+  idle
+  in_use
+}
+
+enum leave_requests_leave_type {
+  annual
+  sick
+  personal
+  comp
+}
+
+enum projects_country {
+  China     @map("中国")
+  USA       @map("美国")
+  Singapore @map("新加坡")
+  Malaysia  @map("马来西亚")
+  Indonesia @map("印尼")
+  Other     @map("其他")
+}
+
+enum purchase_requests_urgency {
+  low
+  normal
+  high
+  urgent
+}
+
+enum warehouses_status {
+  active
+  inactive
+}
+
+enum workflow_executions_status {
+  active
+  completed
+  cancelled
+}
+
+enum approval_orders_status {
+  pending
+  approved
+  rejected
+  withdrawn
+}
+
+enum customers_type {
+  direct
+  channel
+  agent
+}
+
+enum employees_status {
+  active
+  resigned
+  probation
+}
+
+enum equipment_instances_location_status {
+  warehouse
+  in_project
+  repairing
+  transferring
+}
+
+enum purchase_requests_status {
+  pending
+  approved
+  purchasing
+  arrived
+  cancelled
+}
+
+enum departments_status {
+  active
+  inactive
+}
+
+enum employee_transfer_orders_transfer_type {
+  department
+  branch
+  project
+}
+
+enum employees_current_status {
+  on_duty
+  leave
+  business_trip
+  other
+}
+
+enum equipment_accessory_instances_health_status {
+  normal
+  slightly_damaged
+  affected_use
+  repairing
+  scrapped
+}
+
+enum positions_status {
+  active
+  inactive
+}
+
+enum approvals_status {
+  pending
+  in_progress
+  approved
+  rejected
+  withdrawn
+}
+
+enum employee_offboard_orders_offboard_type {
+  voluntary
+  involuntary
+  contract_end
+}
+
+enum equipment_accessory_instances_usage_status {
+  idle
+  in_use
+}
+
+enum equipment_transfer_orders_from_location_type {
+  warehouse
+  project
+}
+
+enum progress_alerts_alert_level {
+  warning
+  severe
+}
+
+enum project_phase_update_orders_update_type {
+  start
+  complete
+  pause
+  resume
+}
+
+enum task_assignment_orders_task_type {
+  milestone
+  subtask
+  process
+}
+
+enum workflow_definitions_status {
+  draft
+  active
+  suspended
+  archived
+}
+
+enum workflow_task_history_result {
+  approved
+  rejected
+  withdrawn
+  delegated
+  transferred
+  skipped
+}
+
+enum equipment_accessory_instances_location_status {
+  warehouse
+  in_project
+  repairing
+  transferring
+}
+
+enum notifications_status {
+  pending
+  sent
+  failed
+}
+
+enum progress_alerts_status {
+  active
+  acknowledged
+  resolved
+}
+
+enum project_completion_orders_task_completion_status {
+  all
+  partial
+}
+
+enum project_phase_update_orders_new_status {
+  not_started
+  in_progress
+  completed
+  paused
+}
+
+enum workflow_instances_status {
+  running
+  suspended
+  completed
+  terminated
+}
+
+enum employees_role {
+  admin
+  project_manager
+  hr_manager
+  equipment_manager
+  implementer
+  user
+}
+
+enum equipment_repair_orders_repair_type {
+  internal
+  external
+}
+
+enum equipment_transfer_order_items_status {
+  pending
+  transferred
+  returned
+}
+
+enum leave_requests_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum project_proposal_orders_country {
+  China
+  USA
+  Singapore
+  Malaysia
+  Indonesia
+  Other
+}
+
+enum employee_onboard_orders_employee_type {
+  full_time
+  intern
+  outsource
+}
+
+enum equipment_inbound_items_status {
+  pending
+  inbound
+  rejected
+}
+
+enum equipment_inbound_orders_new_equipment_category {
+  instrument
+  fake_load
+}
+
+enum task_assignment_orders_task_level {
+  milestone
+  subtask
+  process
+}
+
+enum employee_transfer_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum equipment_scrap_orders_disposal_method {
+  destroy
+  sell
+  donate
+}
+
+enum purchase_orders_purchase_status {
+  pending
+  ordering
+  arrived
+}
+
+enum tasks_status {
+  unassigned
+  pending_confirm
+  accepted
+  in_progress
+  completed
+  closed
+}
+
+enum third_party_configs_last_sync_status {
+  success
+  failed
+  partial
+}
+
+enum equipment_transfer_orders_to_location_type {
+  warehouse
+  project
+}
+
+enum equipment_transfers_status {
+  pending
+  approved
+  rejected
+  in_transit
+  completed
+  cancelled
+}
+
+enum tasks_priority {
+  high
+  medium
+  low
+}
+
+enum workflow_instances_result {
+  approved
+  rejected
+  withdrawn
+  terminated
+  skipped
+}
+
+enum workflow_tasks_status {
+  created
+  assigned
+  in_progress
+  completed
+  cancelled
+}
+
+enum employee_offboard_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum employee_onboard_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum equipment_inbound_items_category {
+  instrument
+  fake_load
+  cable
+}
+
+enum equipment_repair_orders_repair_result {
+  fixed
+  unfixable
+  scrapped
+}
+
+enum equipment_transfer_details_status {
+  pending
+  approved
+  partial
+  rejected
+  completed
+}
+
+enum project_phase_update_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum third_party_configs_status {
+  active
+  inactive
+}
+
+enum workflow_tasks_approval_mode {
+  or_sign
+  and_sign
+  sequential
+  vote
+}
+
+enum equipment_outbound_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum equipment_scrap_orders_status {
+  draft
+  pending
+  approved
+  rejected
+  disposed
+}
+
+enum project_personnel_transfer_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum purchase_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum workflow_tasks_result {
+  approved
+  rejected
+  withdrawn
+  delegated
+  transferred
+  skipped
+}
+
+enum equipment_repair_orders_status {
+  draft
+  pending
+  repairing
+  completed
+  rejected
+}
+
+enum project_completion_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum task_assignment_orders_receive_status {
+  pending
+  accepted
+  rejected
+}
+
+enum equipment_inbound_orders_status {
+  draft
+  pending
+  approved
+  rejected
+  completed
+}
+
+enum equipment_transfer_orders_status {
+  draft
+  pending_from
+  pending_to
+  shipping
+  receiving
+  partial_received
+  completed
+  rejected
+  cancelled
+  withdrawn
+}
+
+enum task_assignment_orders_status {
+  draft
+  pending
+  accepted
+  rejected
+  completed
+}
+
+enum task_completion_orders_overall_rating {
+  excellent
+  good
+  qualified
+  unqualified
+}
+
+enum task_completion_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum project_proposal_orders_status {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum equipment_transfer_orders_equipment_category {
+  instrument
+  fake_load
+  cable
+}
+
+enum equipment_transfer_orders_receive_status {
+  normal
+  damaged
+  missing
+  partial
+}

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { equipmentService } from '../services/EquipmentService.js';
+import { equipmentServiceV2 as equipmentService } from '../services/EquipmentServiceV2.js';
+import { equipmentAccessoryService } from '../services/EquipmentAccessoryService.js';
 
 const router = Router();
 
@@ -162,6 +163,177 @@ router.get('/images/equipment/:equipmentId', async (req: Request, res: Response)
   try {
     const images = await equipmentService.getImagesByEquipmentId(req.params.equipmentId);
     res.json({ success: true, data: images });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================
+// 配件管理相关路由
+// ============================================
+
+// 获取所有配件（支持分页和筛选）
+router.get('/accessories', async (req: Request, res: Response) => {
+  try {
+    const { category, status, location_status, bound, keyword, page, pageSize } = req.query;
+    
+    const result = await equipmentAccessoryService.getAllAccessories({
+      category: category as string,
+      status: status as string,
+      location_status: location_status as string,
+      bound: bound !== undefined ? bound === 'true' : undefined,
+      keyword: keyword as string,
+      page: page ? parseInt(page as string) : 1,
+      pageSize: pageSize ? parseInt(pageSize as string) : 20
+    });
+    
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取未绑定配件列表
+router.get('/accessories/unbound', async (req: Request, res: Response) => {
+  try {
+    const { category, status, keyword } = req.query;
+    
+    const accessories = await equipmentAccessoryService.getUnboundAccessories({
+      category: category as string,
+      status: status as string,
+      keyword: keyword as string
+    });
+    
+    res.json({ success: true, data: accessories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取单个配件详情
+router.get('/accessories/:id', async (req: Request, res: Response) => {
+  try {
+    const accessory = await equipmentAccessoryService.getAccessoryById(req.params.id);
+    if (!accessory) {
+      return res.status(404).json({ success: false, error: '配件不存在' });
+    }
+    res.json({ success: true, data: accessory });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 创建配件（单独入库）
+router.post('/accessories', async (req: Request, res: Response) => {
+  try {
+    const dto = req.body;
+    const accessory = await equipmentAccessoryService.createAccessoryInstance(dto);
+    res.json({ success: true, data: accessory });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 更新配件信息
+router.put('/accessories/:id', async (req: Request, res: Response) => {
+  try {
+    const updates = req.body;
+    const result = await equipmentAccessoryService.updateAccessoryInstance(req.params.id, updates);
+    res.json({ success: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 删除配件
+router.delete('/accessories/:id', async (req: Request, res: Response) => {
+  try {
+    const result = await equipmentAccessoryService.deleteAccessoryInstance(req.params.id);
+    res.json({ success: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 绑定配件到设备
+router.post('/accessories/:id/bind', async (req: Request, res: Response) => {
+  try {
+    const { host_equipment_id, quantity } = req.body;
+    const result = await equipmentAccessoryService.bindAccessoryToEquipment(
+      req.params.id,
+      host_equipment_id,
+      quantity || 1
+    );
+    res.json({ success: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 解绑配件
+router.post('/accessories/:id/unbind', async (req: Request, res: Response) => {
+  try {
+    const { host_equipment_id, quantity } = req.body;
+    const result = await equipmentAccessoryService.unbindAccessoryFromEquipment(
+      req.params.id,
+      host_equipment_id,
+      quantity || 1
+    );
+    res.json({ success: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 标记配件遗失
+router.post('/accessories/:id/mark-lost', async (req: Request, res: Response) => {
+  try {
+    const { operator_id, operator_name, reason, equipment_id, transfer_order_id } = req.body;
+    const result = await equipmentAccessoryService.markAccessoryLost(
+      req.params.id,
+      operator_id,
+      operator_name,
+      reason,
+      equipment_id,
+      transfer_order_id
+    );
+    res.json({ success: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 恢复配件（找到遗失的配件）
+router.post('/accessories/:id/recover', async (req: Request, res: Response) => {
+  try {
+    const { operator_id, operator_name, notes } = req.body;
+    const result = await equipmentAccessoryService.recoverAccessory(
+      req.params.id,
+      operator_id,
+      operator_name,
+      notes
+    );
+    res.json({ success: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取配件的遗失记录
+router.get('/accessories/:id/lost-records', async (req: Request, res: Response) => {
+  try {
+    const records = await equipmentAccessoryService.getLostRecords(req.params.id);
+    res.json({ success: true, data: records });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取设备绑定的配件列表
+router.get('/instances/:id/accessories', async (req: Request, res: Response) => {
+  try {
+    const accessories = await equipmentAccessoryService.getAccessoriesWithDetails(req.params.id);
+    res.json({ success: true, data: accessories });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

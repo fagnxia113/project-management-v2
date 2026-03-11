@@ -261,11 +261,13 @@ export default function WarehouseListPage() {
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}
           onSubmit={async (data) => {
+            console.log('[WarehouseListPage] onSubmit - data:', data)
             const token = localStorage.getItem('token')
             const url = formMode === 'create'
               ? `${API_URL.BASE}/api/warehouses`
               : `${API_URL.BASE}/api/warehouses/${editingWarehouse?.id}`
             const method = formMode === 'create' ? 'POST' : 'PUT'
+            console.log('[WarehouseListPage] onSubmit - url:', url, 'method:', method)
 
             const response = await fetch(url, {
               method,
@@ -275,6 +277,8 @@ export default function WarehouseListPage() {
               },
               body: JSON.stringify(data)
             })
+
+            console.log('[WarehouseListPage] onSubmit - response:', response.status)
 
             if (response.ok) {
               await loadWarehouses()
@@ -350,7 +354,8 @@ function WarehouseForm({ isOpen, onClose, onSubmit, mode, initialValues }: {
     try {
       const submitData = mode === 'create' 
         ? { ...formData, warehouse_no: undefined }
-        : formData
+        : { ...formData, manager_id: formData.manager_id || initialValues?.manager_id || '' }
+      
       await onSubmit(submitData)
     } catch (error) {
       alert(error instanceof Error ? error.message : '操作失败')

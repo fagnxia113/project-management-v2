@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { useRoutes, Navigate, useNavigate } from 'react-router-dom'
+import { routes } from './router'
 import Layout from './components/Layout'
 import LoginPage from './pages/auth/LoginPage'
 import { useUser } from './contexts/UserContext'
@@ -64,7 +65,8 @@ const LoadingFallback = () => (
 )
 
 // 首页快捷入口
-const HomeRedirect = () => {
+// 首页快捷入口
+export const HomeRedirect = () => {
   const navigate = useNavigate()
   return (
     <div className="max-w-7xl mx-auto">
@@ -94,6 +96,11 @@ const HomeRedirect = () => {
   )
 }
 
+function AppContent() {
+  const element = useRoutes(routes)
+  return element
+}
+
 function App() {
   const { user, loading } = useUser()
   const [status, setStatus] = useState<'loading' | 'connected' | 'error'>('loading')
@@ -119,61 +126,7 @@ function App() {
   return (
     <Layout>
       <Suspense fallback={<LoadingFallback />}>
-        <Routes>
-          <Route path="/" element={<HomeRedirect />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/projects" element={<ProjectListPage />} />
-          <Route path="/projects/create" element={<ProjectCreatePage />} />
-          <Route path="/projects/:id" element={<ProjectDetailPage />} />
-          <Route path="/projects/completion" element={<ProjectCompletionPage />} />
-          <Route path="/tasks/board" element={<TaskBoardPage />} />
-          <Route path="/equipment" element={<EquipmentListPage />} />
-          <Route path="/equipment/statistics" element={<EquipmentStatisticsPage />} />
-          <Route path="/equipment/scrap-sales" element={<ScrapSaleListPage />} />
-          <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
-          <Route path="/equipment/repairs/create" element={<RepairCreatePage />} />
-          <Route path="/equipment/scrap-sales/create" element={<ScrapSaleCreatePage />} />
-          <Route path="/equipment/transfers/list" element={<TransferListPage />} />
-          <Route path="/equipment/transfers/create" element={<TransferCreatePage />} />
-          <Route path="/equipment/transfers/:id" element={<TransferDetailPage />} />
-          <Route path="/personnel" element={<PersonnelListPage />} />
-          <Route path="/personnel/:id" element={<EmployeeDetailPage />} />
-          <Route path="/personnel/onboard" element={<PersonnelOnboardPage />} />
-          <Route path="/personnel/onboard/:instanceId" element={<PersonnelOnboardDetailPage />} />
-          <Route path="/personnel/transfer" element={<PersonnelTransferPage />} />
-          <Route path="/customers" element={<CustomerListPage />} />
-          <Route path="/warehouses" element={<WarehouseListPage />} />
-          <Route path="/warehouses/:id" element={<WarehouseDetailPage />} />
-          <Route path="/approvals/pending" element={<ApprovalPendingPage />} />
-          <Route path="/approvals/completed" element={<ApprovalCompletedPage />} />
-          <Route path="/approvals/mine" element={<ApprovalMinePage />} />
-          <Route path="/approvals/draft" element={<ApprovalDraftPage />} />
-          <Route path="/approvals/new" element={<NewProcessPage />} />
-          <Route path="/approvals/workflow/:definitionKey" element={<WorkflowFormPage />} />
-          <Route path="/workflow/definitions" element={<WorkflowDefinitionListPage />} />
-          <Route path="/workflow/designer/new" element={<WorkflowDesignerNewPage />} />
-          <Route path="/workflow/designer/:id" element={<WorkflowDesignerNewPage />} />
-          <Route path="/workflow/visualization/:instanceId" element={<WorkflowVisualizationPage />} />
-          <Route path="/workflow/detail/:instanceId" element={<WorkflowDetailPage />} />
-          <Route path="/workflow/instance/:instanceId" element={<ProcessInstanceDetailPage />} />
-          <Route path="/purchase/request" element={<PurchaseRequestPage />} />
-          <Route path="/reports/dashboard" element={<DailyReportDashboard />} />
-          <Route path="/notifications" element={<NotificationCenterPage />} />
-          <Route path="/notifications/alerts" element={<AlertManagementPage />} />
-          <Route path="/organization/departments" element={<DepartmentPage />} />
-          <Route path="/organization/positions" element={<PositionPage />} />
-          <Route path="/forms/templates" element={<FormTemplatesPage />} />
-          <Route path="/forms/designer/new" element={<FormDesignerPage />} />
-          <Route path="/forms/designer/:id" element={<FormDesignerPage />} />
-          <Route path="/settings" element={<SystemSettingsPage />} />
-          <Route path="/settings/metadata" element={<MetadataConfigPage />} />
-          <Route path="/settings/linkage" element={<DataLinkagePage />} />
-          <Route path="/settings/password" element={<ChangePasswordPage />} />
-          <Route path="/admin/data" element={<AdminDataPage />} />
-          <Route path="/admin/users" element={<UserManagementPage />} />
-          <Route path="/admin/workflow-monitor" element={<WorkflowMonitorPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <AppContent />
       </Suspense>
     </Layout>
   )

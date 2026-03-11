@@ -1008,7 +1008,24 @@ export class UnifiedFormService {
               label: '发货时间',
               type: 'date',
               required: true
-            }
+            },
+          {
+            id: 'field-shipping-images',
+            name: 'shipping_images',
+            label: '发货图片',
+            type: 'images',
+            required: true,
+            placeholder: '请上传发货图片'
+          },
+          {
+            id: 'field-shipping-notes',
+            name: 'shipping_notes',
+            label: '发货备注',
+            type: 'textarea',
+            required: false,
+            placeholder: '请输入发货备注',
+            rows: 3
+          }
         ]
       },
       {
@@ -1032,6 +1049,14 @@ export class UnifiedFormService {
               type: 'date',
               required: true
             },
+          {
+            id: 'field-receiving-images',
+            name: 'receiving_images',
+            label: '收货图片',
+            type: 'images',
+            required: true,
+            placeholder: '请上传收货图片'
+          },
           {
             id: 'field-receiving-note',
             name: 'receiving_note',
@@ -1899,6 +1924,58 @@ export class UnifiedFormService {
                 type: 'text',
                 required: false,
                 placeholder: '请输入配件描述'
+              },
+              {
+                name: 'accessory_list',
+                label: '配件清单',
+                type: 'array',
+                required: false,
+                tooltip: '仅仪器类设备可添加配件',
+                arrayConfig: {
+                  fields: [
+                    {
+                      name: 'accessory_name',
+                      label: '配件名称',
+                      type: 'text',
+                      required: true,
+                      placeholder: '请输入配件名称'
+                    },
+                    {
+                      name: 'accessory_model',
+                      label: '规格型号',
+                      type: 'text',
+                      required: false,
+                      placeholder: '请输入规格型号'
+                    },
+                    {
+                      name: 'accessory_quantity',
+                      label: '数量',
+                      type: 'number',
+                      required: true,
+                      defaultValue: 1,
+                      placeholder: '请输入数量'
+                    },
+                    {
+                      name: 'accessory_unit',
+                      label: '单位',
+                      type: 'select',
+                      required: false,
+                      defaultValue: '个',
+                      options: [
+                        { label: '个', value: '个' },
+                        { label: '套', value: '套' },
+                        { label: '件', value: '件' },
+                        { label: '台', value: '台' },
+                        { label: '把', value: '把' },
+                        { label: '根', value: '根' },
+                        { label: '块', value: '块' },
+                        { label: '张', value: '张' },
+                        { label: '条', value: '条' },
+                        { label: '支', value: '支' }
+                      ]
+                    }
+                  ]
+                }
               },
               {
                 name: 'item_notes',

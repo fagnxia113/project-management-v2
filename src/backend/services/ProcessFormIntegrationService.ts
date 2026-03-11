@@ -474,6 +474,16 @@ export class ProcessFormIntegrationService {
   async startProcessWithForm(params: StartProcessWithFormParams): Promise<ProcessFormIntegrationResult> {
     try {
       console.log('Start process with form params:', params);
+      console.log('Start process initiator:', params.initiator);
+      
+      // 验证发起人信息
+      if (!params.initiator || !params.initiator.id) {
+        console.error('发起人信息缺失:', params.initiator);
+        return {
+          success: false,
+          message: '发起人信息缺失，请重新登录后重试'
+        };
+      }
       
       // 获取预设配置
       const preset = this.presets.get(params.presetId);
@@ -809,6 +819,14 @@ export class ProcessFormIntegrationService {
           );
           
           console.log('[ProcessFormIntegrationService] 调拨单创建成功:', order);
+          
+          if (!order) {
+            console.error('[ProcessFormIntegrationService] 调拨单创建失败，返回值为 null');
+            return {
+              success: false,
+              message: '调拨单创建失败，请重试'
+            };
+          }
           
           // 更新流程实例的 businessId 和 formData 中的 transferOrderId
           const updatedVariables = {

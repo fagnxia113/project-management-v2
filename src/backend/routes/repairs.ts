@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { equipmentRepairService } from '../services/EquipmentRepairService.js';
+import { equipmentRepairServiceV2 as equipmentRepairService } from '../services/EquipmentRepairServiceV2.js';
 
 const router = Router();
 

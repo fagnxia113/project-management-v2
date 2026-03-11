@@ -931,7 +931,8 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
-              type: 'warehouse_manager'
+              type: 'field',
+              value: 'warehouse_manager_id'
             }
           }
         },
@@ -1130,14 +1131,6 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
             type: 'number',
             required: false,
             placeholder: '请输入单价'
-          },
-          {
-            name: 'total_price',
-            label: '总价',
-            type: 'number',
-            required: false,
-            placeholder: '请输入总价',
-            readonly: true
           },
           {
             name: 'serial_numbers',

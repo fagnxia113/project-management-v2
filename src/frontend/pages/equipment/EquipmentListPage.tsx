@@ -69,9 +69,12 @@ export default function EquipmentListPage() {
 
   const loadLocations = async () => {
     try {
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      
       const [warehousesRes, projectsRes] = await Promise.all([
-        fetch(`${API_URL.BASE}/api/warehouses`),
-        fetch(`${API_URL.BASE}/api/projects`)
+        fetch(`${API_URL.BASE}/api/warehouses`, { headers }),
+        fetch(`${API_URL.BASE}/api/projects`, { headers })
       ])
       
       const warehouses = await warehousesRes.json()
@@ -91,6 +94,9 @@ export default function EquipmentListPage() {
   const loadEquipment = async () => {
     try {
       setLoading(true)
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: '10',
@@ -102,7 +108,7 @@ export default function EquipmentListPage() {
         ...(filterLocationId && { location_id: filterLocationId })
       })
 
-      const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`)
+      const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`, { headers })
       const result = await response.json()
 
       if (result.success) {
@@ -131,7 +137,9 @@ export default function EquipmentListPage() {
     if (equipmentImages[equipmentId]) return
     
     try {
-      const response = await fetch(`${API_URL.BASE}/api/equipment/images/equipment/${equipmentId}`)
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const response = await fetch(`${API_URL.BASE}/api/equipment/images/equipment/${equipmentId}`, { headers })
       const result = await response.json()
       if (result.success && result.data) {
         setEquipmentImages(prev => ({
@@ -229,8 +237,12 @@ export default function EquipmentListPage() {
     if (!confirm('确定要删除此设备吗？')) return
     
     try {
+      const token = localStorage.getItem('token')
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      
       const response = await fetch(`${API_URL.BASE}/api/equipment/instances/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
       })
       const result = await response.json()
       
@@ -262,6 +274,12 @@ export default function EquipmentListPage() {
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
           >
             统计报表
+          </button>
+          <button
+            onClick={() => window.location.href = '/equipment/accessories'}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            配件管理
           </button>
           <button
             onClick={() => window.location.href = '/equipment/scrap-sales'}

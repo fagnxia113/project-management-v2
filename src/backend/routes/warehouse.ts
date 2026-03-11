@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { warehouseService } from '../services/WarehouseService.js';
+import { warehouseServiceV2 as warehouseService } from '../services/WarehouseServiceV2.js';
 
 const router = Router();
 
@@ -84,12 +84,34 @@ router.get('/:id/manager', async (req: Request, res: Response) => {
       return res.json({ success: true, data: null });
     }
     
-    const managers = await db.query<any>('SELECT id, username, name, role FROM users WHERE id = ?', [warehouse.manager_id]);
+    // manager_id 是员工ID，需要先查询员工获取user_id，再查询用户
+    const employees = await db.query<any>(
+      'SELECT id, user_id, name FROM employees WHERE id = ?',
+      [warehouse.manager_id]
+    );
     
-    if (Array.isArray(managers) && managers.length > 0) {
-      res.json({ success: true, data: managers[0] });
+    if (!employees || employees.length === 0) {
+      return res.json({ success: true, data: null });
+    }
+    
+    const employee = employees[0];
+    
+    // 如果员工有user_id，则查询用户表获取完整用户信息
+    if (employee.user_id) {
+      const users = await db.query<any>(
+        'SELECT id, username, name, role FROM users WHERE id = ?',
+        [employee.user_id]
+      );
+      
+      if (Array.isArray(users) && users.length > 0) {
+        res.json({ success: true, data: users[0] });
+      } else {
+        // 如果users表没有，直接返回员工信息
+        res.json({ success: true, data: { id: employee.user_id, name: employee.name } });
+      }
     } else {
-      res.json({ success: true, data: null });
+      // 如果员工没有关联user_id，返回员工信息
+      res.json({ success: true, data: { id: employee.id, name: employee.name } });
     }
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

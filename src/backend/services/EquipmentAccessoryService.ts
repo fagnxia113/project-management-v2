@@ -11,11 +11,14 @@ export interface AccessoryInstance {
   quantity: number;
   serial_number?: string;
   manage_code?: string;
+  status: 'normal' | 'lost' | 'damaged';
   health_status: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped';
   usage_status: 'idle' | 'in_use';
   location_status: 'warehouse' | 'in_project' | 'repairing' | 'transferring';
   location_id?: string;
   host_equipment_id?: string;
+  bound_at?: string;
+  source_type?: 'inbound_bundle' | 'inbound_separate';
   keeper_id?: string;
   purchase_date?: string;
   purchase_price?: number;
@@ -52,6 +55,7 @@ export interface CreateAccessoryDto {
   purchase_date?: string;
   purchase_price?: number;
   notes?: string;
+  source_type?: 'inbound_bundle' | 'inbound_separate';
 }
 
 export interface CreateAccessoryRelationDto {
@@ -71,8 +75,8 @@ export class EquipmentAccessoryService {
       `INSERT INTO equipment_accessory_instances (
         id, accessory_name, model_no, brand, category, unit, quantity,
         serial_number, manage_code, health_status, usage_status, location_status,
-        location_id, host_equipment_id, keeper_id, purchase_date, purchase_price, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        location_id, host_equipment_id, bound_at, source_type, keeper_id, purchase_date, purchase_price, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         dto.accessory_name,
@@ -88,6 +92,8 @@ export class EquipmentAccessoryService {
         'warehouse',
         null,
         dto.host_equipment_id || null,
+        dto.host_equipment_id ? new Date() : null,
+        dto.source_type || 'inbound_separate',
         dto.keeper_id || null,
         dto.purchase_date || null,
         dto.purchase_price || null,
@@ -168,12 +174,20 @@ export class EquipmentAccessoryService {
     return rows;
   }
 
-  async getAccessoriesWithDetails(hostEquipmentId: string): Promise<AccessoryInstance[]> {
+  async getAccessoriesWithDetails(hostEquipmentId: string): Promise<any[]> {
     const [rows] = await db.query(
       `SELECT 
-        ai.*,
-        ea.quantity as relation_quantity,
-        ea.is_required
+        ai.id,
+        ai.accessory_name,
+        ai.model_no as accessory_model,
+        ai.category as accessory_category,
+        ai.serial_number,
+        ai.manage_code as accessory_manage_code,
+        ai.health_status as accessory_health_status,
+        ai.usage_status as accessory_usage_status,
+        ea.quantity as accessory_quantity,
+        ea.is_required,
+        ea.notes as accessory_notes
        FROM equipment_accessory_instances ai
        INNER JOIN equipment_accessories ea ON ai.id = ea.accessory_id
        WHERE ea.host_equipment_id = ?
@@ -364,6 +378,270 @@ export class EquipmentAccessoryService {
     }
 
     return stats;
+  }
+
+  async bindAccessoryToEquipment(
+    accessoryId: string, 
+    hostEquipmentId: string, 
+    quantity: number = 1
+  ): Promise<boolean> {
+    const accessory = await this.getAccessoryById(accessoryId);
+    if (!accessory) {
+      throw new Error('配件不存在');
+    }
+
+    const existingRelation = await db.query(
+      'SELECT * FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
+      [hostEquipmentId, accessoryId]
+    );
+
+    if (existingRelation && existingRelation.length > 0) {
+      await db.execute(
+        'UPDATE equipment_accessories SET quantity = quantity + ? WHERE host_equipment_id = ? AND accessory_id = ?',
+        [quantity, hostEquipmentId, accessoryId]
+      );
+    } else {
+      const relationId = uuidv4();
+      await db.execute(
+        `INSERT INTO equipment_accessories (
+          id, host_equipment_id, accessory_id, accessory_name, accessory_model, accessory_category,
+          quantity, is_required, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          relationId,
+          hostEquipmentId,
+          accessoryId,
+          accessory.accessory_name,
+          accessory.model_no,
+          accessory.category,
+          quantity,
+          false,
+          null
+        ]
+      );
+    }
+
+    await db.execute(
+      `UPDATE equipment_accessory_instances 
+       SET host_equipment_id = ?, bound_at = NOW(), status = 'normal', usage_status = 'in_use'
+       WHERE id = ?`,
+      [hostEquipmentId, accessoryId]
+    );
+
+    await this.updateHostEquipmentAccessoryCount(hostEquipmentId);
+    return true;
+  }
+
+  async unbindAccessoryFromEquipment(
+    accessoryId: string, 
+    hostEquipmentId: string,
+    unbindQuantity: number = 1
+  ): Promise<boolean> {
+    const relation = await db.query(
+      'SELECT * FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
+      [hostEquipmentId, accessoryId]
+    );
+
+    if (!relation || relation.length === 0) {
+      throw new Error('配件关联关系不存在');
+    }
+
+    const currentQty = relation[0].quantity;
+    if (currentQty > unbindQuantity) {
+      await db.execute(
+        'UPDATE equipment_accessories SET quantity = quantity - ? WHERE host_equipment_id = ? AND accessory_id = ?',
+        [unbindQuantity, hostEquipmentId, accessoryId]
+      );
+    } else {
+      await db.execute(
+        'DELETE FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
+        [hostEquipmentId, accessoryId]
+      );
+    }
+
+    const remainingRelations = await db.query(
+      'SELECT COUNT(*) as count FROM equipment_accessories WHERE accessory_id = ?',
+      [accessoryId]
+    );
+
+    if (remainingRelations[0].count === 0) {
+      await db.execute(
+        `UPDATE equipment_accessory_instances 
+         SET host_equipment_id = NULL, bound_at = NULL, usage_status = 'idle'
+         WHERE id = ?`,
+        [accessoryId]
+      );
+    }
+
+    await this.updateHostEquipmentAccessoryCount(hostEquipmentId);
+    return true;
+  }
+
+  async markAccessoryLost(
+    accessoryId: string,
+    operatorId: string,
+    operatorName: string,
+    reason?: string,
+    equipmentId?: string,
+    transferOrderId?: string
+  ): Promise<boolean> {
+    const accessory = await this.getAccessoryById(accessoryId);
+    if (!accessory) {
+      throw new Error('配件不存在');
+    }
+
+    await db.execute(
+      `UPDATE equipment_accessory_instances SET status = 'lost' WHERE id = ?`,
+      [accessoryId]
+    );
+
+    const recordId = uuidv4();
+    await db.execute(
+      `INSERT INTO equipment_accessory_lost_records (
+        id, accessory_id, equipment_id, transfer_order_id, lost_at, lost_by, lost_by_name, lost_reason, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'lost')`,
+      [
+        recordId,
+        accessoryId,
+        equipmentId || null,
+        transferOrderId || null,
+        new Date(),
+        operatorId,
+        operatorName,
+        reason || null
+      ]
+    );
+
+    return true;
+  }
+
+  async recoverAccessory(
+    accessoryId: string,
+    operatorId: string,
+    operatorName: string,
+    notes?: string
+  ): Promise<boolean> {
+    const accessory = await this.getAccessoryById(accessoryId);
+    if (!accessory) {
+      throw new Error('配件不存在');
+    }
+
+    await db.execute(
+      `UPDATE equipment_accessory_instances SET status = 'normal' WHERE id = ?`,
+      [accessoryId]
+    );
+
+    await db.execute(
+      `UPDATE equipment_accessory_lost_records 
+       SET status = 'found', found_at = NOW(), found_by = ?, found_by_name = ?, notes = ?
+       WHERE accessory_id = ? AND status = 'lost'`,
+      [operatorId, operatorName, notes || null, accessoryId]
+    );
+
+    return true;
+  }
+
+  async getUnboundAccessories(options?: {
+    category?: string;
+    status?: string;
+    keyword?: string;
+  }): Promise<AccessoryInstance[]> {
+    let sql = 'SELECT * FROM equipment_accessory_instances WHERE host_equipment_id IS NULL';
+    const params: any[] = [];
+
+    if (options?.category) {
+      sql += ' AND category = ?';
+      params.push(options.category);
+    }
+
+    if (options?.status) {
+      sql += ' AND status = ?';
+      params.push(options.status);
+    }
+
+    if (options?.keyword) {
+      sql += ' AND (accessory_name LIKE ? OR model_no LIKE ? OR manage_code LIKE ?)';
+      const kw = `%${options.keyword}%`;
+      params.push(kw, kw, kw);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    const [rows] = await db.query(sql, params);
+    return rows;
+  }
+
+  async getAllAccessories(options?: {
+    category?: string;
+    status?: string;
+    location_status?: string;
+    bound?: boolean;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ list: AccessoryInstance[]; total: number }> {
+    let whereClause = '1=1';
+    const params: any[] = [];
+
+    if (options?.category) {
+      whereClause += ' AND category = ?';
+      params.push(options.category);
+    }
+
+    if (options?.status) {
+      whereClause += ' AND status = ?';
+      params.push(options.status);
+    }
+
+    if (options?.location_status) {
+      whereClause += ' AND location_status = ?';
+      params.push(options.location_status);
+    }
+
+    if (options?.bound !== undefined) {
+      if (options.bound) {
+        whereClause += ' AND host_equipment_id IS NOT NULL';
+      } else {
+        whereClause += ' AND host_equipment_id IS NULL';
+      }
+    }
+
+    if (options?.keyword) {
+      whereClause += ' AND (accessory_name LIKE ? OR model_no LIKE ? OR manage_code LIKE ?)';
+      const kw = `%${options.keyword}%`;
+      params.push(kw, kw, kw);
+    }
+
+    const countSql = `SELECT COUNT(*) as total FROM equipment_accessory_instances WHERE ${whereClause}`;
+    const [countResult] = await db.query(countSql, params);
+    const total = countResult[0].total;
+
+    let querySql = `SELECT * FROM equipment_accessory_instances WHERE ${whereClause}`;
+    
+    if (options?.page && options?.pageSize) {
+      querySql += ` LIMIT ${(options.page - 1) * options.pageSize}, ${options.pageSize}`;
+    }
+
+    querySql += ' ORDER BY created_at DESC';
+
+    const [rows] = await db.query(querySql, params);
+
+    return { list: rows, total };
+  }
+
+  async getLostRecords(accessoryId?: string): Promise<any[]> {
+    let sql = 'SELECT * FROM equipment_accessory_lost_records';
+    const params: any[] = [];
+
+    if (accessoryId) {
+      sql += ' WHERE accessory_id = ?';
+      params.push(accessoryId);
+    }
+
+    sql += ' ORDER BY lost_at DESC';
+
+    const [rows] = await db.query(sql, params);
+    return rows;
   }
 }
 

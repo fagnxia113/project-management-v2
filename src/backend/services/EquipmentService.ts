@@ -69,10 +69,10 @@ export class EquipmentService {
                 (SELECT name FROM employees WHERE id = i.keeper_id) as keeper_name
             FROM equipment_instances i 
             LEFT JOIN equipment_models m ON i.model_id = m.id
-            WHERE i.id = ?`, 
+            WHERE i.id = ?`,
             [id]
         );
-        
+
         if (res) {
             // 处理附件信息，将JSON字符串转换为数组
             if (res.attachment) {
@@ -85,7 +85,7 @@ export class EquipmentService {
             } else {
                 res.attachments = [];
             }
-            
+
             // 获取配件数据
             try {
                 const accessories = await db.query(
@@ -106,14 +106,14 @@ export class EquipmentService {
                     WHERE eai.host_equipment_id = ?`,
                     [id]
                 );
-                
+
                 res.accessories = accessories || [];
             } catch (error) {
                 console.error('[EquipmentService] 获取配件数据失败:', error);
                 res.accessories = [];
             }
         }
-        
+
         return res || undefined;
     }
 
@@ -189,6 +189,11 @@ export class EquipmentService {
                 m.category,
                 m.brand,
                 m.unit,
+                i.manufacturer,
+                i.technical_params,
+                i.certificate_no,
+                i.certificate_issuer,
+                i.accessory_desc,
                 CASE 
                     WHEN i.location_status = 'warehouse' THEN (SELECT name FROM warehouses WHERE id = i.location_id)
                     WHEN i.location_status = 'in_project' THEN (SELECT name FROM projects WHERE id = i.location_id)
@@ -200,7 +205,7 @@ export class EquipmentService {
        ORDER BY i.created_at DESC LIMIT ? OFFSET ?`,
             [...params, pageSize, offset]
         );
-        
+
         // 为每个设备获取配件数据
         for (const item of data) {
             try {
@@ -220,7 +225,7 @@ export class EquipmentService {
                     WHERE ea.host_equipment_id = ?`,
                     [item.id]
                 );
-                
+
                 item.accessories = accessories || [];
             } catch (error) {
                 console.error('[EquipmentService] 获取配件数据失败:', error);
@@ -371,6 +376,34 @@ export class EquipmentService {
         allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         const paginatedData = allData.slice(offset, offset + pageSize);
+
+        // 为每个设备获取配件数据
+        for (const item of paginatedData) {
+            try {
+                // 优先从物理附件实例表中获取当前分配给该主机的附件
+                const accessories = await db.query(
+                    `SELECT 
+                        id,
+                        id as accessory_id,
+                        accessory_name,
+                        model_no as accessory_model,
+                        quantity as accessory_quantity,
+                        category as accessory_category,
+                        health_status as accessory_health_status,
+                        usage_status as accessory_usage_status,
+                        manage_code as accessory_manage_code,
+                        unit as accessory_unit
+                    FROM equipment_accessory_instances
+                    WHERE host_equipment_id = ?`,
+                    [item.id]
+                );
+
+                item.accessories = accessories || [];
+            } catch (error) {
+                console.error('[EquipmentService] 获取聚合设备配件数据失败:', error);
+                item.accessories = [];
+            }
+        }
 
         return { data: paginatedData, total, totalPages: Math.ceil(total / pageSize) };
     }

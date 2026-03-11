@@ -116,7 +116,6 @@ export class EquipmentInboundService {
         const unit = item.unit || '台';
         const quantity = item.quantity || 1;
         const purchasePrice = item.purchase_price || 0;
-        const totalPrice = item.total_price || (purchasePrice * quantity);
         const serialNumbers = item.serial_numbers || null;
         const certificateNo = item.certificate_no || null;
         const certificateIssuer = item.certificate_issuer || null;
@@ -259,11 +258,11 @@ export class EquipmentInboundService {
               const accessoryId = uuidv4();
               const accessoryManageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
               
-              // 创建配件实例，直接关联到主机设备
+              // 创建配件实例，直接关联到主机设备（随仪器入库）
               await db.query(
                 `INSERT INTO equipment_accessory_instances 
-                 (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, manage_code, host_equipment_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, manage_code, host_equipment_id, source_type, bound_at, status, usage_status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inbound_bundle', NOW(), 'normal', 'in_use')`,
                 [
                   accessoryId,
                   accessory.accessory_name,
@@ -338,31 +337,34 @@ export class EquipmentInboundService {
             }
           }
 
-          // 处理配件清单 - 创建配件实例并关联到设备实例
-          for (const accessory of accessoryList) {
-            const accessoryId = uuidv4();
-            const accessoryManageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
-            
-            // 创建配件实例，直接关联到主机设备
-            await db.query(
-              `INSERT INTO equipment_accessory_instances 
-               (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, manage_code, host_equipment_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                accessoryId,
-                accessory.accessory_name,
-                accessory.accessory_model || null,
-                null,
-                category,
-                accessory.accessory_unit || '个',
-                accessory.accessory_quantity,
-                null,
-                0,
-                null,
-                accessoryManageCode,
-                instanceId
-              ]
-            );
+          // 只有仪器类设备才处理配件清单
+          if (category === 'instrument') {
+            // 处理配件清单 - 创建配件实例并关联到设备实例
+            for (const accessory of accessoryList) {
+              const accessoryId = uuidv4();
+              const accessoryManageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
+              
+              // 创建配件实例，直接关联到主机设备
+              await db.query(
+                `INSERT INTO equipment_accessory_instances 
+                 (id, accessory_name, model_no, brand, category, unit, quantity, serial_number, purchase_price, notes, manage_code, host_equipment_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  accessoryId,
+                  accessory.accessory_name,
+                  accessory.accessory_model || null,
+                  null,
+                  category,
+                  accessory.accessory_unit || '个',
+                  accessory.accessory_quantity,
+                  null,
+                  0,
+                  null,
+                  accessoryManageCode,
+                  instanceId
+                ]
+              );
+            }
           }
           console.log(`[EquipmentInboundService] 创建汇总记录: ${modelName}, 数量: ${quantity}`);
         }

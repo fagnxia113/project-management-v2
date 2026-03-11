@@ -115,13 +115,13 @@ export default function RepairCreatePage() {
 
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_URL.BASE}/api/warehouses?page=1&pageSize=1000`, {
+      const res = await fetch(`${API_URL.BASE}/api/warehouses/${locationId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const result = await res.json()
       
-      if (result.success) {
-        const warehouse = (result.data || []).find((wh: Warehouse) => wh.id === locationId)
+      if (result.success && result.data) {
+        const warehouse = result.data
         const employeeId = warehouse?.manager_id || ''
         
         if (employeeId) {
@@ -129,13 +129,20 @@ export default function RepairCreatePage() {
             headers: { 'Authorization': `Bearer ${token}` }
           })
           const userResult = await userRes.json()
-          if (userResult.success) {
+          if (userResult.success && userResult.data) {
             setLocationManagerId(userResult.data.userId)
+          } else {
+            setLocationManagerId('')
           }
+        } else {
+          setLocationManagerId('')
         }
+      } else {
+        setLocationManagerId('')
       }
     } catch (error) {
       console.error('加载位置管理员失败:', error)
+      setLocationManagerId('')
     }
   }
 
@@ -172,8 +179,8 @@ export default function RepairCreatePage() {
     }
 
     if (!locationManagerId) {
-      alert('位置管理员信息加载失败，请稍后重试')
-      return
+      const proceed = window.confirm('未找到位置管理员信息，是否继续提交？系统将使用默认审批流程。')
+      if (!proceed) return
     }
 
     try {

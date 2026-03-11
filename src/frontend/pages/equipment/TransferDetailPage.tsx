@@ -34,6 +34,13 @@ interface TransferItem {
   shipping_images?: string[]
   receiving_images?: string[]
   accessories?: AccessoryItem[]
+  manufacturer?: string | null
+  technical_params?: string | null
+  purchase_date?: string | null
+  purchase_price?: number | null
+  calibration_expiry?: string | null
+  certificate_no?: string | null
+  certificate_issuer?: string | null
 }
 
 interface TransferOrder {
@@ -149,6 +156,13 @@ export default function TransferDetailPage() {
       const result = await response.json()
       
       if (result.success) {
+        console.log('[TransferDetail] 调拨单数据:', result.data);
+        console.log('[TransferDetail] 设备明细:', result.data.items);
+        if (result.data.items && result.data.items.length > 0) {
+          result.data.items.forEach((item: any, idx: number) => {
+            console.log(`[TransferDetail] 设备${idx+1} accessories:`, item.accessories);
+          });
+        }
         setOrder(result.data)
       } else {
         alert('调拨单不存在')
@@ -617,20 +631,27 @@ export default function TransferDetailPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">设备名称</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">序列号</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[120px]">设备名称</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">型号</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[80px]">类别</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[120px]">管理编号</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">序列号</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[60px]">数量</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[120px]">生产厂家</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[150px]">技术参数</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">采购日期</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">采购价格</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">校准到期</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[120px]">证书编号</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">发证单位</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[80px]">状态</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {order.items.map(item => (
                 <tr key={item.id}>
-                  <td className="px-4 py-3 text-sm">{item.equipment_name}</td>
-                  <td className="px-4 py-3 text-sm">{item.model_no}</td>
+                  <td className="px-4 py-3 text-sm font-medium">{item.equipment_name}</td>
+                  <td className="px-4 py-3 text-sm">{item.model_no || '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs ${
                       item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
@@ -643,6 +664,13 @@ export default function TransferDetailPage() {
                   <td className="px-4 py-3 text-sm">{item.manage_code || '-'}</td>
                   <td className="px-4 py-3 text-sm">{item.serial_number || '-'}</td>
                   <td className="px-4 py-3 text-sm">{item.quantity} {item.unit}</td>
+                  <td className="px-4 py-3 text-sm">{item.manufacturer || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-xs">{item.technical_params || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{item.purchase_date || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{item.purchase_price ? `¥${item.purchase_price.toFixed(2)}` : '-'}</td>
+                  <td className="px-4 py-3 text-sm">{item.calibration_expiry || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{item.certificate_no || '-'}</td>
+                  <td className="px-4 py-3 text-sm">{item.certificate_issuer || '-'}</td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs ${
                       item.status === 'transferred' ? 'bg-green-100 text-green-700' :

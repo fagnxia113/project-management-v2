@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { InboundOrderService } from '../services/InboundOrderService.js';
+import { inboundOrderServiceV2 } from '../services/InboundOrderServiceV2.js';
 
 const router = Router();
-const inboundOrderService = new InboundOrderService();
+const inboundOrderService = inboundOrderServiceV2;
 
 router.post('/', async (req: Request, res: Response) => {
   try {

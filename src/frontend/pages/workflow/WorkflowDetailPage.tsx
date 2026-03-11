@@ -378,35 +378,31 @@ export default function WorkflowDetailPage() {
           // 加载所有需要的映射数据
           const loadPromises: Promise<void>[] = []
 
-          if (deptIds.length > 0) {
-            loadPromises.push(
-              fetchWithTimeout(`${API_URL.BASE}/api/organization/departments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              }).then(async (res) => {
-                if (res.ok) {
-                  const result = await res.json()
-                  if (result.success && result.data) {
-                    setDeptMap(Object.fromEntries(result.data.map((d: any) => [d.id, d.name])))
-                  }
+          loadPromises.push(
+            fetchWithTimeout(`${API_URL.BASE}/api/organization/departments`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }).then(async (res) => {
+              if (res.ok) {
+                const result = await res.json()
+                if (result.success && result.data) {
+                  setDeptMap(Object.fromEntries(result.data.map((d: any) => [d.id, d.name])))
                 }
-              }).catch(() => {})
-            )
-          }
+              }
+            }).catch(() => {})
+          )
 
-          if (posIds.length > 0) {
-            loadPromises.push(
-              fetchWithTimeout(`${API_URL.BASE}/api/organization/positions`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              }).then(async (res) => {
-                if (res.ok) {
-                  const result = await res.json()
-                  if (result.success && result.data) {
-                    setPosMap(Object.fromEntries(result.data.map((p: any) => [p.id, p.name])))
-                  }
+          loadPromises.push(
+            fetchWithTimeout(`${API_URL.BASE}/api/organization/positions`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            }).then(async (res) => {
+              if (res.ok) {
+                const result = await res.json()
+                if (result.success && result.data) {
+                  setPosMap(Object.fromEntries(result.data.map((p: any) => [p.id, p.name])))
                 }
-              }).catch(() => {})
-            )
-          }
+              }
+            }).catch(() => {})
+          )
           
           if (warehouseIds.length > 0) {
             loadPromises.push(
@@ -1423,6 +1419,7 @@ export default function WorkflowDetailPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">配件信息</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
@@ -1441,10 +1438,29 @@ export default function WorkflowDetailPage() {
                       </td>
                       <td className="px-4 py-2 text-sm">{item.manage_code || '-'}</td>
                       <td className="px-4 py-2 text-sm">{item.quantity} {item.unit}</td>
+                      <td className="px-4 py-2 text-sm">
+                        {item.category === 'instrument' && item.accessories && item.accessories.length > 0 ? (
+                          <div className="text-xs space-y-1">
+                            {item.accessories.map((acc: any, idx: number) => (
+                              <div key={idx} className={`flex items-center gap-1 ${
+                                acc.status === 'lost' ? 'text-red-600' : 'text-gray-600'
+                              }`}>
+                                <span>{acc.accessory_name || acc.accessory_id || `配件${idx + 1}`}</span>
+                                {acc.accessory_quantity && <span>x{acc.accessory_quantity}</span>}
+                                {acc.status === 'lost' && (
+                                  <span className="ml-1 px-1 py-0.5 bg-red-100 text-red-600 rounded text-xs">已遗失</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={5} className="px-4 py-4 text-center text-gray-500 text-sm">
+                      <td colSpan={6} className="px-4 py-4 text-center text-gray-500 text-sm">
                         暂无设备明细
                       </td>
                     </tr>

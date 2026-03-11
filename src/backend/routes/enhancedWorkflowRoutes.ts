@@ -5,8 +5,7 @@ import { performanceMonitor } from '../services/PerformanceMonitor.js';
 import { instanceService } from '../services/InstanceService.js';
 import { taskService } from '../services/TaskService.js';
 import { definitionService } from '../services/DefinitionService.js';
-import { projectService } from '../services/ProjectService.js';
-import { inboundOrderService } from '../services/InboundOrderService.js';
+import { projectServiceV2 as projectService } from '../services/ProjectServiceV2.js';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
 import { db } from '../database/connection.js';
 

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { workTimeService } from '../services/WorkTimeService.js';
+import { workTimeServiceV2 as workTimeService } from '../services/WorkTimeServiceV2.js';
 
 const router = Router();
 

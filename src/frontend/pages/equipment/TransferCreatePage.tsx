@@ -16,6 +16,8 @@ interface Equipment {
   location_id: string
   location_name?: string
   main_image?: string
+  accessories?: any[]
+  accessory_desc?: string | null
 }
 
 interface Warehouse {
@@ -47,27 +49,29 @@ interface TransferItem {
   serial_number: string | null
   quantity: number
   available_quantity: number
+  accessories?: any[]
+  accessory_desc?: string | null
 }
 
 export default function TransferCreatePage() {
   const navigate = useNavigate()
-  
+
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [loading, setLoading] = useState(false)
-  
+
   const [fromLocationType, setFromLocationType] = useState<'warehouse' | 'project'>('warehouse')
   const [fromLocationId, setFromLocationId] = useState('')
   const [fromManagerId, setFromManagerId] = useState('')
   const [toLocationType, setToLocationType] = useState<'warehouse' | 'project'>('project')
   const [toLocationId, setToLocationId] = useState('')
   const [toManagerId, setToManagerId] = useState('')
-  
+
   const [transferItems, setTransferItems] = useState<TransferItem[]>([])
   const [transferReason, setTransferReason] = useState('')
   const [estimatedArrivalDate, setEstimatedArrivalDate] = useState('')
-  
+
   const [showEquipmentDialog, setShowEquipmentDialog] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -80,6 +84,7 @@ export default function TransferCreatePage() {
 
   useEffect(() => {
     if (fromLocationId) {
+      setTransferItems([])
       loadEquipment()
       loadFromManager()
     } else {
@@ -107,10 +112,10 @@ export default function TransferCreatePage() {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ])
-      
+
       const whData = await whRes.json()
       const projData = await projRes.json()
-      
+
       setWarehouses(whData.data || whData || [])
       setProjects(projData.data || projData || [])
     } catch (error) {
@@ -128,12 +133,12 @@ export default function TransferCreatePage() {
         location_status: fromLocationType === 'warehouse' ? 'warehouse' : 'in_project',
         location_id: fromLocationId
       })
-      
+
       const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const result = await response.json()
-      
+
       setEquipment(result.data || [])
     } catch (error) {
       console.error('加载设备失败:', error)
@@ -146,14 +151,14 @@ export default function TransferCreatePage() {
     try {
       const token = localStorage.getItem('token')
       let managerId = ''
-      
+
       if (fromLocationType === 'warehouse') {
         const warehouse = warehouses.find(w => w.id === fromLocationId)
         managerId = warehouse?.manager_id || ''
       } else {
         const project = projects.find(p => p.id === fromLocationId)
         const employeeId = project?.manager_id || ''
-        
+
         if (employeeId) {
           const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -164,7 +169,7 @@ export default function TransferCreatePage() {
           }
         }
       }
-      
+
       setFromManagerId(managerId)
     } catch (error) {
       console.error('加载调出负责人失败:', error)
@@ -175,14 +180,14 @@ export default function TransferCreatePage() {
     try {
       const token = localStorage.getItem('token')
       let managerId = ''
-      
+
       if (toLocationType === 'warehouse') {
         const warehouse = warehouses.find(w => w.id === toLocationId)
         managerId = warehouse?.manager_id || ''
       } else {
         const project = projects.find(p => p.id === toLocationId)
         const employeeId = project?.manager_id || ''
-        
+
         if (employeeId) {
           const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -193,7 +198,7 @@ export default function TransferCreatePage() {
           }
         }
       }
-      
+
       setToManagerId(managerId)
     } catch (error) {
       console.error('加载调入负责人失败:', error)
@@ -219,16 +224,16 @@ export default function TransferCreatePage() {
   }
 
   const handleAddEquipment = (eq: Equipment) => {
-    const existingItem = transferItems.find(item => 
-      item.equipment_id === eq.id || 
+    const existingItem = transferItems.find(item =>
+      item.equipment_id === eq.id ||
       (item.category !== 'instrument' && item.equipment_name === eq.equipment_name && item.model_no === eq.model_no)
     )
-    
+
     if (existingItem) {
       alert('该设备已添加')
       return
     }
-    
+
     const newItem: TransferItem = {
       id: crypto.randomUUID(),
       equipment_id: eq.id,
@@ -240,15 +245,17 @@ export default function TransferCreatePage() {
       manage_code: eq.manage_code,
       serial_number: eq.serial_number,
       quantity: 1,
-      available_quantity: eq.quantity || 1
+      available_quantity: eq.quantity || 1,
+      accessories: eq.accessories || [],
+      accessory_desc: eq.accessory_desc || null
     }
-    
+
     setTransferItems(prev => [...prev, newItem])
     setShowEquipmentDialog(false)
   }
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
-    setTransferItems(prev => prev.map(item => 
+    setTransferItems(prev => prev.map(item =>
       item.id === id ? { ...item, quantity: Math.min(quantity, item.available_quantity) } : item
     ))
   }
@@ -320,7 +327,10 @@ export default function TransferCreatePage() {
           unit: item.unit,
           manage_code: item.manage_code,
           serial_number: item.serial_number,
-          quantity: item.quantity
+          quantity: item.quantity,
+          accessories: item.accessories || [],
+          accessory_list: item.accessories || [], // 兼容某些组件
+          accessory_desc: item.accessory_desc || null
         }))
       }
 
@@ -340,12 +350,16 @@ export default function TransferCreatePage() {
       })
 
       const result = await response.json()
-      
+      console.log('调拨申请提交结果:', result)
+
       if (result.success) {
         alert('调拨申请提交成功！')
         navigate('/approvals/mine')
       } else {
-        alert('提交失败：' + (result.message || '未知错误'))
+        const errorMsg = result.message || '未知错误'
+        const dataErrors = result.data?.formValidation?.errors
+        console.error('提交失败详情:', dataErrors)
+        alert('提交失败：' + errorMsg + (dataErrors ? '\n' + JSON.stringify(dataErrors) : ''))
       }
     } catch (error) {
       console.error('提交失败:', error)
@@ -356,7 +370,7 @@ export default function TransferCreatePage() {
   }
 
   const filteredEquipment = equipment.filter(eq => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       eq.equipment_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       eq.model_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
       eq.manage_code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -409,7 +423,7 @@ export default function TransferCreatePage() {
               <option value="project">项目</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">调入位置类型</label>
             <select
@@ -424,7 +438,7 @@ export default function TransferCreatePage() {
               <option value="warehouse">仓库</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">调出位置 <span className="text-red-500">*</span></label>
             <select
@@ -444,7 +458,7 @@ export default function TransferCreatePage() {
               )}
             </select>
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">调入位置 <span className="text-red-500">*</span></label>
             <select
@@ -478,7 +492,7 @@ export default function TransferCreatePage() {
               + 添加设备
             </button>
           </div>
-          
+
           {transferItems.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -488,48 +502,72 @@ export default function TransferCreatePage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">配件信息</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {transferItems.map(item => (
-                    <tr key={item.id}>
-                      <td className="px-4 py-3 text-sm">{item.equipment_name}</td>
-                      <td className="px-4 py-3 text-sm">{item.model_no}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                          item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
-                          {getCategoryLabel(item.category)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">{item.manage_code || '-'}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <input
-                          type="number"
-                          min="1"
-                          max={item.available_quantity}
-                          value={item.quantity}
-                          onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value) || 1)}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
-                        />
-                        <span className="ml-1 text-gray-500">{item.unit}</span>
-                        {item.category !== 'instrument' && (
-                          <span className="ml-2 text-xs text-gray-400">(可用: {item.available_quantity})</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          移除
-                        </button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={item.id}>
+                      <tr>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="font-medium">{item.equipment_name}</div>
+                          {item.category === 'instrument' && item.serial_number && (
+                            <div className="text-xs text-gray-500">S/N: {item.serial_number}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{item.model_no}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs ${item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                            item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>
+                            {getCategoryLabel(item.category)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{item.manage_code || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {item.category !== 'instrument' ? (item.accessory_desc || '-') : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <input
+                            type="number"
+                            min="1"
+                            max={item.available_quantity}
+                            value={item.quantity}
+                            onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value) || 1)}
+                            className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
+                          />
+                          <span className="ml-1 text-gray-500">{item.unit}</span>
+                          {item.category !== 'instrument' && (
+                            <span className="ml-2 text-xs text-gray-400">(可用: {item.available_quantity})</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            移除
+                          </button>
+                        </td>
+                      </tr>
+                      {item.category === 'instrument' && item.accessories && item.accessories.length > 0 && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={7} className="px-4 py-2 text-xs text-gray-600">
+                            <div className="flex flex-wrap gap-x-6 gap-y-1">
+                              <span className="font-medium text-blue-600">仪器清单:</span>
+                              {item.accessories.map((acc: any, idx: number) => (
+                                <span key={idx} className="bg-white px-2 py-0.5 rounded border border-gray-200">
+                                  {acc.accessory_name} ({acc.accessory_model || '通用'}) x{acc.accessory_quantity}{acc.accessory_unit || '个'}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -593,7 +631,7 @@ export default function TransferCreatePage() {
                 ✕
               </button>
             </div>
-            
+
             <div className="p-4 border-b border-gray-200 flex gap-4">
               <input
                 type="text"
@@ -613,7 +651,7 @@ export default function TransferCreatePage() {
                 <option value="cable">线材类</option>
               </select>
             </div>
-            
+
             <div className="overflow-y-auto max-h-96">
               {loading ? (
                 <p className="text-center py-8 text-gray-500">加载中...</p>
@@ -635,8 +673,8 @@ export default function TransferCreatePage() {
                         <td className="px-4 py-3 text-sm relative">
                           <div className="flex items-center gap-2 group">
                             {eq.main_image && (
-                              <img 
-                                src={eq.main_image} 
+                              <img
+                                src={eq.main_image}
                                 alt={eq.equipment_name}
                                 className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-500"
                                 onClick={() => setPreviewImage(eq.main_image!)}
@@ -647,11 +685,10 @@ export default function TransferCreatePage() {
                         </td>
                         <td className="px-4 py-3 text-sm">{eq.model_no}</td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            eq.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
+                          <span className={`px-2 py-1 rounded text-xs ${eq.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
                             eq.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                            'bg-green-100 text-green-700'
-                          }`}>
+                              'bg-green-100 text-green-700'
+                            }`}>
                             {getCategoryLabel(eq.category)}
                           </span>
                         </td>
@@ -680,12 +717,12 @@ export default function TransferCreatePage() {
       )}
 
       {previewImage && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60]"
           onClick={() => setPreviewImage(null)}
         >
-          <img 
-            src={previewImage} 
+          <img
+            src={previewImage}
             alt="预览"
             className="max-w-[80vw] max-h-[80vh] object-contain rounded-lg"
           />
