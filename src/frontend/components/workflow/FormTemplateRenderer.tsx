@@ -84,22 +84,16 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
   const loadWarehouseManager = async (warehouseId: string) => {
     try {
-      console.log('开始加载仓库管理员，仓库ID:', warehouseId)
       const response = await fetch(`/api/warehouses/${warehouseId}/manager`)
-      console.log('仓库管理员API响应状态:', response.status)
       const result = await response.json()
-      console.log('仓库管理员API响应数据:', result)
       if (result.success && result.data) {
         setWarehouseManager(result.data)
         onChange('warehouse_manager_id', result.data.id)
-        console.log('成功设置仓库管理员ID:', result.data.id)
       } else {
         setWarehouseManager(null)
         onChange('warehouse_manager_id', '')
-        console.log('仓库管理员API返回失败或无数据')
       }
     } catch (error) {
-      console.error('加载仓库管理员失败:', error)
       setWarehouseManager(null)
       onChange('warehouse_manager_id', '')
     }
@@ -123,11 +117,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         }
       } else {
         const text = await response.text()
-        console.error('API 错误响应:', text)
         throw new Error(`服务器返回错误: ${response.status}`)
       }
     } catch (error) {
-      console.error('加载设备选项失败:', error)
     } finally {
       setLoadingEquipment(false)
     }
@@ -141,7 +133,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
       const result = await response.json()
-      console.log('配件数据:', result)
       if (Array.isArray(result)) {
         setAccessoryOptions(result)
       } else if (result.success && result.data && Array.isArray(result.data)) {
@@ -152,7 +143,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         setAccessoryOptions(result.data)
       }
     } catch (error) {
-      console.error('加载配件选项失败:', error)
     } finally {
       setLoadingAccessory(false)
     }
@@ -304,7 +294,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
   }
 
   const renderFieldInput = (field: FormField, value: any, onChange: (name: string, value: any) => void, isReadonly: boolean) => {
-    console.log('[FormTemplateRenderer] renderFieldInput:', field.name, 'isReadonly:', isReadonly, 'value:', value)
     switch (field.type) {
       case 'text':
       case 'phone':
@@ -815,7 +804,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
   const renderField = (field: FormField) => {
     const permissions = getFieldPermissions(field)
-    console.log('[FormTemplateRenderer] renderField:', field.name, 'permissions:', permissions, 'effectiveNodeId:', effectiveNodeId)
 
     if (!permissions.visible) {
       return null
@@ -1046,8 +1034,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             userDisplayValue = selectedUser[1]
           }
         }
-
-        console.log('[FormTemplateRenderer] userDisplayValue:', userDisplayValue)
 
         const isUserDisabled = isReadonly || field.disabled
         if (isUserDisabled) {
@@ -3194,11 +3180,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      console.log('[FormTemplateRenderer] 点击添加设备明细按钮')
-                      console.log('[FormTemplateRenderer] field.name:', field.name)
-                      console.log('[FormTemplateRenderer] arrayValue:', arrayValue)
-                      console.log('[FormTemplateRenderer] arrayConfig.fields:', arrayConfig.fields)
-
                       const newItem: any = {}
                         ; (Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []).forEach((f: any) => {
                           if (f.type === 'array') {
@@ -3210,9 +3191,6 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                       newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                       newItem.isCustomName = false
                       newItem.isCustomModel = false
-
-                      console.log('[FormTemplateRenderer] newItem:', newItem)
-                      console.log('[FormTemplateRenderer] 调用 onChange，参数:', field.name, [...arrayValue, newItem])
 
                       onChange(field.name, [...arrayValue, newItem])
                     }}

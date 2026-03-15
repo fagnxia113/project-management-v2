@@ -143,7 +143,6 @@ router.get('/equipment/accessories', async (req, res) => {
     const result = await equipmentAccessoryService.getAllAccessories({});
     res.json(result);
   } catch (error) {
-    console.error('获取配件列表错误:', error);
     res.status(500).json({ error: (error as Error).message });
   }
 });
@@ -265,8 +264,6 @@ router.get('/transfer/:id', async (req, res) => {
 // 发货
 router.post('/transfer/:id/dispatch', async (req, res) => {
   try {
-    console.log('[Dispatch] 原始req.body:', typeof req.body, req.body);
-
     let body = req.body;
 
     // 如果body是字符串，尝试解析
@@ -274,22 +271,18 @@ router.post('/transfer/:id/dispatch', async (req, res) => {
       try {
         body = JSON.parse(body);
       } catch (e) {
-        console.log('[Dispatch] body解析失败');
+        // 解析失败，继续使用原始body
       }
     }
-
-    console.log('[Dispatch] 解析后body:', typeof body, body);
 
     // 如果items是字符串，也需要解析
     if (body && body.items && typeof body.items === 'string') {
       try {
         body.items = JSON.parse(body.items);
       } catch (e) {
-        console.log('[Dispatch] items解析失败');
+        // 解析失败，继续使用原始items
       }
     }
-
-    console.log('[Dispatch] 最终body.items:', body?.items);
 
     if (!body || !body.items) {
       res.status(400).json({ error: '请求体格式错误', body: req.body });
@@ -304,7 +297,6 @@ router.post('/transfer/:id/dispatch', async (req, res) => {
     const result = await transferServiceV2.dispatchOrder(req.params.id, body);
     res.json(result);
   } catch (error) {
-    console.error('[Dispatch] 错误:', error);
     res.status(400).json({ error: (error as Error).message });
   }
 });

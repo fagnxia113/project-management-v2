@@ -811,8 +811,6 @@ export class EnhancedWorkflowEngine {
     definition: WorkflowDefinition,
     node: WorkflowNode
   ): Promise<void> {
-    console.log(`[EnhancedWorkflowEngine] 执行服务任务: ${node.name}`);
-
     // 更新当前节点信息
     await this.updateCurrentNode(instance.id, node.id, node.name);
 
@@ -920,8 +918,6 @@ export class EnhancedWorkflowEngine {
     config: any
   ): Promise<void> {
     try {
-      console.log('[EnhancedWorkflowEngine] 开始执行创建员工服务任务');
-
       const formData = instance.variables?.formData || {};
 
       logger.debug('创建员工服务 - formData', { formData })
@@ -1123,8 +1119,6 @@ export class EnhancedWorkflowEngine {
     config: any
   ): Promise<void> {
     try {
-      console.log('[EnhancedWorkflowEngine] 开始执行创建设备服务任务');
-
       const formData = instance.variables?.formData || {};
 
       logger.debug('创建设备服务 - formData', { formData })
@@ -1147,8 +1141,6 @@ export class EnhancedWorkflowEngine {
     config: any
   ): Promise<void> {
     try {
-      console.log('[EnhancedWorkflowEngine] 开始执行设备调拨发货服务任务');
-
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
 
@@ -1209,7 +1201,6 @@ export class EnhancedWorkflowEngine {
           const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
 
           if (!equipment) {
-            console.log(`[EnhancedWorkflowEngine] 未找到调出位置的设备记录: ${item.equipment_name} ${item.model_no}`);
             continue;
           }
 
@@ -1282,8 +1273,6 @@ export class EnhancedWorkflowEngine {
     config: any
   ): Promise<void> {
     try {
-      console.log('[EnhancedWorkflowEngine] 开始执行设备调拨收货服务任务');
-
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
 
@@ -1371,7 +1360,6 @@ export class EnhancedWorkflowEngine {
                WHERE id = ?`,
               [transferQuantity, existingEquipment.id]
             );
-            console.log(`[EnhancedWorkflowEngine] 调入位置数量已增加: ${existingEquipment.id}`);
           } else {
             const [modelRows] = await db.query<any>(
               `SELECT * FROM equipment_models WHERE name = ? AND model_no = ? AND category = ?`,
@@ -1394,7 +1382,6 @@ export class EnhancedWorkflowEngine {
                 location_id: toLocationId,
                 keeper_id: locDetails.manager_id || undefined
               });
-              console.log(`[EnhancedWorkflowEngine] 已创建调入位置设备记录(含保管人): ${newEquipmentId}`);
             }
           }
         }
@@ -1424,8 +1411,6 @@ export class EnhancedWorkflowEngine {
     config: any
   ): Promise<void> {
     try {
-      console.log('[EnhancedWorkflowEngine] 开始执行设备维修发货服务任务');
-
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
 
@@ -1522,8 +1507,6 @@ export class EnhancedWorkflowEngine {
     config: any
   ): Promise<void> {
     try {
-      console.log('[EnhancedWorkflowEngine] 开始执行设备维修收货服务任务');
-
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
 
@@ -1586,7 +1569,6 @@ export class EnhancedWorkflowEngine {
           `UPDATE equipment_instances SET quantity = quantity + ? WHERE id = ?`,
           [repairQuantity, order.equipment_id]
         );
-        console.log(`[EnhancedWorkflowEngine] 设备数量已恢复: ${order.equipment_id}`);
       }
 
       await db.execute(
@@ -1765,18 +1747,12 @@ export class EnhancedWorkflowEngine {
   // ==================== 辅助方法 ====================
 
   private async endInstance(instanceId: string, result: string): Promise<void> {
-    console.log(`[EnhancedWorkflowEngine] endInstance 被调用: instanceId=${instanceId}, result=${result}`);
-    console.log(`[EnhancedWorkflowEngine] process.ended 事件监听器数量: ${this.eventBus.listenerCount('process.ended')}`);
     try {
       await this.clearCurrentNode(instanceId);
-      console.log(`[EnhancedWorkflowEngine] clearCurrentNode 完成`);
       await instanceService.endInstance(instanceId, result as any);
-      console.log(`[EnhancedWorkflowEngine] instanceService.endInstance 完成`);
-      console.log(`[EnhancedWorkflowEngine] 准备触发 process.ended 事件: instanceId=${instanceId}, result=${result}`);
       this.eventBus.emit('process.ended', { instanceId, result, timestamp: new Date() });
-      console.log(`[EnhancedWorkflowEngine] process.ended 事件已触发`);
     } catch (error) {
-      console.error(`[EnhancedWorkflowEngine] endInstance 错误:`, error);
+      logger.error(`[EnhancedWorkflowEngine] endInstance 错误:`, error as Error);
       throw error;
     }
   }
