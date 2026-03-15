@@ -14,6 +14,10 @@ export interface WorkflowNode {
   gatewayConfig?: GatewayConfig;
   serviceConfig?: ServiceConfig;
   timeoutConfig?: TimeoutConfig;
+  actions?: {
+    allowed: string[];
+    defaultAction: string;
+  };
 }
 
 export interface ApprovalConfig {
@@ -30,6 +34,9 @@ export interface ApprovalConfig {
   };
   formConfig?: TaskFormConfig;
   notifyConfig?: NotifyConfig;
+  allowReject?: boolean;
+  allowReturn?: boolean;
+  returnTarget?: string;
 }
 
 export interface NotifyConfig {
@@ -61,7 +68,7 @@ export interface FieldPermission {
 }
 
 export interface ApproverSource {
-  type: 'fixed' | 'user' | 'role' | 'department' | 'superior' | 'department_manager' | 'project_manager' | 'form_field' | 'expression' | 'previous_handler' | 'initiator';
+  type: 'fixed' | 'user' | 'role' | 'department' | 'superior' | 'department_manager' | 'project_manager' | 'form_field' | 'field' | 'expression' | 'previous_handler' | 'initiator';
   value: string | string[];
   fallback?: ApproverSource;
 }

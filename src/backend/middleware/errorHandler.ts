@@ -9,10 +9,9 @@ export function errorHandler(
   next: NextFunction
 ): void {
   if (err instanceof AppError) {
-    logger.warn({
+    logger.warn(`[APP_ERROR] ${err.name}: ${err.message}`, {
       type: 'APP_ERROR',
       name: err.name,
-      message: err.message,
       statusCode: err.statusCode,
       path: req.path,
       method: req.method,
@@ -28,9 +27,8 @@ export function errorHandler(
   }
 
   if (err.name === 'ValidationError') {
-    logger.warn({
+    logger.warn(`[VALIDATION_ERROR] ${err.message}`, {
       type: 'VALIDATION_ERROR',
-      message: err.message,
       path: req.path,
       method: req.method,
     })
@@ -44,9 +42,8 @@ export function errorHandler(
   }
 
   if (err.name === 'UnauthorizedError') {
-    logger.warn({
+    logger.warn(`[UNAUTHORIZED] ${err.message}`, {
       type: 'UNAUTHORIZED',
-      message: err.message,
       path: req.path,
       method: req.method,
     })
@@ -74,7 +71,7 @@ export function errorHandler(
 }
 
 export function notFoundHandler(req: Request, res: Response): void {
-  logger.warn({
+  logger.warn(`[NOT_FOUND] ${req.method} ${req.path}`, {
     type: 'NOT_FOUND',
     path: req.path,
     method: req.method,
@@ -88,7 +85,7 @@ export function notFoundHandler(req: Request, res: Response): void {
 }
 
 export function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+  fn: (req: any, res: any, next: NextFunction) => Promise<any>
 ) {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next)

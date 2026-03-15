@@ -110,7 +110,7 @@ const INBOUND_TYPE_LABELS: Record<string, string> = {
 const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
   'instrument': '仪器类',
   'fake_load': '假负载类',
-  'cable': '线材类'
+  'accessory': '配件类'
 }
 
 // 位置类型映射
@@ -761,12 +761,12 @@ export default function ApprovalMinePageNew() {
                                 <p className="text-sm font-medium text-gray-900">{item.remark || '-'}</p>
                               </div>
 
-                              {/* 主机图片 */}
-                              {item.main_images && item.main_images.length > 0 && (
+                              {/* 图片信息 */}
+                              {((item.images && item.images.length > 0) || (item.main_images && item.main_images.length > 0) || (item.accessory_images && item.accessory_images.length > 0)) && (
                                 <div>
-                                  <span className="text-xs text-gray-500 block mb-2">主机图片</span>
+                                  <span className="text-xs text-gray-500 block mb-2">图片信息</span>
                                   <div className="flex flex-wrap gap-2">
-                                    {item.main_images.map((img: string, imgIdx: number) => (
+                                    {[...(item.images || []), ...(item.main_images || []), ...(item.accessory_images || [])].map((img: string, imgIdx: number) => (
                                       <a
                                         key={imgIdx}
                                         href={img}
@@ -776,31 +776,7 @@ export default function ApprovalMinePageNew() {
                                       >
                                         <img
                                           src={img}
-                                          alt={`主机图片 ${imgIdx + 1}`}
-                                          className="w-20 h-20 object-cover rounded border border-gray-200 hover:border-blue-500 transition-colors"
-                                        />
-                                      </a>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 配件图片 */}
-                              {item.accessory_images && item.accessory_images.length > 0 && (
-                                <div>
-                                  <span className="text-xs text-gray-500 block mb-2">配件图片</span>
-                                  <div className="flex flex-wrap gap-2">
-                                    {item.accessory_images.map((img: string, imgIdx: number) => (
-                                      <a
-                                        key={imgIdx}
-                                        href={img}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block"
-                                      >
-                                        <img
-                                          src={img}
-                                          alt={`配件图片 ${imgIdx + 1}`}
+                                          alt={`图片 ${imgIdx + 1}`}
                                           className="w-20 h-20 object-cover rounded border border-gray-200 hover:border-blue-500 transition-colors"
                                         />
                                       </a>

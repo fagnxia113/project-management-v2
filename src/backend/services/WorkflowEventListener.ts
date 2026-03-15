@@ -1,11 +1,9 @@
 import { enhancedWorkflowEngine } from './EnhancedWorkflowEngine.js';
-import { equipmentRepairService } from './EquipmentRepairService.js';
-import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
-import { equipmentInboundService } from './EquipmentInboundService.js';
-import { TransferOrderService } from './TransferOrderService.js';
+import { equipmentRepairServiceV2 as equipmentRepairService } from './EquipmentRepairServiceV2.js';
+import { equipmentScrapSaleServiceV2 as equipmentScrapSaleService } from './EquipmentScrapSaleServiceV2.js';
+import { equipmentInboundServiceV2 as equipmentInboundService } from './EquipmentInboundServiceV2.js';
+import { transferOrderServiceV2 as transferOrderService } from './TransferOrderServiceV2.js';
 import { instanceService } from './InstanceService.js';
-
-const transferOrderService = new TransferOrderService();
 
 export class WorkflowEventListener {
   private listenersSetup = false;
@@ -23,7 +21,7 @@ export class WorkflowEventListener {
     enhancedWorkflowEngine.on('task.completed', async (event: any) => {
       try {
         const { task, params } = event;
-        
+
         if (!task.instance_id) {
           return;
         }
@@ -60,7 +58,7 @@ export class WorkflowEventListener {
     try {
       const action = params.action;
       console.log(`[WorkflowEventListener] 处理入库审批 - instanceId: ${instance.id}, nodeId: ${nodeId}, action: ${action}`);
-      
+
       // 设备入库流程的数据库操作现在由服务节点处理
       // 保留此注释以便后续参考
       // if (nodeId === 'warehouse-manager' && (action === 'approve' || action === 'approved')) {
@@ -117,9 +115,18 @@ export class WorkflowEventListener {
         } else if (action === 'reject' || action === 'rejected') {
           await equipmentScrapSaleService.rejectScrapSaleOrder(orderId, operator.id, operator.name, comment);
         }
-      } else if (nodeId === 'process') {
+      } else if (nodeId === 'process' || nodeId === 'scrap-process') {
         if (action === 'approve' || action === 'approved') {
           await equipmentScrapSaleService.processScrapSaleOrder(orderId, operator.id);
+          
+          // 获取订单详情以执行实物报废逻辑
+          const order = await equipmentScrapSaleService.getById(orderId);
+          if (order && order.equipment_id) {
+            await equipmentScrapSaleService.setEquipmentStatusToScrapped(
+              order.equipment_id, 
+              order.scrap_quantity || 1
+            );
+          }
         }
       }
     } catch (error) {
@@ -143,13 +150,23 @@ export class WorkflowEventListener {
       if (nodeId === 'from-location-manager' || nodeId === 'from_manager' || nodeId === 'from-manager' || nodeId === 'from-manager-approval') {
         if (action === 'approve' || action === 'approved') {
           await transferOrderService.approveFromLocation(transferOrderId, operator.id, comment);
+
+          await transferOrderService.confirmShipping(transferOrderId, {
+            shipped_by: operator.id,
+            shipped_at: new Date().toISOString(),
+            shipping_no: `AUTO-${Date.now()}`,
+            shipping_attachment: undefined,
+            item_images: [],
+            package_images: []
+          });
         } else if (action === 'reject' || action === 'rejected') {
-          await transferOrderService.rejectOrder(transferOrderId, operator.id, comment || '');
+          await transferOrderService.rejectOrder(transferOrderId, operator.id, operator.name, comment || '');
         }
       } else if (nodeId === 'shipping' || nodeId === 'ship') {
         if (action === 'approve' || action === 'approved') {
           const shipFormData = params.formData || {};
-          await transferOrderService.shipOrder(transferOrderId, operator.id, operator.name, {
+          await transferOrderService.confirmShipping(transferOrderId, {
+            shipped_by: operator.id,
             shipped_at: shipFormData.shipped_at,
             shipping_no: shipFormData.shipping_no,
             shipping_attachment: shipFormData.shipping_attachment,
@@ -160,29 +177,30 @@ export class WorkflowEventListener {
       } else if (nodeId === 'to-location-manager' || nodeId === 'receiving' || nodeId === 'receive') {
         if (action === 'approve' || action === 'approved') {
           await transferOrderService.approveToLocation(transferOrderId, operator.id, comment);
-          
+
           const order = await transferOrderService.getById(transferOrderId);
           if (!order) {
             return;
           }
-          
-          await transferOrderService.shipOrder(transferOrderId, operator.id, operator.name, {
+
+          await transferOrderService.confirmShipping(transferOrderId, {
+            shipped_by: operator.id,
             shipped_at: new Date().toISOString(),
             shipping_no: `AUTO-${Date.now()}`,
             shipping_attachment: undefined,
             item_images: [],
             package_images: []
           });
-          
+
           const items = order.items || [];
           const receivedItems = items.map((item: any) => ({
             item_id: item.id,
             received_quantity: item.quantity
           }));
-          
+
           const receiveFormData = params.formData || {};
-          await transferOrderService.receiveOrder(transferOrderId, operator.id, operator.name, {
-            received_at: new Date().toISOString(),
+          await transferOrderService.confirmReceiving(transferOrderId, {
+            received_by: operator.id,
             receive_status: receiveFormData.receive_status || 'normal',
             receive_comment: comment || '审批通过自动收货',
             item_images: receiveFormData.item_images || [],

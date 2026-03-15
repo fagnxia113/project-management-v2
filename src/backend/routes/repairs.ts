@@ -1,119 +1,81 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 import { equipmentRepairServiceV2 as equipmentRepairService } from '../services/EquipmentRepairServiceV2.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
-router.post('/', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.userId || 'system';
-    const userName = (req as any).user?.username || '系统';
-    
-    console.log('[Repair] Creating order:', JSON.stringify(req.body, null, 2));
-    console.log('[Repair] User:', userId, userName);
-    
-    if (req.body.equipment_data && Array.isArray(req.body.equipment_data)) {
-      const orders = await equipmentRepairService.createBatchRepairOrders(req.body, userId, userName);
-      res.status(201).json({ success: true, data: orders });
-    } else {
-      const order = await equipmentRepairService.createRepairOrder(req.body, userId, userName);
-      res.status(201).json({ success: true, data: order });
-    }
-  } catch (error: any) {
-    console.error('[Repair] Error creating order:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// 创建维修单
+router.post('/', asyncHandler(async (req, res) => {
+  const userId = req.user?.id || 'system';
+  const userName = req.user?.name || '系统';
+  const data = {
+    ...req.body,
+    applicant_id: userId,
+    applicant_name: userName,
+  };
 
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const { status, applicant_id, equipment_id } = req.query;
-    
-    const orders = await equipmentRepairService.list({
-      status: status as string,
-      applicant_id: applicant_id as string,
-      equipment_id: equipment_id as string
-    });
-    
-    res.json({ success: true, data: orders });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+  const order = await equipmentRepairService.createRepairOrder(data);
+  res.status(201).json({ success: true, data: order });
+}));
 
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const order = await equipmentRepairService.getById(req.params.id);
-    
-    if (!order) {
-      return res.status(404).json({ success: false, error: '维修单不存在' });
-    }
-    
-    res.json({ success: true, data: order });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// 维修单列表
+router.get('/', asyncHandler(async (req, res) => {
+  const { status, page, pageSize } = req.query;
 
-router.put('/:id/ship', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.userId || 'system';
-    const userName = (req as any).user?.username || '系统';
-    const { shipping_no } = req.body;
-    
-    if (!shipping_no) {
-      return res.status(400).json({ success: false, error: '物流单号不能为空' });
-    }
-    
-    const result = await equipmentRepairService.shipRepairOrder(req.params.id, shipping_no, userId);
-    res.json({ success: true, data: result });
-  } catch (error: any) {
-    console.error('[Repair] Error shipping order:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+  const result = await equipmentRepairService.list({
+    status: status as string,
+    page: page ? parseInt(page as string) : 1,
+    pageSize: pageSize ? parseInt(pageSize as string) : 10
+  });
 
-router.put('/:id/approve', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.userId || 'system';
-    const userName = (req as any).user?.username || '系统';
-    const { comment } = req.body;
-    
-    const result = await equipmentRepairService.approveRepairOrder(req.params.id, userId, userName, comment);
-    res.json({ success: true, data: result });
-  } catch (error: any) {
-    console.error('[Repair] Error approving order:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+  res.json({ success: true, ...result });
+}));
 
-router.put('/:id/reject', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.userId || 'system';
-    const userName = (req as any).user?.username || '系统';
-    const { comment } = req.body;
-    
-    if (!comment) {
-      return res.status(400).json({ success: false, error: '驳回意见不能为空' });
-    }
-    
-    const result = await equipmentRepairService.rejectRepairOrder(req.params.id, userId, userName, comment);
-    res.json({ success: true, data: result });
-  } catch (error: any) {
-    console.error('[Repair] Error rejecting order:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// 维修单详情
+router.get('/:id', asyncHandler(async (req, res) => {
+  const order = await equipmentRepairService.getById(req.params.id);
 
-router.put('/:id/receive', async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.userId || 'system';
-    
-    const result = await equipmentRepairService.receiveRepairOrder(req.params.id, userId);
-    res.json({ success: true, data: result });
-  } catch (error: any) {
-    console.error('[Repair] Error receiving order:', error);
-    res.status(500).json({ success: false, error: error.message });
+  if (!order) {
+    return res.status(404).json({ success: false, error: '维修单不存在' });
   }
-});
+
+  res.json({ success: true, data: order });
+}));
+
+// 发货
+router.put('/:id/ship', asyncHandler(async (req, res) => {
+  const { shipping_no } = req.body;
+
+  if (!shipping_no) {
+    return res.status(400).json({ success: false, error: '物流单号不能为空' });
+  }
+
+  const result = await equipmentRepairService.shipRepairOrder(req.params.id, shipping_no);
+  res.json({ success: true, data: result });
+}));
+
+// 审批
+router.put('/:id/approve', asyncHandler(async (req, res) => {
+  const result = await equipmentRepairService.approveRepairOrder(req.params.id);
+  res.json({ success: true, data: result });
+}));
+
+// 驳回
+router.put('/:id/reject', asyncHandler(async (req, res) => {
+  const { comment } = req.body;
+
+  if (!comment) {
+    return res.status(400).json({ success: false, error: '驳回意见不能为空' });
+  }
+
+  const result = await equipmentRepairService.rejectRepairOrder(req.params.id);
+  res.json({ success: true, data: result });
+}));
+
+// 收货
+router.put('/:id/receive', asyncHandler(async (req, res) => {
+  const result = await equipmentRepairService.receiveRepairOrder(req.params.id);
+  res.json({ success: true, data: result });
+}));
 
 export default router;

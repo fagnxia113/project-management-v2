@@ -15,7 +15,7 @@ interface Equipment {
   model_no: string
   manufacturer: string | null
   technical_params: string | null
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load'
   unit: string
   quantity: number
   serial_number: string | null
@@ -70,7 +70,7 @@ export default function EquipmentListPage() {
   const loadLocations = async () => {
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       
       const [warehousesRes, projectsRes] = await Promise.all([
         fetch(`${API_URL.BASE}/api/warehouses`, { headers }),
@@ -95,7 +95,7 @@ export default function EquipmentListPage() {
     try {
       setLoading(true)
       const token = localStorage.getItem('token')
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       
       const params = new URLSearchParams({
         page: page.toString(),
@@ -138,7 +138,7 @@ export default function EquipmentListPage() {
     
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       const response = await fetch(`${API_URL.BASE}/api/equipment/images/equipment/${equipmentId}`, { headers })
       const result = await response.json()
       if (result.success && result.data) {
@@ -219,12 +219,12 @@ export default function EquipmentListPage() {
     const styles: Record<string, string> = {
       instrument: 'bg-purple-100 text-purple-700',
       fake_load: 'bg-blue-100 text-blue-700',
-      cable: 'bg-orange-100 text-orange-700'
+      accessory: 'bg-green-100 text-green-700'
     }
     const labels: Record<string, string> = {
       instrument: '仪器类',
       fake_load: '假负载类',
-      cable: '线材类'
+      accessory: '配件类'
     }
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[category] || ''}`}>
@@ -238,7 +238,7 @@ export default function EquipmentListPage() {
     
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {}
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {}
       
       const response = await fetch(`${API_URL.BASE}/api/equipment/instances/${id}`, {
         method: 'DELETE',
@@ -291,7 +291,7 @@ export default function EquipmentListPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex gap-4 mb-4">
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
           <input
             type="text"
             value={searchTerm}
@@ -301,71 +301,108 @@ export default function EquipmentListPage() {
           />
           <button
             onClick={() => setPage(1)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
           >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
             搜索
           </button>
         </div>
 
-        <div className="flex gap-4 flex-wrap">
-          <select
-            value={filterCategory}
-            onChange={(e) => { setFilterCategory(e.target.value); setPage(1) }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">全部类别</option>
-            <option value="instrument">仪器类</option>
-            <option value="fake_load">假负载类</option>
-            <option value="cable">线材类</option>
-          </select>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">设备类别</label>
+              <select
+                value={filterCategory}
+                onChange={(e) => { setFilterCategory(e.target.value); setPage(1) }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              >
+                <option value="">全部类别</option>
+                <option value="instrument">仪器类</option>
+                <option value="fake_load">假负载类</option>
+                <option value="accessory">配件类</option>
+              </select>
+            </div>
 
-          <select
-            value={filterHealthStatus}
-            onChange={(e) => { setFilterHealthStatus(e.target.value); setPage(1) }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">全部健康状态</option>
-            <option value="normal">正常</option>
-            <option value="slightly_damaged">轻微损坏</option>
-            <option value="affected_use">影响使用</option>
-            <option value="repairing">维修中</option>
-            <option value="scrapped">已报废</option>
-          </select>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">健康状态</label>
+              <select
+                value={filterHealthStatus}
+                onChange={(e) => { setFilterHealthStatus(e.target.value); setPage(1) }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              >
+                <option value="">全部健康状态</option>
+                <option value="normal">正常</option>
+                <option value="slightly_damaged">轻微损坏</option>
+                <option value="affected_use">影响使用</option>
+                <option value="repairing">维修中</option>
+                <option value="scrapped">已报废</option>
+              </select>
+            </div>
 
-          <select
-            value={filterUsageStatus}
-            onChange={(e) => { setFilterUsageStatus(e.target.value); setPage(1) }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">全部使用状态</option>
-            <option value="idle">闲置</option>
-            <option value="in_use">使用中</option>
-          </select>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">使用状态</label>
+              <select
+                value={filterUsageStatus}
+                onChange={(e) => { setFilterUsageStatus(e.target.value); setPage(1) }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              >
+                <option value="">全部使用状态</option>
+                <option value="idle">闲置</option>
+                <option value="in_use">使用中</option>
+              </select>
+            </div>
 
-          <select
-            value={filterLocationStatus}
-            onChange={(e) => { setFilterLocationStatus(e.target.value); setPage(1) }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">全部位置状态</option>
-            <option value="warehouse">仓库</option>
-            <option value="in_project">项目中</option>
-            <option value="repairing">维修中</option>
-            <option value="transferring">调拨中</option>
-          </select>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-1">位置状态</label>
+              <select
+                value={filterLocationStatus}
+                onChange={(e) => { setFilterLocationStatus(e.target.value); setPage(1) }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              >
+                <option value="">全部位置状态</option>
+                <option value="warehouse">仓库</option>
+                <option value="in_project">项目中</option>
+                <option value="repairing">维修中</option>
+                <option value="transferring">调拨中</option>
+              </select>
+            </div>
 
-          <select
-            value={filterLocationId}
-            onChange={(e) => { setFilterLocationId(e.target.value); setPage(1) }}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">全部位置</option>
-            {locations.map((loc) => (
-              <option key={loc.id} value={loc.id}>
-                {loc.type === 'warehouse' ? `仓库: ${loc.name}` : `项目: ${loc.name}`}
-              </option>
-            ))}
-          </select>
+            <div className="relative md:col-span-2 lg:col-span-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">具体位置</label>
+              <select
+                value={filterLocationId}
+                onChange={(e) => { setFilterLocationId(e.target.value); setPage(1) }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              >
+                <option value="">全部位置</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.type === 'warehouse' ? `仓库: ${loc.name}` : `项目: ${loc.name}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-2">
+            <button
+              onClick={() => {
+                setFilterCategory('');
+                setFilterHealthStatus('');
+                setFilterUsageStatus('');
+                setFilterLocationStatus('');
+                setFilterLocationId('');
+                setSearchTerm('');
+                setPage(1);
+              }}
+              className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              重置筛选
+            </button>
+          </div>
         </div>
       </div>
 
@@ -394,7 +431,6 @@ export default function EquipmentListPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">校准到期</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">证书编号</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">发证单位</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">配件描述</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] sticky right-0 bg-gray-50 z-10">操作</th>
               </tr>
             </thead>
@@ -445,7 +481,7 @@ export default function EquipmentListPage() {
                           </button>
                           {hoveredEquipment === item.id && equipmentImages[item.id] && equipmentImages[item.id].length > 0 && (
                             <div className="absolute z-[100] left-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[150px] max-w-[200px]">
-                              <div className="text-xs text-gray-500 mb-1">主机图片</div>
+                              <div className="text-xs text-gray-500 mb-1">设备图片</div>
                               <img
                                 src={equipmentImages[item.id].find(img => img.image_type === 'main')?.image_url || equipmentImages[item.id][0]?.image_url}
                                 alt="设备图片"
@@ -513,9 +549,6 @@ export default function EquipmentListPage() {
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {item.certificate_issuer || '-'}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {item.accessory_desc || '-'}
-                      </td>
                       <td className="px-6 py-4 sticky right-0 bg-white z-10">
                         <div className="flex gap-2">
                           <button
@@ -537,18 +570,23 @@ export default function EquipmentListPage() {
                     </tr>
                     {expandedRows.has(item.id) && item.category === 'instrument' && item.display_type !== 'aggregated' && (
                       <tr key={`${item.id}-accessories`} className="bg-gray-50">
-                        <td colSpan={23} className="px-6 py-4">
+                        <td colSpan={22} className="px-6 py-4">
                           <div className="ml-8">
                             <h4 className="text-sm font-medium text-gray-700 mb-2">配件清单</h4>
                             {item.accessories && item.accessories.length > 0 ? (
                               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                                 {item.accessories.map((acc: any, idx: number) => (
                                   <div key={idx} className="flex items-center gap-2 text-gray-700">
-                                    <span className="font-medium">{acc.accessory_name || '-'}</span>
+                                    <span 
+                                      onClick={() => window.location.href = `/equipment/accessories/${acc.id}`}
+                                      className="font-medium text-blue-600 hover:text-blue-800 cursor-pointer"
+                                    >
+                                      {acc.accessory_name || '-'}
+                                    </span>
                                     <span className="text-gray-400">|</span>
-                                    <span className="text-gray-500">{acc.accessory_model || '-'}</span>
+                                    <span className="text-gray-500">{acc.model_no || '-'}</span>
                                     <span className="text-gray-400">|</span>
-                                    <span>{acc.accessory_quantity || '-'} {acc.accessory_unit || ''}</span>
+                                    <span>{acc.quantity || '-'} {acc.unit || ''}</span>
                                   </div>
                                 ))}
                               </div>

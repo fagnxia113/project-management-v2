@@ -8,7 +8,7 @@ interface TransferItem {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   manage_code: string | null
   serial_number: string | null
@@ -20,6 +20,7 @@ interface TransferItem {
   receiving_images?: string[]
   accessories?: any[]
   accessory_desc?: string
+  is_accessory?: boolean
 }
 
 interface TransferOrder {
@@ -401,7 +402,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
     const labels: Record<string, string> = {
       instrument: '仪器类',
       fake_load: '假负载类',
-      cable: '线材类'
+      accessory: '配件类'
     }
     return labels[category] || category
   }
@@ -468,133 +469,211 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
   const canReturnFromReceiving = order.status === 'receiving' && currentUser?.id === order.to_manager_id
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-white border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-medium text-gray-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-500" />
-            基本信息
-          </h3>
-          {getStatusBadge(order.status)}
+    <div className="space-y-8 animate-fade-in max-w-5xl mx-auto pb-20">
+      {/* Header Summary */}
+      <div className="premium-card p-10 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"></div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                 <FileText className="w-6 h-6" />
+              </div>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tighter">设备调拨任务单</h2>
+            </div>
+            <div className="flex items-center gap-3">
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">ORDER NO: {order.order_no}</span>
+               <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{formatDate(order.apply_date)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden md:block">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Current Status</p>
+              {getStatusBadge(order.status)}
+            </div>
+            <div className="w-px h-10 bg-slate-100 mx-2 hidden md:block"></div>
+            <div className="flex -space-x-3">
+               <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-blue-600 font-bold text-xs" title={`申请人: ${order.applicant}`}>
+                 {order.applicant.charAt(0)}
+               </div>
+               {order.from_manager && (
+                 <div className="w-10 h-10 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-emerald-600 font-bold text-xs" title={`调出负责人: ${order.from_manager}`}>
+                   {order.from_manager.charAt(0)}
+                 </div>
+               )}
+            </div>
+          </div>
         </div>
-        <div className="p-4">
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500">调拨单号</span>
-              <p className="font-medium mt-0.5">{order.order_no}</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-10 pt-8 border-t border-slate-50">
+           <div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">调拨件数</p>
+             <p className="text-2xl font-black text-slate-900">{order.total_items} <span className="text-sm font-medium text-slate-400">项</span></p>
+           </div>
+           <div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">调拨总量</p>
+             <p className="text-2xl font-black text-slate-900">{order.total_quantity} <span className="text-sm font-medium text-slate-400">个</span></p>
+           </div>
+           <div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">调拨类型</p>
+             <p className="text-md font-bold text-slate-700 mt-1">{order.transfer_type === 'batch' ? '批量调拨' : '单台调拨'}</p>
+           </div>
+           <div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">业务场景</p>
+             <p className="text-md font-bold text-slate-700 mt-1">场景 {order.transfer_scene}</p>
+           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* From Location */}
+        <div className="premium-card p-8 group hover:border-blue-200 transition-colors">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2.5 bg-blue-50 text-blue-500 rounded-2xl group-hover:bg-blue-500 group-hover:text-white transition-colors">
+              <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-gray-500">申请人</span>
-              <p className="font-medium mt-0.5">{order.applicant}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Source Location</p>
+              <h4 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">调出位置</h4>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`w-2 h-2 rounded-full ${order.from_location_type === 'warehouse' ? 'bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.5)]' : 'bg-green-400'}`}></span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {order.from_location_type === 'warehouse' ? 'WAREHOUSE' : 'PROJECT SITE'}
+                </span>
+              </div>
+              <p className="text-xl font-black text-slate-800 tracking-tight">{order.from_warehouse_name || order.from_project_name || '-'}</p>
+            </div>
+            {order.from_manager && (
+              <div className="flex items-center justify-between px-4">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">负责人</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-black">{order.from_manager.charAt(0)}</div>
+                  <span className="text-sm font-bold text-slate-700">{order.from_manager}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* To Location */}
+        <div className="premium-card p-8 group hover:border-emerald-200 transition-colors">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2.5 bg-emerald-50 text-emerald-500 rounded-2xl group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+              <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-gray-500">申请日期</span>
-              <p className="font-medium mt-0.5">{formatDate(order.apply_date)}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target Destination</p>
+              <h4 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">调入位置</h4>
             </div>
-            <div>
-              <span className="text-gray-500">设备项数</span>
-              <p className="font-medium mt-0.5">{order.total_items} 项</p>
+          </div>
+          <div className="space-y-4">
+            <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`w-2 h-2 rounded-full ${order.to_location_type === 'warehouse' ? 'bg-blue-400' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'}`}></span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {order.to_location_type === 'warehouse' ? 'WAREHOUSE' : 'PROJECT SITE'}
+                </span>
+              </div>
+              <p className="text-xl font-black text-slate-800 tracking-tight">{order.to_warehouse_name || order.to_project_name || '-'}</p>
             </div>
-            <div>
-              <span className="text-gray-500">总数量</span>
-              <p className="font-medium mt-0.5">{order.total_quantity}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">调拨类型</span>
-              <p className="font-medium mt-0.5">{order.transfer_type === 'batch' ? '批量调拨' : '单台调拨'}</p>
-            </div>
+             {order.to_manager && (
+              <div className="flex items-center justify-between px-4">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">负责人</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-black">{order.to_manager.charAt(0)}</div>
+                  <span className="text-sm font-bold text-slate-700">{order.to_manager}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-white border-b border-gray-100">
-          <h3 className="font-medium text-gray-900 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-green-500" />
-            调拨位置
-          </h3>
-        </div>
-        <div className="p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <div className="text-sm text-blue-600 mb-1">调出位置</div>
-              <div className="font-medium">{order.from_warehouse_name || order.from_project_name || '-'}</div>
-              <div className="text-sm text-gray-500 mt-1">
-                <span className="inline-flex items-center gap-1">
-                  <span className={`w-2 h-2 rounded-full ${order.from_location_type === 'warehouse' ? 'bg-blue-400' : 'bg-green-400'}`}></span>
-                  {order.from_location_type === 'warehouse' ? '仓库' : '项目'}
-                </span>
-                {order.from_manager && (
-                  <span className="ml-2">| 负责人: {order.from_manager}</span>
-                )}
-              </div>
-            </div>
-            <div className="p-3 bg-green-50 rounded-lg">
-              <div className="text-sm text-green-600 mb-1">调入位置</div>
-              <div className="font-medium">{order.to_warehouse_name || order.to_project_name || '-'}</div>
-              <div className="text-sm text-gray-500 mt-1">
-                <span className="inline-flex items-center gap-1">
-                  <span className={`w-2 h-2 rounded-full ${order.to_location_type === 'warehouse' ? 'bg-blue-400' : 'bg-green-400'}`}></span>
-                  {order.to_location_type === 'warehouse' ? '仓库' : '项目'}
-                </span>
-                {order.to_manager && (
-                  <span className="ml-2">| 负责人: {order.to_manager}</span>
-                )}
-              </div>
-            </div>
+      {/* Items Detail */}
+      <div className="premium-card overflow-hidden">
+        <div className="px-8 py-6 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+               <Package className="w-5 h-5" />
+             </div>
+             <h4 className="text-xl font-black text-slate-900 tracking-tight">调拨设备明细列表</h4>
           </div>
+          <span className="bg-white px-4 py-1.5 rounded-full border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {order.items?.length || 0} TOTAL ITEMS
+          </span>
         </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-white border-b border-gray-100">
-          <h3 className="font-medium text-gray-900 flex items-center gap-2">
-            <Package className="w-5 h-5 text-purple-500" />
-            调拨设备明细
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">设备名称</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">配件信息</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">设备信息</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">型号 / 类别</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">管理编号</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">配件与描述</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">数量</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-slate-50">
               {order.items && order.items.length > 0 ? order.items.map(item => (
                 <React.Fragment key={item.id}>
-                  <tr>
-                    <td className="px-4 py-2">{item.equipment_name}</td>
-                    <td className="px-4 py-2">{item.model_no}</td>
-                    <td className="px-4 py-2">
-                      <span className={`px-2 py-0.5 rounded text-xs ${item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                        item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                          'bg-green-100 text-green-700'
-                        }`}>
-                        {getCategoryLabel(item.category)}
-                      </span>
+                  <tr className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="px-8 py-6">
+                       <div className="flex items-center gap-2">
+                         <p className="font-black text-slate-800 tracking-tight">{item.equipment_name}</p>
+                         {item.is_accessory && (
+                           <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-pink-50 text-pink-500 border border-pink-100 uppercase tracking-tighter">
+                             Independent Accessory
+                           </span>
+                         )}
+                       </div>
+                       <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">BRAND: {item.brand || 'N/A'}</p>
                     </td>
-                    <td className="px-4 py-2">{item.manage_code || '-'}</td>
-                    <td className="px-4 py-2 text-gray-600">
-                      {item.category !== 'instrument' ? (item.accessory_desc || '-') : '-'}
+                    <td className="px-6 py-6">
+                       <p className="text-sm font-bold text-slate-600">{item.model_no}</p>
+                       <div className="mt-1.5">
+                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${
+                           item.category === 'instrument' ? 'bg-blue-50 text-blue-600' :
+                           item.category === 'fake_load' ? 'bg-orange-50 text-orange-600' :
+                           'bg-emerald-50 text-emerald-600'
+                         }`}>
+                           {getCategoryLabel(item.category)}
+                         </span>
+                       </div>
                     </td>
-                    <td className="px-4 py-2">{item.quantity} {item.unit}</td>
+                    <td className="px-6 py-6">
+                       <code className="text-[11px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{item.manage_code || '-'}</code>
+                       {item.serial_number && <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">S/N: {item.serial_number}</p>}
+                    </td>
+                    <td className="px-6 py-6">
+                       <p className="text-xs text-slate-500 max-w-[200px] truncate" title={item.accessory_desc || ''}>
+                         {item.category !== 'instrument' ? (item.accessory_desc || '-') : '-'}
+                       </p>
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                       <span className="text-lg font-black text-slate-900">{item.quantity}</span>
+                       <span className="text-[10px] font-black text-slate-400 uppercase ml-1.5">{item.unit}</span>
+                    </td>
                   </tr>
                   {item.category === 'instrument' && item.accessories && item.accessories.length > 0 && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={6} className="px-4 py-2 text-xs text-gray-600 border-t border-gray-100">
-                        <div className="flex flex-wrap gap-x-6 gap-y-1">
-                          <span className="font-medium text-blue-600">仪器清单:</span>
-                          {item.accessories.map((acc: any, idx: number) => (
-                            <span key={idx} className="bg-white px-2 py-0.5 rounded border border-gray-200">
-                              {acc.accessory_name} ({acc.accessory_model || '通用'}) x{acc.accessory_quantity}{acc.accessory_unit || '个'}
-                            </span>
-                          ))}
+                    <tr className="bg-slate-50/30">
+                      <td colSpan={5} className="px-8 py-4">
+                        <div className="flex items-center gap-4">
+                           <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                           <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest">仪器清单</p>
+                           <div className="flex flex-wrap gap-2">
+                             {item.accessories.map((acc: any, idx: number) => (
+                               <span key={idx} className="bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-blue-100 shadow-sm text-xs font-bold text-slate-700 flex items-center gap-2">
+                                 {acc.accessory_name}
+                                 <span className="w-px h-3 bg-slate-200"></span>
+                                 <span className="text-blue-600">x{acc.accessory_quantity}</span>
+                               </span>
+                             ))}
+                           </div>
                         </div>
                       </td>
                     </tr>
@@ -602,8 +681,11 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                 </React.Fragment>
               )) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-4 text-center text-gray-500">
-                    暂无设备明细
+                  <td colSpan={5} className="px-8 py-20 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-[1.5rem] flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                       <Package className="w-8 h-8 text-slate-200" />
+                    </div>
+                    <p className="text-sm font-black text-slate-300 uppercase tracking-widest">暂无设备明细</p>
                   </td>
                 </tr>
               )}
@@ -612,28 +694,63 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gradient-to-r from-yellow-50 to-white border-b border-gray-100">
-          <h3 className="font-medium text-gray-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-yellow-500" />
-            调拨信息
-          </h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Reasons */}
+        <div className="premium-card p-8 md:col-span-2">
+           <div className="flex items-center gap-3 mb-6">
+              <div className="p-2.5 bg-yellow-50 text-yellow-500 rounded-2xl">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <h4 className="text-xl font-black text-slate-900 tracking-tight">调拨业务详情</h4>
+           </div>
+           <div className="space-y-6">
+             <div>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">调拨主要原因说明</p>
+               <div className="p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100 text-sm text-slate-600 italic leading-relaxed">
+                 "{order.transfer_reason}"
+               </div>
+             </div>
+             <div className="grid grid-cols-2 gap-8">
+               <div>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">预计发货日期</p>
+                 <p className="text-md font-bold text-slate-800">{order.estimated_ship_date || '未设置'}</p>
+               </div>
+               <div>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">预计到达日期</p>
+                 <p className="text-md font-bold text-slate-800">{order.estimated_arrival_date || '未设置'}</p>
+               </div>
+             </div>
+           </div>
         </div>
-        <div className="p-4">
-          <div className="mb-3">
-            <span className="text-gray-500 text-sm">调拨原因</span>
-            <p className="mt-0.5">{order.transfer_reason}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500">预计发货日期</span>
-              <p className="font-medium mt-0.5">{order.estimated_ship_date || '-'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500">预计到达日期</span>
-              <p className="font-medium mt-0.5">{order.estimated_arrival_date || '-'}</p>
-            </div>
-          </div>
+
+        {/* Transportation */}
+        <div className="premium-card p-8 bg-slate-900 text-white relative overflow-hidden">
+           <div className="absolute top-0 right-0 p-8 opacity-10">
+              <Truck className="w-32 h-32" />
+           </div>
+           <div className="relative z-10 h-full flex flex-col">
+             <div className="flex items-center gap-3 mb-8">
+                <div className="p-2.5 bg-white/10 rounded-2xl">
+                  <Truck className="w-5 h-5 text-white" />
+                </div>
+                <h4 className="text-xl font-black tracking-tight">物流运输</h4>
+             </div>
+             <div className="flex-1 space-y-6">
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">运输方式</p>
+                  <p className="text-lg font-black">{order.transport_method || '待定'}</p>
+                </div>
+                {order.tracking_no && (
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">快递/物流单号</p>
+                    <p className="text-lg font-black tracking-tighter text-blue-400">{order.tracking_no}</p>
+                  </div>
+                )}
+             </div>
+             <div className="mt-8 pt-6 border-t border-white/10">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">SYSTEM VERIFIED LOGISTICS</p>
+             </div>
+           </div>
         </div>
       </div>
 
@@ -755,7 +872,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                             item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                               'bg-green-100 text-green-700'
                             }`}>
-                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                           </span>
                           {item.category !== 'instrument' && <span className="text-sm text-gray-500 ml-2">x{item.quantity}</span>}
                         </div>
@@ -922,7 +1039,7 @@ export default function EquipmentTransferForm({ transferOrderId, currentUser, on
                             item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                               'bg-green-100 text-green-700'
                             }`}>
-                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">

@@ -6,6 +6,8 @@
 import { WarehouseRepository, warehouseRepository } from '../repository/WarehouseRepository.js'
 import { employeeRepository, EmployeeRepository } from '../repository/EmployeeRepository.js'
 import { Prisma } from '@prisma/client'
+import { v4 as uuidv4 } from 'uuid'
+import { equipmentServiceV3 } from './EquipmentServiceV3.js'
 
 export interface Warehouse {
   id: string
@@ -29,8 +31,28 @@ export class WarehouseServiceV2 {
     this.employeeRepo = employeeRepo
   }
 
+  private async generateWarehouseNo(): Promise<string> {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    
+    const result = await this.repo.findAll({
+      where: {
+        warehouse_no: { contains: `WH-${dateStr}` }
+      },
+      orderBy: { created_at: 'desc' },
+      take: 1
+    });
+    
+    const count = result.length;
+    const seq = (count + 1).toString().padStart(3, '0');
+    
+    return `WH-${dateStr}-${seq}`;
+  }
+
   async createWarehouse(data: Partial<Warehouse>): Promise<Warehouse> {
-    return (await this.repo.create(data as any)) as Warehouse
+    const id = data.id || uuidv4();
+    const warehouse_no = await this.generateWarehouseNo();
+    return (await this.repo.create({ ...data, id, warehouse_no } as any)) as Warehouse
   }
 
   async getWarehouseById(id: string): Promise<Warehouse | null> {
@@ -98,7 +120,11 @@ export class WarehouseServiceV2 {
   }
 
   async updateWarehouse(id: string, data: Partial<Warehouse>): Promise<Warehouse> {
-    return (await this.repo.update(id, data as any)) as Warehouse
+    const warehouse = (await this.repo.update(id, data as any)) as unknown as Warehouse
+    if (data.manager_id) {
+      await equipmentServiceV3.syncKeepersByLocation(id, data.manager_id);
+    }
+    return warehouse
   }
 
   async deleteWarehouse(id: string): Promise<void> {

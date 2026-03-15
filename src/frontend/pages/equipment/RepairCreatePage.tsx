@@ -7,7 +7,7 @@ interface Equipment {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   quantity: number
   manage_code: string
@@ -47,7 +47,11 @@ export default function RepairCreatePage() {
     loadWarehouses()
   }, [])
 
+
   useEffect(() => {
+    if (locationId) {
+      setSelectedEquipment([])
+    }
     loadEquipment()
     loadLocationManager()
   }, [locationId])

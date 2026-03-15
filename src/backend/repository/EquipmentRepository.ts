@@ -35,8 +35,13 @@ export class EquipmentRepository {
     /**
      * 更新设备状态/位置
      */
-    async update(id: string, data: Prisma.equipment_instancesUncheckedUpdateInput): Promise<any> {
-        return this.db.equipment_instances.update({
+    async update(
+        id: string,
+        data: Prisma.equipment_instancesUncheckedUpdateInput,
+        tx?: Prisma.TransactionClient
+    ): Promise<any> {
+        const client = tx || this.db
+        return client.equipment_instances.update({
             where: { id },
             data: { ...data, updated_at: new Date() }
         })
@@ -52,13 +57,14 @@ export class EquipmentRepository {
             location_status: any;
             usage_status?: any;
             keeper_id?: string;
-        }
+        },
+        tx?: Prisma.TransactionClient
     ): Promise<void> {
         const { location_id, location_status, usage_status = 'idle', keeper_id } = params
 
-        await this.db.$transaction(async (tx) => {
+        const execute = async (client: Prisma.TransactionClient) => {
             // 1. 更新主设备
-            await tx.equipment_instances.update({
+            await client.equipment_instances.update({
                 where: { id },
                 data: {
                     location_id,
@@ -70,7 +76,7 @@ export class EquipmentRepository {
             })
 
             // 2. 更新关联配件
-            await tx.equipment_accessory_instances.updateMany({
+            await client.equipment_accessory_instances.updateMany({
                 where: { host_equipment_id: id },
                 data: {
                     location_id,
@@ -78,7 +84,9 @@ export class EquipmentRepository {
                     updated_at: new Date()
                 }
             })
-        })
+        }
+
+        return tx ? execute(tx) : this.db.$transaction(execute)
     }
 
     /**
@@ -87,30 +95,31 @@ export class EquipmentRepository {
     async splitForTransfer(
         sourceId: string,
         quantity: number,
-        transferOrderId: string
+        transferOrderId: string,
+        tx?: Prisma.TransactionClient
     ): Promise<string> {
-        return this.db.$transaction(async (tx) => {
-            const source = await tx.equipment_instances.findUnique({ where: { id: sourceId } })
+        const execute = async (client: Prisma.TransactionClient) => {
+            const source = await client.equipment_instances.findUnique({ where: { id: sourceId } })
             if (!source) throw new Error('源设备不存在')
             if ((source.quantity ?? 1) < quantity) throw new Error('库存不足')
 
             // 1. 扣减源设备数量
             if (source.quantity === quantity) {
                 // 如果刚好相等，直接变状态
-                await tx.equipment_instances.update({
+                await client.equipment_instances.update({
                     where: { id: sourceId },
                     data: { location_status: 'transferring', updated_at: new Date() }
                 })
                 return sourceId
             } else {
-                await tx.equipment_instances.update({
+                await client.equipment_instances.update({
                     where: { id: sourceId },
                     data: { quantity: { decrement: quantity }, updated_at: new Date() }
                 })
 
                 // 2. 创建新记录（运输中）
                 const newId = `TR-${sourceId.slice(0, 8)}-${transferOrderId.slice(-4)}`
-                await tx.equipment_instances.create({
+                await client.equipment_instances.create({
                     data: {
                         ...source,
                         id: newId,
@@ -122,7 +131,73 @@ export class EquipmentRepository {
                 })
                 return newId
             }
-        })
+        }
+
+        return tx ? execute(tx) : this.db.$transaction(execute)
+    }
+
+    /**
+     * 报废设备及其绑定的配件（支持批次设备部分报废）
+     */
+    async scrapEquipment(id: string, quantity: number = 1, tx?: Prisma.TransactionClient): Promise<void> {
+        const execute = async (client: Prisma.TransactionClient) => {
+            const source = await client.equipment_instances.findUnique({ where: { id } })
+            if (!source) throw new Error('设备不存在')
+
+            const currentQty = source.quantity ?? 1
+
+            if (currentQty > quantity) {
+                // 1. 部分报废：原记录扣减数量
+                await client.equipment_instances.update({
+                    where: { id },
+                    data: { quantity: { decrement: quantity }, updated_at: new Date() }
+                })
+
+                // 2. 创建一条新的报废记录
+                await client.equipment_instances.create({
+                    data: {
+                        ...source,
+                        id: `SCR-${id.slice(0, 8)}-${Date.now().toString().slice(-4)}`,
+                        quantity: quantity,
+                        location_status: 'scrapped' as any,
+                        health_status: 'scrapped' as any,
+                        usage_status: 'scrapped' as any,
+                        location_id: null,
+                        keeper_id: null,
+                        created_at: new Date(),
+                        updated_at: new Date()
+                    } as any
+                })
+                // 注意：部分报废通常不联动报废配件，因为配件是绑定在整体上的，
+                // 如果是批次物资，通常不绑定精密配件。如果是仪器类，quantity 恒为 1，会走下方的全额报废逻辑。
+            } else {
+                // 3. 全额报废：原记录直接变状态
+                await client.equipment_instances.update({
+                    where: { id },
+                    data: {
+                        location_status: 'scrapped' as any,
+                        health_status: 'scrapped' as any,
+                        usage_status: 'scrapped' as any,
+                        location_id: null,
+                        keeper_id: null,
+                        updated_at: new Date()
+                    }
+                })
+
+                // 联动报废所有绑定的配件
+                await client.equipment_accessory_instances.updateMany({
+                    where: { host_equipment_id: id },
+                    data: {
+                        location_status: 'scrapped' as any,
+                        location_id: null,
+                        keeper_id: null,
+                        updated_at: new Date()
+                    }
+                })
+            }
+        }
+
+        return tx ? execute(tx) : this.db.$transaction(execute)
     }
 
     /**

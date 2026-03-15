@@ -33,6 +33,11 @@ const WorkflowFormLauncher: React.FC<WorkflowFormLauncherProps> = ({
     loadData()
   }, [definitionKey])
 
+  // 监控 formData 变化
+  useEffect(() => {
+    console.log('[WorkflowFormLauncher] formData 变化:', formData)
+  }, [formData])
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -53,13 +58,18 @@ const WorkflowFormLauncher: React.FC<WorkflowFormLauncherProps> = ({
       const workflowDef = defData.data || defData
       setDefinition(workflowDef)
       
-      const formKey = workflowDef.form_template_id || workflowDef.definition?.nodes?.find((n: any) => n.type === 'startEvent')?.config?.formKey
+      // 检查 formKey - 可能在 form_template_id、definition.nodes 或 node_config.nodes 中
+      const formKey = workflowDef.form_template_id || 
+        workflowDef.definition?.nodes?.find((n: any) => n.type === 'startEvent')?.config?.formKey ||
+        workflowDef.node_config?.nodes?.find((n: any) => n.type === 'startEvent')?.config?.formKey
+      console.log('[WorkflowFormLauncher] formKey:', formKey)
       if (formKey) {
         const templateResponse = await fetch(`${API_URL.BASE}/api/workflow/form-templates/key/${formKey}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         })
+        console.log('[WorkflowFormLauncher] templateResponse.ok:', templateResponse.ok)
         
         if (templateResponse.ok) {
           const templateData = await templateResponse.json()
@@ -71,16 +81,23 @@ const WorkflowFormLauncher: React.FC<WorkflowFormLauncherProps> = ({
               initialData[field.name] = field.defaultValue
             }
           })
+          
+          console.log('[WorkflowFormLauncher] 最终设置的 initialData:', JSON.stringify(initialData))
           setFormData(initialData)
+        } else {
+          console.log('[WorkflowFormLauncher] templateResponse 不成功，状态:', templateResponse.status)
         }
       } else if (workflowDef.form_schema) {
+        console.log('[WorkflowFormLauncher] 使用 form_schema 分支')
         const initialData: Record<string, any> = {}
         workflowDef.form_schema.forEach((field: FormField) => {
           if (field.defaultValue !== undefined) {
             initialData[field.name] = field.defaultValue
           }
         })
+        
         setFormData(initialData)
+      } else {
       }
       
       const loadWithTimeout = async (fn: () => Promise<void>, timeout: number = 5000) => {
@@ -300,6 +317,76 @@ const WorkflowFormLauncher: React.FC<WorkflowFormLauncherProps> = ({
     if (!validateForm()) {
       alert('表单数据验证失败，请检查填写内容')
       return
+    }
+
+    // 设备入库表单的管理编码校验
+    if (definitionKey === 'equipment-inbound') {
+      const manageCodes: string[] = []
+      const duplicateCodes: string[] = []
+      
+      // 收集所有管理编码
+      const items = Array.isArray(formData.items) ? formData.items : [formData]
+      for (const item of items) {
+        const manageCode = item.manage_code || item.item_code
+        if (manageCode) {
+          if (manageCodes.includes(manageCode)) {
+            if (!duplicateCodes.includes(manageCode)) {
+              duplicateCodes.push(manageCode)
+            }
+          } else {
+            manageCodes.push(manageCode)
+          }
+        }
+        
+        // 检查配件清单中的管理编码
+        if (Array.isArray(item.accessory_list)) {
+          for (const acc of item.accessory_list) {
+            const accManageCode = acc.manage_code || acc.item_code
+            if (accManageCode) {
+              if (manageCodes.includes(accManageCode)) {
+                if (!duplicateCodes.includes(accManageCode)) {
+                  duplicateCodes.push(accManageCode)
+                }
+              } else {
+                manageCodes.push(accManageCode)
+              }
+            }
+          }
+        }
+      }
+      
+      if (duplicateCodes.length > 0) {
+        alert(`表单内管理编码重复: ${duplicateCodes.join(', ')}，请修改后重新提交`)
+        return
+      }
+      
+      // 检查管理编码是否已存在于数据库
+      const token = localStorage.getItem('token')
+      for (const code of manageCodes) {
+        if (!code || code.trim() === '') continue
+        
+        try {
+          const response = await fetch(`${API_URL.BASE}/api/equipment/v3/manage-code/check?code=${encodeURIComponent(code)}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          })
+          
+          if (!response.ok) {
+            console.error('校验管理编码 API 返回错误:', response.status, response.statusText)
+            continue
+          }
+          
+          const result = await response.json()
+          console.log(`[管理编码校验] code: ${code}, result:`, result)
+          
+          // 检查返回结果，unique 为 true 表示编码可用
+          if (result.unique === false) {
+            alert(`管理编码 "${code}" 已存在，请使用其他编码`)
+            return
+          }
+        } catch (error) {
+          console.error('校验管理编码失败:', error)
+        }
+      }
     }
 
     try {

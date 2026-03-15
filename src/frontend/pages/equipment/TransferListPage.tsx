@@ -27,7 +27,7 @@ interface TransferItem {
   equipment_id: string
   equipment_name: string
   model_no: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   quantity: number
 }
@@ -43,19 +43,27 @@ export default function TransferListPage() {
 
   const statusLabels: Record<string, string> = {
     'pending': '待审批',
+    'pending_from': '待调出审批',
+    'pending_to': '待调入审批',
+    'shipping': '待发货',
+    'in_transit': '运输中',
     'approved': '已通过',
     'receiving': '收货中',
     'completed': '已完成',
-    'cancelled': '已取消'
-  }
+    'cancelled': '已取消',
+  };
 
   const statusColors: Record<string, string> = {
     'pending': 'text-yellow-600 bg-yellow-100',
+    'pending_from': 'text-orange-600 bg-orange-100',
+    'pending_to': 'text-orange-600 bg-orange-100',
+    'shipping': 'text-purple-600 bg-purple-100',
+    'in_transit': 'text-indigo-600 bg-indigo-100',
     'approved': 'text-green-600 bg-green-100',
     'receiving': 'text-blue-600 bg-blue-100',
     'completed': 'text-gray-600 bg-gray-100',
-    'cancelled': 'text-red-600 bg-red-100'
-  }
+    'cancelled': 'text-red-600 bg-red-100',
+  };
 
   useEffect(() => {
     loadTransfers()
@@ -71,10 +79,13 @@ export default function TransferListPage() {
         ...(statusFilter && { status: statusFilter })
       })
 
-      const response = await fetch(`${API_URL.BASE}/api/equipment/transfers?${params}`)
+      const response = await fetch(`${API_URL.BASE}/api/equipment/v3/transfer?${params}`)
       const result = await response.json()
 
-      if (result.success) {
+      if (result.data) {
+        setTransfers(result.data || [])
+        setTotalPages(Math.ceil(result.total / result.pageSize) || 1)
+      } else if (result.success) {
         setTransfers(result.data || [])
         setTotalPages(result.totalPages || 1)
       } else {

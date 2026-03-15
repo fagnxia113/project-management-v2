@@ -8,6 +8,8 @@
  */
 import { v4 as uuidv4 } from 'uuid'
 import { prisma } from '../database/prisma.js'
+import { Prisma } from '@prisma/client'
+import { NotFoundError, ValidationError, DatabaseError } from '../errors/AppError.js'
 import {
     transferOrderRepository,
     TransferOrderRepository,
@@ -16,7 +18,7 @@ import {
     GetOrdersParams,
     TransferOrderWithItems,
 } from '../repository/TransferOrderRepository.js'
-import { equipmentAccessoryService } from './EquipmentAccessoryService.js'
+import { equipmentAccessoryServiceV2 as equipmentAccessoryService } from './EquipmentAccessoryServiceV2.js'
 import { equipmentRepository } from '../repository/EquipmentRepository.js'
 
 // =====================================================================
@@ -49,6 +51,7 @@ export interface TransferItemDto {
     notes?: string
     accessories?: any[]
     accessory_desc?: string
+    is_accessory?: boolean
 }
 
 // =====================================================================
@@ -131,7 +134,8 @@ export class TransferOrderServiceV2 {
                     quantity: item.quantity,
                     notes: item.notes,
                     accessory_info: accessoryInfo,
-                    accessory_desc: item.accessory_desc
+                    accessory_desc: item.accessory_desc,
+                    is_accessory: item.is_accessory ?? false
                 } satisfies CreateOrderItemData
             })
         )
@@ -150,24 +154,23 @@ export class TransferOrderServiceV2 {
     // -------------------------------------------------------------------
     // 查询单个调拨单（含配件信息处理）
     // -------------------------------------------------------------------
-    async getById(id: string): Promise<TransferOrderWithItems | null> {
+    async getById(id: string, tx?: Prisma.TransactionClient): Promise<TransferOrderWithItems | null> {
         const order = await this.repo.findById(id)
         if (!order) return null
 
-        // 处理仪器类配件查询（兼容旧数据）
-        for (const item of order.items) {
+        // 处理仪器类配件查询（并行化提升性能）
+        await Promise.all(order.items.map(async (item) => {
             if (item.category === 'instrument' && item.equipment_id) {
                 if (item.accessory_info) {
-                    // accessory_info 已经是 JSON 字段，Prisma 自动解析
-                    ; (item as any).accessories = item.accessory_info
+                    (item as any).accessories = item.accessory_info
                 } else {
-                    const accessories = await equipmentAccessoryService.getAccessoriesWithDetails(item.equipment_id)
-                        ; (item as any).accessories = accessories ?? []
+                    const accessories = await equipmentAccessoryService.getAccessoriesWithDetails(item.equipment_id);
+                    (item as any).accessories = accessories ?? []
                 }
             } else {
-                ; (item as any).accessories = []
+                (item as any).accessories = []
             }
-        }
+        }))
 
         return order
     }
@@ -295,34 +298,44 @@ export class TransferOrderServiceV2 {
             package_images?: string[]
         }
     ): Promise<TransferOrderWithItems> {
-        await this.repo.confirmShipping(id, {
-            shipping_no: params.shipping_no,
-            shipped_by: params.shipped_by,
-            shipped_at: params.shipped_at ? new Date(params.shipped_at) : new Date(),
-            shipping_attachment: params.shipping_attachment,
-            shipping_package_images: params.package_images
-        })
+        return prisma.$transaction(async (tx) => {
+            // 1. 更新订单基本信息
+            await this.repo.confirmShipping(id, {
+                shipping_no: params.shipping_no,
+                shipped_by: params.shipped_by,
+                shipped_at: params.shipped_at ? new Date(params.shipped_at) : new Date(),
+                shipping_attachment: params.shipping_attachment,
+                shipping_package_images: params.package_images
+            }, tx)
 
-        // 2. 更新库存状态（改为运输中）
-        const items = await this.repo.findItems(id)
-        for (const item of items) {
-            if (!item.equipment_id) continue
+            // 2. 更新库存状态（改为运输中）
+            const items = await this.repo.findItems(id)
+            for (const item of items) {
+                if (!item.equipment_id) continue
 
-            if (item.category === 'instrument') {
-                await equipmentRepository.update(item.equipment_id, {
-                    location_status: 'transferring'
-                })
-            } else {
-                // 假负载/线缆类：分拆数量
-                await equipmentRepository.splitForTransfer(item.equipment_id, item.quantity, id)
+                if ((item as any).is_accessory) {
+                    await tx.equipment_accessory_instances.update({
+                        where: { id: item.equipment_id },
+                        data: { location_status: 'transferring' }
+                    })
+                } else if (item.category === 'instrument') {
+                    await equipmentRepository.update(item.equipment_id, {
+                        location_status: 'transferring'
+                    }, tx)
+                } else {
+                    // 假负载/线缆类：分拆数量
+                    await equipmentRepository.splitForTransfer(item.equipment_id, item.quantity, id, tx)
+                }
             }
-        }
 
-        return this.getById(id) as Promise<TransferOrderWithItems>
+            const updatedOrder = await this.getById(id, tx)
+            if (!updatedOrder) throw new NotFoundError('调拨单更新后未找到')
+            return updatedOrder
+        })
     }
 
     // -------------------------------------------------------------------
-    // 确认收货
+    // 确认收货（支持事务）
     // -------------------------------------------------------------------
     async confirmReceiving(
         id: string,
@@ -335,80 +348,109 @@ export class TransferOrderServiceV2 {
             received_items?: { item_id: string; received_quantity: number }[]
         }
     ): Promise<boolean> {
-        const items = await this.repo.findItems(id)
-        let isPartial = false
-        let totalReceived = 0
+        return prisma.$transaction(async (tx) => {
+            const items = await this.repo.findItems(id)
+            let isPartial = false
+            let totalReceived = 0
 
-        if (params.received_items && params.received_items.length > 0) {
-            for (const item of items) {
-                const receivedInfo = params.received_items.find(ri => ri.item_id === item.id)
-                const received = receivedInfo?.received_quantity ?? 0
-                totalReceived += received
-                if (received < item.quantity) isPartial = true
+            // 1. 处理明细收货
+            if (params.received_items && params.received_items.length > 0) {
+                for (const item of items) {
+                    const receivedInfo = params.received_items.find(ri => ri.item_id === item.id)
+                    const received = receivedInfo?.received_quantity ?? 0
+                    totalReceived += received
+                    if (received < item.quantity) isPartial = true
 
-                await this.repo.updateItem(item.id, {
-                    received_quantity: received,
-                    status: receivedInfo ? 'transferred' : 'returned'
-                })
+                    await this.repo.updateItem(item.id, {
+                        received_quantity: received,
+                        status: (received > 0 ? 'transferred' : 'returned') as any
+                    }, tx)
+                }
+            } else {
+                totalReceived = items.reduce((s, i) => s + i.quantity, 0)
+                // 默认全收
+                for (const item of items) {
+                    await this.repo.updateItem(item.id, {
+                        received_quantity: item.quantity,
+                        status: 'transferred' as any
+                    }, tx)
+                }
             }
-        } else {
-            totalReceived = items.reduce((s, i) => s + i.quantity, 0)
-        }
 
-        // 更新各明细的收货图片
-        if (params.item_images && params.item_images.length > 0) {
-            await Promise.all(
-                params.item_images.map(img =>
-                    this.repo.updateItem(img.item_id, { receiving_images: img.images })
+            // 更新明细收货图片
+            if (params.item_images && params.item_images.length > 0) {
+                await Promise.all(
+                    params.item_images.map(img =>
+                        this.repo.updateItem(img.item_id, { receiving_images: img.images }, tx)
+                    )
                 )
+            }
+
+            // 2. 更新主单据状态
+            await this.repo.confirmReceiving(id, {
+                received_by: params.received_by,
+                receive_status: params.receive_status,
+                receive_comment: params.receive_comment,
+                receiving_package_images: params.package_images,
+                total_received_quantity: totalReceived,
+                isPartial
+            }, tx)
+
+            // 3. 更新物理库存位置
+            const order = await tx.equipment_transfer_orders.findUnique({ where: { id } })
+            if (!order) throw new NotFoundError('调拨单不存在')
+
+            const { managerId } = await this.resolveLocationInfo(
+                order.to_location_type,
+                order.to_warehouse_id ?? undefined,
+                order.to_project_id ?? undefined
             )
-        }
 
-        await this.repo.confirmReceiving(id, {
-            received_by: params.received_by,
-            receive_status: params.receive_status,
-            receive_comment: params.receive_comment,
-            receiving_package_images: params.package_images,
-            total_received_quantity: totalReceived,
-            isPartial
-        })
-
-        // 3. 更新物理库存位置
-        const order = await this.repo.findById(id)
-        if (!order) return true
-
-        const { managerId } = await this.resolveLocationInfo(order.to_location_type, order.to_warehouse_id ?? undefined, order.to_project_id ?? undefined)
-
-        for (const item of items) {
-            if (!item.equipment_id) continue
-
-            const receivedInfo = params.received_items?.find(ri => ri.item_id === item.id)
-            const receivedQty = receivedInfo?.received_quantity ?? item.quantity
-
-            if (receivedQty <= 0) continue
-
-            // 确定目标位置状态
+            const targetLocationId = (order.to_location_type === 'warehouse' ? order.to_warehouse_id : order.to_project_id) as string
             const targetStatus = order.to_location_type === 'warehouse' ? 'warehouse' : 'in_project'
 
-            if (item.category === 'instrument') {
-                await equipmentRepository.transferEquipment(item.equipment_id, {
-                    location_id: (order.to_location_type === 'warehouse' ? order.to_warehouse_id : order.to_project_id) as string,
-                    location_status: targetStatus,
-                    keeper_id: managerId ?? undefined
-                })
-            } else {
-                // 非仪器类：由于 splitForTransfer 可能创建了新 ID，这里简化处理，直接更新
-                // 实际生产中建议通过 manage_code 查找并合并
-                await equipmentRepository.update(item.equipment_id, {
-                    location_id: (order.to_location_type === 'warehouse' ? order.to_warehouse_id : order.to_project_id) as string,
-                    location_status: targetStatus,
-                    keeper_id: managerId ?? undefined,
-                    updated_at: new Date()
-                })
-            }
-        }
+            for (const item of items) {
+                if (!item.equipment_id) continue
 
-        return true
+                const receivedInfo = params.received_items?.find(ri => ri.item_id === item.id)
+                const receivedQty = receivedInfo?.received_quantity ?? item.quantity
+
+                if (receivedQty <= 0) {
+                    // 如果没收到，状态应回退或标记异常，这里简单处理为回到在库（实际上可能需要回退到发货地）
+                    continue
+                }
+
+                if ((item as any).is_accessory) {
+                    // 如果是独立配件，更新配件表
+                    await tx.equipment_accessory_instances.update({
+                        where: { id: item.equipment_id },
+                        data: {
+                            location_id: targetLocationId,
+                            location_status: targetStatus as any,
+                            keeper_id: managerId ?? undefined,
+                            updated_at: new Date()
+                        }
+                    })
+                } else if (item.category === 'instrument') {
+                    // 如果是主设备（仪器类），更新主表并同步其绑定的配件
+                    await equipmentRepository.transferEquipment(item.equipment_id, {
+                        location_id: targetLocationId,
+                        location_status: targetStatus,
+                        keeper_id: managerId ?? undefined
+                    }, tx)
+                } else {
+                    // 非仪器类主设备（线缆/假负载）
+                    await equipmentRepository.update(item.equipment_id, {
+                        location_id: targetLocationId,
+                        location_status: targetStatus,
+                        keeper_id: managerId ?? undefined,
+                        updated_at: new Date()
+                    }, tx)
+                }
+            }
+
+            return true
+        })
     }
 
     // -------------------------------------------------------------------

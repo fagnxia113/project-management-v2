@@ -659,6 +659,7 @@ model equipment_transfer_order_items {
   updated_at        DateTime?                               @default(now()) @db.Timestamp(0)
   accessory_info    Json?
   accessory_desc    String?                                 @db.Text
+  is_accessory      Boolean                                 @default(false)
 
   @@index([equipment_id], map: "idx_equipment_id")
   @@index([order_id], map: "idx_order_id")
@@ -1084,6 +1085,7 @@ model projects {
   hvac_architecture                               String?                             @db.Text
   fire_architecture                               String?                             @db.Text
   weak_electric_architecture                      String?                             @db.Text
+  approval_mode                                   String?                             @db.VarChar(50)
   created_at                                      DateTime?                           @default(now()) @db.Timestamp(0)
   updated_at                                      DateTime?                           @default(now()) @db.Timestamp(0)
   leave_requests                                  leave_requests[]

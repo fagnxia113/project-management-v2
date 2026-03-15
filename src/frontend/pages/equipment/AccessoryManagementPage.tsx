@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { API_URL } from '../../config/api'
 
 interface Accessory {
@@ -6,7 +7,7 @@ interface Accessory {
   accessory_name: string
   model_no?: string
   brand?: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   quantity: number
   serial_number?: string
@@ -16,13 +17,20 @@ interface Accessory {
   usage_status: 'idle' | 'in_use'
   location_status: 'warehouse' | 'in_project' | 'repairing' | 'transferring'
   location_id?: string
+  location_name?: string
   host_equipment_id?: string
+  host_equipment_name?: string
   bound_at?: string
   source_type?: 'inbound_bundle' | 'inbound_separate'
   keeper_id?: string
+  keeper_name?: string
   purchase_date?: string
   purchase_price?: number
   notes?: string
+  images?: string[]
+  main_images?: string[]
+  accessory_images?: string[]
+  attachments?: any[]
   created_at: string
 }
 
@@ -30,7 +38,7 @@ interface AccessoryFormData {
   accessory_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   quantity: number
   serial_number: string
@@ -57,23 +65,25 @@ const initialFormData: AccessoryFormData = {
 }
 
 export default function AccessoryManagementPage() {
+  const navigate = useNavigate()
   const [accessories, setAccessories] = useState<Accessory[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
-  
+
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterBound, setFilterBound] = useState<string>('')
   const [keyword, setKeyword] = useState('')
-  
+
   const [showModal, setShowModal] = useState(false)
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create')
   const [formData, setFormData] = useState<AccessoryFormData>(initialFormData)
   const [editingId, setEditingId] = useState<string>('')
-  
+
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [hoveredAccessory, setHoveredAccessory] = useState<string | null>(null)
 
   useEffect(() => {
     const user = localStorage.getItem('user')
@@ -98,12 +108,12 @@ export default function AccessoryManagementPage() {
       if (keyword) params.append('keyword', keyword)
 
       const res = await fetch(`${API_URL.BASE}/api/equipment/accessories?${params}`, {
-        headers
+        headers: headers as Record<string, string>
       })
       const data = await res.json()
 
       if (data.success) {
-        setAccessories(data.list || [])
+        setAccessories(Array.isArray(data.list) ? data.list : [])
         setTotal(data.total || 0)
         setTotalPages(Math.ceil((data.total || 0) / 20))
       }
@@ -118,7 +128,7 @@ export default function AccessoryManagementPage() {
     e.preventDefault()
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { 
+      const headers = token ? {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       } : { 'Content-Type': 'application/json' }
@@ -127,7 +137,7 @@ export default function AccessoryManagementPage() {
       if (modalMode === 'create') {
         res = await fetch(`${API_URL.BASE}/api/equipment/accessories`, {
           method: 'POST',
-          headers,
+          headers: headers as Record<string, string>,
           body: JSON.stringify({
             ...formData,
             source_type: 'inbound_separate'
@@ -136,7 +146,7 @@ export default function AccessoryManagementPage() {
       } else {
         res = await fetch(`${API_URL.BASE}/api/equipment/accessories/${editingId}`, {
           method: 'PUT',
-          headers,
+          headers: headers as Record<string, string>,
           body: JSON.stringify(formData)
         })
       }
@@ -183,7 +193,7 @@ export default function AccessoryManagementPage() {
 
       const res = await fetch(`${API_URL.BASE}/api/equipment/accessories/${id}`, {
         method: 'DELETE',
-        headers
+        headers: headers as Record<string, string>
       })
       const data = await res.json()
       if (data.success) {
@@ -202,14 +212,14 @@ export default function AccessoryManagementPage() {
     if (reason === null) return
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { 
+      const headers = token ? {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       } : { 'Content-Type': 'application/json' }
 
       const res = await fetch(`${API_URL.BASE}/api/equipment/accessories/${id}/mark-lost`, {
         method: 'POST',
-        headers,
+        headers: headers as Record<string, string>,
         body: JSON.stringify({
           operator_id: currentUser?.id,
           operator_name: currentUser?.name,
@@ -233,14 +243,14 @@ export default function AccessoryManagementPage() {
     if (!confirm('确定要恢复这个配件吗？')) return
     try {
       const token = localStorage.getItem('token')
-      const headers = token ? { 
+      const headers = token ? {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       } : { 'Content-Type': 'application/json' }
 
       const res = await fetch(`${API_URL.BASE}/api/equipment/accessories/${id}/recover`, {
         method: 'POST',
-        headers,
+        headers: headers as Record<string, string>,
         body: JSON.stringify({
           operator_id: currentUser?.id,
           operator_name: currentUser?.name
@@ -263,7 +273,6 @@ export default function AccessoryManagementPage() {
     switch (category) {
       case 'instrument': return '仪器类'
       case 'fake_load': return '假负载类'
-      case 'cable': return '线材类'
       default: return category
     }
   }
@@ -296,20 +305,28 @@ export default function AccessoryManagementPage() {
     }
   }
 
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+  }
+
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined) return '-'
+    return new Intl.NumberFormat('zh-CN', {
+      style: 'currency',
+      currency: 'CNY'
+    }).format(amount)
+  }
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">配件管理</h1>
-        <button
-          onClick={() => {
-            setModalMode('create')
-            setFormData(initialFormData)
-            setShowModal(true)
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          配件入库
-        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow mb-6 p-4">
@@ -324,7 +341,6 @@ export default function AccessoryManagementPage() {
               <option value="">全部</option>
               <option value="instrument">仪器类</option>
               <option value="fake_load">假负载类</option>
-              <option value="cable">线材类</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
@@ -370,60 +386,81 @@ export default function AccessoryManagementPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full">
+      <div className="bg-white rounded-lg shadow overflow-hidden overflow-x-auto">
+        <table className="min-w-full whitespace-nowrap">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">配件名称</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">位置</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">绑定状态</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky left-0 bg-gray-50 z-10 min-w-[120px]">配件名称</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">型号</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">管理编码</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[60px]">数量</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[60px]">单位</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[80px]">状态</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[80px]">位置状态</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">当前位置</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[80px]">保管人</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[80px]">绑定状态</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">采购日期</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[100px]">采购价格</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase sticky right-0 bg-gray-50 z-10 min-w-[100px]">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-gray-500">加载中...</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-gray-500">加载中...</td>
               </tr>
             ) : accessories.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-gray-500">暂无数据</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-gray-500">暂无数据</td>
               </tr>
             ) : (
               accessories.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">{item.accessory_name}</td>
-                  <td className="px-4 py-3">{item.model_no || '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                      item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                      'bg-green-100 text-green-700'
-                    }`}>
-                      {getCategoryName(item.category)}
-                    </span>
+                  <td className="px-4 py-3 sticky left-0 bg-white z-10">
+                    <div className="relative inline-block">
+                      <span
+                        onClick={() => navigate(`/equipment/accessories/${item.id}`)}
+                        onMouseEnter={() => setHoveredAccessory(item.id)}
+                        onMouseLeave={() => setHoveredAccessory(null)}
+                        className="text-blue-600 hover:text-blue-800 cursor-pointer"
+                      >
+                        {item.accessory_name}
+                      </span>
+                      {hoveredAccessory === item.id && ((item.images && item.images.length > 0) || (item.accessory_images && item.accessory_images.length > 0)) && (
+                        <div className="absolute z-[100] left-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[150px] max-w-[200px]">
+                          <div className="text-xs text-gray-500 mb-1">配件图片</div>
+                          <img
+                            src={(item.accessory_images && item.accessory_images[0]) || (item.images && item.images[0])}
+                            alt="配件图片"
+                            className="w-full h-24 object-cover rounded"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-4 py-3">{item.manage_code || '-'}</td>
-                  <td className="px-4 py-3">{item.quantity} {item.unit}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{item.model_no || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{item.manage_code || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{item.unit || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(item.status)}`}>
                       {getStatusName(item.status)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{getLocationStatusName(item.location_status)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-sm text-gray-900">{getLocationStatusName(item.location_status)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{item.location_name || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{item.keeper_name || '-'}</td>
+                  <td className="px-4 py-3 text-sm">
                     {item.host_equipment_id ? (
                       <span className="text-green-600">已绑定</span>
                     ) : (
                       <span className="text-gray-400">未绑定</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-sm text-gray-900">{formatDate(item.purchase_date)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(item.purchase_price)}</td>
+                  <td className="px-4 py-3 sticky right-0 bg-white z-10">
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEdit(item)}
@@ -530,7 +567,6 @@ export default function AccessoryManagementPage() {
                   >
                     <option value="instrument">仪器类</option>
                     <option value="fake_load">假负载类</option>
-                    <option value="cable">线材类</option>
                   </select>
                 </div>
                 <div>

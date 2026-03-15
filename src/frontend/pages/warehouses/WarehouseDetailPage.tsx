@@ -15,6 +15,9 @@ interface Warehouse {
   status: 'active' | 'inactive'
   created_at: string
   updated_at: string
+  total_equipment?: number
+  available_equipment?: number
+  in_use_equipment?: number
 }
 
 interface Equipment {
@@ -23,7 +26,7 @@ interface Equipment {
   model_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   serial_number: string | null
   manage_code: string
   health_status: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped'

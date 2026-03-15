@@ -49,6 +49,7 @@ interface ApprovalTask {
   field_permissions?: FieldPermission[]
   dept_map?: Record<string, string>
   pos_map?: Record<string, string>
+  user_map?: Record<string, string>
   timeout?: number
 }
 
@@ -217,8 +218,8 @@ export default function ApprovalPendingPageNew() {
           setTasks(mappedTasks)
           
           const uniqueProcessTypes = [...new Set(mappedTasks.map((task: any) => task.process_type))]
-          uniqueProcessTypes.forEach(processType => {
-            loadFormFields(processType)
+          uniqueProcessTypes.forEach((processType: any) => {
+            loadFormFields(processType as string)
           })
         }
       }
@@ -363,7 +364,7 @@ export default function ApprovalPendingPageNew() {
                       }
                       
                       return (
-                        <div key={key} className="flex justify-between text-xs">
+                        <div key={`${task.id}-${key}`} className="flex justify-between text-xs">
                           <span className="text-gray-500">{label}:</span>
                           <span className="text-gray-900 font-medium truncate ml-2">{String(displayValue)}</span>
                         </div>
@@ -437,8 +438,8 @@ export default function ApprovalPendingPageNew() {
               .slice(0, isExpanded ? undefined : 3)
             
             return (
-              <>
-                <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+              <React.Fragment key={task.id}>
+                <tr className="hover:bg-gray-50 transition-colors">
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-lg bg-${typeConfig.color}-100 flex items-center justify-center`}>
@@ -502,7 +503,7 @@ export default function ApprovalPendingPageNew() {
                           }
                           
                           return (
-                            <div key={key} className="flex justify-between text-xs">
+                            <div key={`${task.id}-${key}`} className="flex justify-between text-xs">
                               <span className="text-gray-500">{label}:</span>
                               <span className="text-gray-900 font-medium truncate ml-2">{String(displayValue)}</span>
                             </div>
@@ -512,9 +513,9 @@ export default function ApprovalPendingPageNew() {
                     </td>
                   </tr>
                 )}
-              </>
-            )
-          })}
+                </React.Fragment>
+              )
+            })}
         </tbody>
       </table>
     </div>

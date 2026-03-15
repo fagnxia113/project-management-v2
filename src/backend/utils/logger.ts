@@ -118,18 +118,21 @@ class Logger {
 
     console.log(`${color}[${entry.level.toUpperCase()}]${reset} ${entry.message}`, entry.meta || '')
 
-    try {
-      fs.appendFileSync(this.logFile, logLine, 'utf8')
+    // 使用异步写入，避免阻塞事件循环
+    fs.promises.appendFile(this.logFile, logLine, 'utf8').catch(err => {
+      console.error('写入日志失败:', err)
+    })
 
-      if (entry.level === 'error') {
-        fs.appendFileSync(this.errorLogFile, logLine, 'utf8')
-      }
+    if (entry.level === 'error') {
+      fs.promises.appendFile(this.errorLogFile, logLine, 'utf8').catch(err => {
+        console.error('写入错误日志失败:', err)
+      })
+    }
 
-      if (entry.performance) {
-        fs.appendFileSync(this.performanceLogFile, logLine, 'utf8')
-      }
-    } catch (error) {
-      console.error('写入日志失败:', error)
+    if (entry.performance) {
+      fs.promises.appendFile(this.performanceLogFile, logLine, 'utf8').catch(err => {
+        console.error('写入性能日志失败:', err)
+      })
     }
   }
 

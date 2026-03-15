@@ -21,7 +21,9 @@ import { executionLogger } from './ExecutionLogger.js';
 import { performanceMonitor } from './PerformanceMonitor.js';
 import { logger } from '../utils/logger.js';
 import { db } from '../database/connection.js';
-import { equipmentInboundService } from './EquipmentInboundService.js';
+import { equipmentInboundServiceV2 as equipmentInboundService } from './EquipmentInboundServiceV2.js';
+import { equipmentServiceV3 } from './EquipmentServiceV3.js';
+import { notificationService } from './NotificationService.js';
 
 // 流程引擎配置
 interface WorkflowEngineConfig {
@@ -55,16 +57,16 @@ interface CacheItem<T> {
 export class EnhancedWorkflowEngine {
   private eventBus: EventEmitter;
   private config: WorkflowEngineConfig;
-  
+
   // 多层缓存
   private definitionCache: Map<string, CacheItem<any>>;
   private approverCache: Map<string, CacheItem<any[]>>;
   private nextNodesCache: Map<string, Map<string, string[]>>;
-  
+
   // 执行状态跟踪
   private activeExecutions: Map<string, AbortController>;
   private executionRetries: Map<string, number>;
-  
+
   // 性能指标
   private metrics: {
     totalExecutions: number;
@@ -78,14 +80,14 @@ export class EnhancedWorkflowEngine {
     this.config = { ...defaultConfig, ...config };
     this.eventBus = new EventEmitter();
     this.eventBus.setMaxListeners(this.config.maxListeners);
-    
+
     this.definitionCache = new Map();
     this.approverCache = new Map();
     this.nextNodesCache = new Map();
-    
+
     this.activeExecutions = new Map();
     this.executionRetries = new Map();
-    
+
     this.metrics = {
       totalExecutions: 0,
       successfulExecutions: 0,
@@ -99,14 +101,14 @@ export class EnhancedWorkflowEngine {
   }
 
   // ==================== 流程启动 ====================
-  
+
   async startProcess(params: StartProcessParams): Promise<WorkflowInstance> {
     const startTime = Date.now();
     const executionId = uuidv4();
-    
+
     try {
       this.metrics.totalExecutions++;
-      
+
       // 记录执行开始
       if (this.config.enableExecutionLog) {
         await executionLogger.log({
@@ -121,7 +123,7 @@ export class EnhancedWorkflowEngine {
 
       // 获取流程定义（使用缓存）
       const definition = await this.getCachedDefinition(params.processKey);
-      
+
       // 创建流程实例
       const instance = await instanceService.createInstance({
         definitionId: definition.id,
@@ -150,7 +152,7 @@ export class EnhancedWorkflowEngine {
       // 记录性能指标
       const duration = Date.now() - startTime;
       this.updateMetrics(true, duration);
-      
+
       if (this.config.enablePerformanceMonitor) {
         performanceMonitor.record('process_start', duration);
       }
@@ -159,7 +161,7 @@ export class EnhancedWorkflowEngine {
     } catch (error) {
       const duration = Date.now() - startTime;
       this.updateMetrics(false, duration);
-      
+
       // 记录错误
       if (this.config.enableExecutionLog) {
         await executionLogger.log({
@@ -169,14 +171,14 @@ export class EnhancedWorkflowEngine {
           timestamp: new Date()
         });
       }
-      
+
       this.eventBus.emit('process.start_failed', {
         params,
         error,
         executionId,
         timestamp: new Date()
       });
-      
+
       throw error;
     }
   }
@@ -186,7 +188,7 @@ export class EnhancedWorkflowEngine {
   async completeTask(taskId: string, params: CompleteTaskParams): Promise<void> {
     const startTime = Date.now();
     const executionId = uuidv4();
-    
+
     try {
       const task = await taskService.getTask(taskId);
       if (!task) {
@@ -206,7 +208,7 @@ export class EnhancedWorkflowEngine {
           taskId,
           instanceId: instance.id,
           operator: params.operator,
-          result: params.result,
+          result: params.action,
           timestamp: new Date()
         });
       }
@@ -219,16 +221,16 @@ export class EnhancedWorkflowEngine {
         await this.handleMultiApproval(task, instance, params, approvalMode, voteThreshold);
       } else {
         await taskService.completeTask(taskId, params);
-        
-        this.eventBus.emit('task.completed', { 
-          task, 
+
+        this.eventBus.emit('task.completed', {
+          task,
           params,
           executionId,
           timestamp: new Date()
         });
-        
+
         // 如果驳回，将流程实例状态设置为completed，result设置为rejected
-        if (params.action === 'rejected') {
+        if (params.action === 'reject' || params.action === 'rejected') {
           await instanceService.endInstance(instance.id, 'rejected', params.operator, params.comment);
         } else {
           const definition = await this.getCachedDefinitionById(instance.definition_id);
@@ -256,7 +258,7 @@ export class EnhancedWorkflowEngine {
           timestamp: new Date()
         });
       }
-      
+
       throw error;
     }
   }
@@ -275,9 +277,9 @@ export class EnhancedWorkflowEngine {
     const nodeTasks = allTasks.filter(t => t.node_id === nodeId);
 
     await taskService.completeTask(task.id, params);
-    
-    this.eventBus.emit('task.completed', { 
-      task, 
+
+    this.eventBus.emit('task.completed', {
+      task,
       params,
       timestamp: new Date()
     });
@@ -346,12 +348,12 @@ export class EnhancedWorkflowEngine {
 
     await taskService.rollbackTask(taskId, targetNodeId, operator, comment);
 
-    this.eventBus.emit('task.rolledback', { 
-      taskId, 
-      targetNodeId, 
-      operator, 
+    this.eventBus.emit('task.rolledback', {
+      taskId,
+      targetNodeId,
+      operator,
       comment,
-      timestamp: new Date() 
+      timestamp: new Date()
     });
   }
 
@@ -386,18 +388,18 @@ export class EnhancedWorkflowEngine {
 
     await taskService.addSigner(taskId, operator, newSigners, comment);
 
-    this.eventBus.emit('task.signer_added', { 
-      taskId, 
-      operator, 
-      newSigners, 
+    this.eventBus.emit('task.signer_added', {
+      taskId,
+      operator,
+      newSigners,
       comment,
-      timestamp: new Date() 
+      timestamp: new Date()
     });
   }
 
   async terminateProcess(instanceId: string, reason?: string, operator?: { id: string; name: string }): Promise<void> {
     await instanceService.endInstance(instanceId, 'terminated', operator, reason);
-    
+
     if (this.config.enableExecutionLog) {
       await executionLogger.log({
         executionId: uuidv4(),
@@ -408,12 +410,12 @@ export class EnhancedWorkflowEngine {
         timestamp: new Date()
       });
     }
-    
-    this.eventBus.emit('process.terminated', { 
-      instanceId, 
-      reason, 
+
+    this.eventBus.emit('process.terminated', {
+      instanceId,
+      reason,
       operator,
-      timestamp: new Date() 
+      timestamp: new Date()
     });
   }
 
@@ -431,20 +433,20 @@ export class EnhancedWorkflowEngine {
 
     // 恢复流程状态
     await instanceService.updateInstanceStatus(instanceId, 'running');
-    
+
     const definition = await this.getCachedDefinitionById(instance.definition_id);
-    
+
     // 从指定节点或最后一个活动节点继续
     const resumeNodeId = fromNodeId || await this.findLastActiveNode(instanceId);
-    
+
     if (resumeNodeId) {
       await this.continueExecution(instance, definition, resumeNodeId);
     }
 
-    this.eventBus.emit('process.resumed', { 
-      instanceId, 
+    this.eventBus.emit('process.resumed', {
+      instanceId,
       fromNodeId: resumeNodeId,
-      timestamp: new Date() 
+      timestamp: new Date()
     });
   }
 
@@ -463,8 +465,8 @@ export class EnhancedWorkflowEngine {
   }
 
   private async continueExecution(
-    instance: WorkflowInstance, 
-    definition: WorkflowDefinition, 
+    instance: WorkflowInstance,
+    definition: WorkflowDefinition,
     currentNodeId: string,
     executionId?: string
   ): Promise<void> {
@@ -494,41 +496,41 @@ export class EnhancedWorkflowEngine {
       case 'startEvent':
         await this.executeGatewayOrUserTask(instance, definition, currentNode);
         break;
-      
+
       case 'endEvent':
         // 结束节点 - 直接结束流程
         logger.debug(`执行结束节点: ${currentNode.name}`, { nodeName: currentNode.name })
         await this.endInstance(instance.id, 'approved');
         break;
-      
+
       case 'userTask':
         await this.executeUserTask(instance, definition, currentNode);
         break;
-      
+
       case 'exclusiveGateway':
         await this.executeExclusiveGateway(instance, definition, currentNode);
         break;
-      
+
       case 'parallelGateway':
         await this.executeParallelGateway(instance, definition, currentNode);
         break;
-      
+
       case 'inclusiveGateway':
         await this.executeInclusiveGateway(instance, definition, currentNode);
         break;
-      
+
       case 'serviceTask':
         await this.executeServiceTask(instance, definition, currentNode);
         break;
-      
+
       default:
         logger.warn(`未处理的节点类型: ${currentNode.type}`, { nodeType: currentNode.type })
     }
   }
 
   private async executeGatewayOrUserTask(
-    instance: WorkflowInstance, 
-    definition: WorkflowDefinition, 
+    instance: WorkflowInstance,
+    definition: WorkflowDefinition,
     currentNode: WorkflowNode
   ): Promise<void> {
     const nextNodes = await this.findNextNodes(definition, currentNode.id);
@@ -539,12 +541,12 @@ export class EnhancedWorkflowEngine {
   }
 
   private async executeUserTask(
-    instance: WorkflowInstance, 
-    definition: WorkflowDefinition, 
+    instance: WorkflowInstance,
+    definition: WorkflowDefinition,
     node: WorkflowNode
   ): Promise<void> {
     let approvalConfig = node.config?.approvalConfig || node.approvalConfig;
-    
+
     // 如果没有标准的approvalConfig，尝试从node.config.assignee获取
     if (!approvalConfig && node.config?.assignee) {
       approvalConfig = {
@@ -552,10 +554,10 @@ export class EnhancedWorkflowEngine {
         approverSource: node.config.assignee
       };
     }
-    
+
     if (!approvalConfig) {
       logger.error(`节点 ${node.name} (${node.id}) 缺少审批配置，自动跳过`, undefined, { nodeConfig: node.config })
-      
+
       // 自动跳过该节点
       await this.updateCurrentNode(instance.id, node.id, node.name);
       const nextNodes = await this.findNextNodes(definition, node.id);
@@ -578,11 +580,11 @@ export class EnhancedWorkflowEngine {
 
     let approvers: any[] = [];
     try {
-      logger.debug(`开始解析节点 ${node.name} (${node.id}) 的审批人`, { 
-        approverSource: approvalConfig.approverSource 
+      logger.debug(`开始解析节点 ${node.name} (${node.id}) 的审批人`, {
+        approverSource: approvalConfig.approverSource
       });
       approvers = await this.resolveApproversWithCache(node, approvalConfig.approverSource, context);
-      logger.debug(`节点 ${node.name} (${node.id}) 解析到 ${approvers.length} 个审批人`, { 
+      logger.debug(`节点 ${node.name} (${node.id}) 解析到 ${approvers.length} 个审批人`, {
         approvers: approvers.map(a => ({ id: a.id, name: a.name }))
       });
     } catch (error) {
@@ -592,30 +594,30 @@ export class EnhancedWorkflowEngine {
     if (approvers.length === 0) {
       const skipIfNoApprover = (approvalConfig as any).skipIfNoApprover;
       const skipCondition = (approvalConfig as any).skipCondition;
-      
-      logger.debug(`节点 ${node.name} (${node.id}) 无法解析审批人`, { 
-        approverSource: approvalConfig.approverSource, 
+
+      logger.debug(`节点 ${node.name} (${node.id}) 无法解析审批人`, {
+        approverSource: approvalConfig.approverSource,
         skipIfNoApprover,
         skipCondition
       })
-      
+
       // 检查是否需要跳过节点
       let shouldSkip = false;
-      
+
       // 1. 检查 skipIfNoApprover（布尔值，旧版本兼容）
       if (skipIfNoApprover === true) {
         shouldSkip = true;
       }
-      
+
       // 2. 检查 skipCondition（字符串，新版本）
       if (skipCondition === 'no_approvers' || skipCondition === 'always') {
         shouldSkip = true;
       }
-      
+
       // 如果配置了无审批人跳过，则跳过该节点
       if (shouldSkip) {
         logger.info(`节点 ${node.name} (${node.id}) 配置了无审批人跳过，跳过该节点`)
-        
+
         // 记录节点跳过日志
         if (this.config.enableExecutionLog) {
           await executionLogger.log({
@@ -631,7 +633,7 @@ export class EnhancedWorkflowEngine {
             timestamp: new Date()
           });
         }
-        
+
         // 更新当前节点为正在处理的节点
         await this.updateCurrentNode(instance.id, node.id, node.name);
         // 获取下一个节点并继续执行
@@ -643,11 +645,11 @@ export class EnhancedWorkflowEngine {
         }
         return;
       }
-      
+
       // 否则创建任务给流程发起人
       logger.debug(`节点 ${node.name} (${node.id}) 未配置无审批人跳过，创建任务给发起人`)
       await this.updateCurrentNode(instance.id, node.id, node.name);
-      
+
       await taskService.createTask({
         instanceId: instance.id,
         nodeId: node.id,
@@ -662,7 +664,7 @@ export class EnhancedWorkflowEngine {
           approverSource: approvalConfig.approverSource
         }
       });
-      
+
       return;
     }
 
@@ -725,6 +727,7 @@ export class EnhancedWorkflowEngine {
 
     // 重新获取实例以获取最新的变量
     const updatedInstance = await instanceService.getInstance(instance.id);
+    if (!updatedInstance) return;
 
     const context: ProcessContext = {
       process: updatedInstance,
@@ -737,7 +740,9 @@ export class EnhancedWorkflowEngine {
     const targetNodes = await gatewayHandler.handleExclusiveGateway(node, context);
 
     for (const targetNodeId of targetNodes) {
-      await this.continueExecution(updatedInstance, definition, targetNodeId);
+      if (updatedInstance) {
+        await this.continueExecution(updatedInstance, definition, targetNodeId);
+      }
     }
   }
 
@@ -751,6 +756,7 @@ export class EnhancedWorkflowEngine {
 
     // 重新获取实例以获取最新的变量
     const updatedInstance = await instanceService.getInstance(instance.id);
+    if (!updatedInstance) return;
 
     const context: ProcessContext = {
       process: updatedInstance,
@@ -783,6 +789,7 @@ export class EnhancedWorkflowEngine {
 
     // 重新获取实例以获取最新的变量
     const updatedInstance = await instanceService.getInstance(instance.id);
+    if (!updatedInstance) return;
 
     const context: ProcessContext = {
       process: updatedInstance,
@@ -842,7 +849,66 @@ export class EnhancedWorkflowEngine {
       }
     } catch (error) {
       logger.error('服务任务执行失败', error as Error)
+      
+      // 通知管理员服务节点执行失败
+      await this.notifyAdminServiceTaskFailed(instance, node, error as Error);
+      
       throw error;
+    }
+  }
+
+  /**
+   * 通知管理员服务节点执行失败
+   */
+  private async notifyAdminServiceTaskFailed(
+    instance: WorkflowInstance,
+    node: WorkflowNode,
+    error: Error
+  ): Promise<void> {
+    try {
+      // 获取所有管理员
+      const admins = await db.query<{ id: string; name: string }>(
+        `SELECT u.id, e.name FROM users u 
+         JOIN employees e ON u.id = e.user_id 
+         WHERE u.role = 'admin' AND e.status = 'active'`
+      );
+
+      if (!admins || admins.length === 0) {
+        logger.warn('没有找到活跃的管理员用户，无法发送服务节点失败通知');
+        return;
+      }
+
+      // 构建通知内容
+      const formData = instance.variables?.formData || {};
+      const businessInfo = formData.equipment_name || formData.items?.[0]?.equipment_name || instance.business_id || '未知业务';
+      const errorMessage = error.message || '未知错误';
+      
+      const title = `服务节点执行失败通知`;
+      const content = `流程实例 ${instance.id.substring(0, 8)}... 在执行服务节点"${node.name}"时失败。
+      
+业务信息：${businessInfo}
+失败原因：${errorMessage}
+发起人：${instance.initiator_name || '未知'}
+流程定义：${instance.process_key}
+
+请及时处理。`;
+
+      // 向所有管理员发送通知
+      for (const admin of admins) {
+        await notificationService.sendNotification({
+          user_id: admin.id,
+          user_name: admin.name,
+          type: 'in_app',
+          title: title,
+          content: content,
+          priority: 'high',
+          link: `/workflow/instances/${instance.id}`
+        });
+      }
+
+      logger.info(`已向 ${admins.length} 位管理员发送服务节点失败通知`);
+    } catch (notifyError) {
+      logger.error('发送服务节点失败通知时出错', notifyError as Error);
     }
   }
 
@@ -855,11 +921,11 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     try {
       console.log('[EnhancedWorkflowEngine] 开始执行创建员工服务任务');
-      
+
       const formData = instance.variables?.formData || {};
-      
+
       logger.debug('创建员工服务 - formData', { formData })
-      
+
       // 直接从表单数据提取员工信息（不再依赖dataMapping）
       const employeeName = formData.employee_name;
       const departmentId = formData.department_id;
@@ -867,23 +933,23 @@ export class EnhancedWorkflowEngine {
       const hireDate = formData.start_date;
       const email = formData.email || '';
       const phone = formData.phone || '';
-      
+
       logger.debug('创建员工服务 - 解析后的数据', { employeeName, departmentId, positionId, hireDate })
-      
+
       if (!employeeName) {
         logger.error('员工姓名为空，无法创建员工记录')
         return;
       }
-      
+
       // 自动生成工号
       const employeeNo = await this.generateEmployeeNo();
       logger.debug('生成的工号', { employeeNo })
-      
+
       // 生成拼音用户名
       logger.debug('开始生成拼音用户名')
       const username = await this.generatePinyinUsername(employeeName);
       logger.debug('生成的用户名', { username })
-      
+
       // 获取岗位名称
       let positionName = '';
       if (positionId) {
@@ -893,7 +959,7 @@ export class EnhancedWorkflowEngine {
         );
         positionName = position?.name || '';
       }
-      
+
       // 1. 创建员工记录
       // 注意：employees表使用position字段存储岗位名称，不是position_id
       const employeeId = uuidv4();
@@ -903,7 +969,7 @@ export class EnhancedWorkflowEngine {
         [employeeId, employeeName, employeeNo, departmentId, positionName, email, phone, hireDate, 'active']
       );
       logger.info(`员工记录创建成功: ${employeeName} (${employeeId})`)
-      
+
       // 2. 创建用户账号
       const userId = uuidv4();
       const defaultPassword = '123456'; // 默认密码
@@ -913,14 +979,14 @@ export class EnhancedWorkflowEngine {
         [userId, username, defaultPassword, employeeName, email, 'user', 'active']
       );
       logger.info(`用户账号创建成功: ${username} (${userId})`)
-      
+
       // 3. 关联用户账号到员工记录
       await db.execute(
         `UPDATE employees SET user_id = ? WHERE id = ?`,
         [userId, employeeId]
       );
       logger.info(`员工记录已关联用户账号: ${employeeId} -> ${userId}`)
-      
+
       // 记录执行日志
       if (this.config.enableExecutionLog) {
         await executionLogger.log({
@@ -931,7 +997,7 @@ export class EnhancedWorkflowEngine {
           timestamp: new Date()
         });
       }
-      
+
     } catch (error) {
       logger.error('创建员工和用户失败', error as Error)
       throw error;
@@ -943,13 +1009,13 @@ export class EnhancedWorkflowEngine {
    */
   private resolveDataMapping(mapping: string, formData: any): any {
     if (!mapping) return null;
-    
+
     // 处理 ${formData.xxx} 格式
     const match = mapping.match(/^\$\{formData\.(\w+)\}$/);
     if (match) {
       return formData[match[1]];
     }
-    
+
     // 直接返回值
     return mapping;
   }
@@ -959,7 +1025,7 @@ export class EnhancedWorkflowEngine {
    */
   private async generateEmployeeNo(): Promise<string> {
     const prefix = 'EMP';
-    
+
     // 查询当前最大的工号
     const result = await db.queryOne<{ max_no: string }>(
       `SELECT employee_no as max_no 
@@ -969,9 +1035,9 @@ export class EnhancedWorkflowEngine {
        LIMIT 1`,
       [`${prefix}-%`]
     );
-    
+
     let sequence = 1;
-    
+
     if (result && result.max_no) {
       // 从现有工号中提取序号
       const match = result.max_no.match(/^EMP-(\d+)$/);
@@ -979,20 +1045,20 @@ export class EnhancedWorkflowEngine {
         sequence = parseInt(match[1]) + 1;
       }
     }
-    
+
     // 工号格式: EMP-XXXXX (前缀-序号，5位数字)
     const employeeNo = `${prefix}-${sequence.toString().padStart(5, '0')}`;
-    
+
     // 检查工号是否已存在（避免并发冲突）
     let finalEmployeeNo = employeeNo;
     let counter = 1;
-    
+
     while (await this.isEmployeeNoExists(finalEmployeeNo)) {
       const newSequence = sequence + counter;
       finalEmployeeNo = `${prefix}-${newSequence.toString().padStart(5, '0')}`;
       counter++;
     }
-    
+
     return finalEmployeeNo;
   }
 
@@ -1016,25 +1082,25 @@ export class EnhancedWorkflowEngine {
       style: 'normal', // 普通风格，不带声调
       heteronym: false // 不启用多音字
     });
-    
+
     let baseUsername = py.map((item: string[]) => item[0]).join('').toLowerCase();
-    
+
     // 移除特殊字符，只保留字母和数字
     baseUsername = baseUsername.replace(/[^a-z0-9]/g, '');
-    
+
     if (!baseUsername) {
       baseUsername = 'user';
     }
-    
+
     // 检查用户名是否已存在
     let username = baseUsername;
     let counter = 1;
-    
+
     while (await this.isUsernameExists(username)) {
       username = `${baseUsername}${counter}`;
       counter++;
     }
-    
+
     return username;
   }
 
@@ -1058,14 +1124,14 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     try {
       console.log('[EnhancedWorkflowEngine] 开始执行创建设备服务任务');
-      
+
       const formData = instance.variables?.formData || {};
-      
+
       logger.debug('创建设备服务 - formData', { formData })
-      
+
       // 调用设备入库服务创建设备台账
       await equipmentInboundService.createEquipmentFromWorkflow(instance.id);
-      
+
       logger.info(`设备台账创建成功: 流程实例 ${instance.id}`);
     } catch (error) {
       logger.error('创建设备服务任务执行失败', error as Error);
@@ -1082,34 +1148,34 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     try {
       console.log('[EnhancedWorkflowEngine] 开始执行设备调拨发货服务任务');
-      
+
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
-      
+
       logger.debug('设备调拨发货服务 - formData', { formData, businessId })
-      
+
       if (!businessId) {
-        logger.error('业务ID为空，无法执行调拨发货服务')
+        logger.error('业务ID为空，无法执行调拨发货服务', { instanceId: instance.id } as any)
         return;
       }
-      
+
       const [orderRows] = await db.query<any>(
         'SELECT * FROM equipment_transfer_orders WHERE id = ?',
         [businessId]
       );
       const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
-      
+
       if (!order) {
         logger.error('调拨单不存在', { businessId })
         return;
       }
-      
+
       const [itemRows] = await db.query<any>(
         'SELECT * FROM equipment_transfer_order_items WHERE order_id = ?',
         [businessId]
       );
       const items = itemRows || [];
-      
+
       for (const item of items) {
         if (item.equipment_id) {
           await db.execute(
@@ -1123,16 +1189,16 @@ export class EnhancedWorkflowEngine {
           console.log(`[EnhancedWorkflowEngine] 仪器类设备状态已更新为运输中: ${item.equipment_id}`);
         } else {
           const transferQuantity = item.quantity || 1;
-          
+
           let fromLocationId = null;
           if (order.from_location_type === 'warehouse') {
             fromLocationId = order.from_warehouse_id;
           } else if (order.from_location_type === 'project') {
             fromLocationId = order.from_project_id;
           }
-          
+
           if (!fromLocationId) continue;
-          
+
           const [equipmentRows] = await db.query<any>(
             `SELECT ei.*, em.name as equipment_name, em.model_no, em.brand, em.category, em.unit 
              FROM equipment_instances ei
@@ -1141,14 +1207,14 @@ export class EnhancedWorkflowEngine {
             [item.equipment_name, item.model_no, item.category, fromLocationId]
           );
           const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
-          
+
           if (!equipment) {
             console.log(`[EnhancedWorkflowEngine] 未找到调出位置的设备记录: ${item.equipment_name} ${item.model_no}`);
             continue;
           }
-          
+
           const currentQuantity = equipment.quantity || 1;
-          
+
           if (currentQuantity <= transferQuantity) {
             await db.execute(
               'DELETE FROM equipment_instances WHERE id = ?',
@@ -1162,7 +1228,7 @@ export class EnhancedWorkflowEngine {
               [transferQuantity, equipment.id]
             );
           }
-          
+
           const transferringEquipmentId = uuidv4();
           const transferringManageCode = item.manage_code ? item.manage_code + '-transferring' : `TRANS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           await db.execute(
@@ -1191,7 +1257,7 @@ export class EnhancedWorkflowEngine {
           console.log(`[EnhancedWorkflowEngine] 已创建运输中设备记录: ${transferringEquipmentId}`);
         }
       }
-      
+
       await db.execute(
         `UPDATE equipment_transfer_orders 
          SET status = 'receiving', 
@@ -1200,7 +1266,7 @@ export class EnhancedWorkflowEngine {
          WHERE id = ?`,
         [businessId]
       );
-      
+
       logger.info(`设备调拨发货服务执行成功: 流程实例 ${instance.id}`);
     } catch (error) {
       logger.error('设备调拨发货服务任务执行失败', error as Error);
@@ -1217,28 +1283,28 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     try {
       console.log('[EnhancedWorkflowEngine] 开始执行设备调拨收货服务任务');
-      
+
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
-      
+
       logger.debug('设备调拨收货服务 - formData', { formData, businessId })
-      
+
       if (!businessId) {
         logger.error('业务ID为空，无法执行调拨收货服务')
         return;
       }
-      
+
       const [orderRows] = await db.query<any>(
         'SELECT * FROM equipment_transfer_orders WHERE id = ?',
         [businessId]
       );
       const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
-      
+
       if (!order) {
         logger.error('调拨单不存在', { businessId })
         return;
       }
-      
+
       let toLocationId = null;
       let toLocationType = null;
       if (order.to_location_type === 'warehouse') {
@@ -1248,32 +1314,32 @@ export class EnhancedWorkflowEngine {
         toLocationId = order.to_project_id;
         toLocationType = 'project';
       }
-      
+
       if (!toLocationId) {
-        logger.error('调入位置ID为空', { order })
+        logger.error('调入位置ID为空', { instanceId: instance.id } as any)
         return;
       }
-      
+
       const [itemRows] = await db.query<any>(
         'SELECT * FROM equipment_transfer_order_items WHERE order_id = ?',
         [businessId]
       );
       const items = itemRows || [];
-      
+
       for (const item of items) {
         if (item.equipment_id) {
-          await db.execute(
-            `UPDATE equipment_instances 
-             SET location_status = ?, 
-                 location_id = ?, 
-                 updated_at = NOW()
-             WHERE id = ?`,
-            [toLocationType === 'warehouse' ? 'warehouse' : 'in_project', toLocationId, item.equipment_id]
-          );
-          console.log(`[EnhancedWorkflowEngine] 仪器类设备位置已更新: ${item.equipment_id}`);
+          // 获取目标位置的负责人
+          const locDetails = await equipmentServiceV3.getLocationDetails(toLocationId);
+          
+          await equipmentServiceV3.updateInstanceStatus(item.equipment_id, {
+            location_status: toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
+            location_id: toLocationId,
+            keeper_id: locDetails.manager_id || undefined
+          });
+          console.log(`[EnhancedWorkflowEngine] 仪器类设备位置及保管人已更新: ${item.equipment_id}`);
         } else {
           const transferQuantity = item.quantity || 1;
-          
+
           const [transferringRows] = await db.query<any>(
             `SELECT ei.*, em.name as equipment_name, em.model_no, em.category 
              FROM equipment_instances ei
@@ -1282,14 +1348,14 @@ export class EnhancedWorkflowEngine {
             [item.equipment_name, item.model_no, item.category]
           );
           const transferringEquipment = transferringRows && transferringRows.length > 0 ? transferringRows[0] : null;
-          
+
           if (transferringEquipment) {
             await db.execute(
               'DELETE FROM equipment_instances WHERE id = ?',
               [transferringEquipment.id]
             );
           }
-          
+
           const [existingRows] = await db.query<any>(
             `SELECT ei.* FROM equipment_instances ei
              JOIN equipment_models em ON ei.model_id = em.id
@@ -1297,7 +1363,7 @@ export class EnhancedWorkflowEngine {
             [item.equipment_name, item.model_no, item.category, toLocationId]
           );
           const existingEquipment = existingRows && existingRows.length > 0 ? existingRows[0] : null;
-          
+
           if (existingEquipment) {
             await db.execute(
               `UPDATE equipment_instances 
@@ -1312,30 +1378,28 @@ export class EnhancedWorkflowEngine {
               [item.equipment_name, item.model_no, item.category]
             );
             const model = modelRows && modelRows.length > 0 ? modelRows[0] : null;
-            
+
             if (model) {
               const newEquipmentId = uuidv4();
-              await db.execute(
-                `INSERT INTO equipment_instances 
-                (id, model_id, quantity, manage_code, health_status, usage_status, location_status, location_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                  newEquipmentId,
-                  model.id,
-                  transferQuantity,
-                  item.manage_code || null,
-                  'normal',
-                  'idle',
-                  toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
-                  toLocationId
-                ]
-              );
-              console.log(`[EnhancedWorkflowEngine] 已创建调入位置设备记录: ${newEquipmentId}`);
+              const locDetails = await equipmentServiceV3.getLocationDetails(toLocationId);
+              
+              await equipmentServiceV3.createInstance({
+                equipment_name: model.name,
+                model_no: model.model_no || '',
+                category: model.category,
+                tracking_type: 'BATCH',
+                quantity: transferQuantity,
+                manage_code: item.manage_code || undefined,
+                location_status: toLocationType === 'warehouse' ? 'warehouse' : 'in_project',
+                location_id: toLocationId,
+                keeper_id: locDetails.manager_id || undefined
+              });
+              console.log(`[EnhancedWorkflowEngine] 已创建调入位置设备记录(含保管人): ${newEquipmentId}`);
             }
           }
         }
       }
-      
+
       await db.execute(
         `UPDATE equipment_transfer_orders 
          SET status = 'completed', 
@@ -1344,7 +1408,7 @@ export class EnhancedWorkflowEngine {
          WHERE id = ?`,
         [businessId]
       );
-      
+
       logger.info(`设备调拨收货服务执行成功: 流程实例 ${instance.id}`);
     } catch (error) {
       logger.error('设备调拨收货服务任务执行失败', error as Error);
@@ -1361,82 +1425,79 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     try {
       console.log('[EnhancedWorkflowEngine] 开始执行设备维修发货服务任务');
-      
+
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
-      
+
       logger.debug('设备维修发货服务 - formData', { formData, businessId })
-      
+
       if (!businessId) {
         logger.error('业务ID为空，无法执行维修发货服务')
         return;
       }
-      
+
       const [orderRows] = await db.query<any>(
         'SELECT * FROM equipment_repair_orders WHERE id = ?',
         [businessId]
       );
       const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
-      
+
       if (!order) {
         logger.error('维修单不存在', { businessId })
         return;
       }
-      
+
       const repairQuantity = order.repair_quantity || 1;
-      
+
       if (order.equipment_category === 'instrument') {
-        await db.execute(
+        const result = await db.execute(
           `UPDATE equipment_instances 
-           SET location_id = 'repairing', 
+           SET location_id = ?, 
                health_status = 'repairing',
                location_status = 'repairing',
                updated_at = NOW()
            WHERE id = ?`,
-          [order.equipment_id]
+          [order.location_id, order.equipment_id]
         );
-        console.log(`[EnhancedWorkflowEngine] 仪器类设备状态已更新为维修中: ${order.equipment_id}`);
+        if (result && (result as any).affectedRows === 0) {
+          logger.error(`仪器类设备维修状态更新失败: ${order.equipment_id}`);
+        }
       } else {
         const [equipmentRows] = await db.query<any>(
           `SELECT * FROM equipment_instances WHERE id = ?`,
           [order.equipment_id]
         );
         const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
-        
+
         if (!equipment) {
           logger.error('设备不存在', { equipment_id: order.equipment_id })
           return;
         }
-        
+
         await db.execute(
           `UPDATE equipment_instances SET quantity = quantity - ? WHERE id = ?`,
           [repairQuantity, order.equipment_id]
         );
-        
+
         const repairingId = uuidv4();
-        await db.execute(
-          `INSERT INTO equipment_instances 
-          (id, equipment_name, model_no, brand, category, unit, quantity, manage_code, 
-           health_status, usage_status, location_status, location_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            repairingId,
-            equipment.equipment_name,
-            equipment.model_no,
-            equipment.brand,
-            equipment.category,
-            equipment.unit,
-            repairQuantity,
-            equipment.manage_code + '-repairing',
-            'repairing',
-            'idle',
-            'repairing',
-            'repairing'
-          ]
-        );
+        await equipmentServiceV3.createInstance({
+          equipment_name: equipment.equipment_name,
+          model_no: equipment.model_no,
+          brand: equipment.brand,
+          category: equipment.category,
+          unit: equipment.unit,
+          quantity: repairQuantity,
+          tracking_type: 'SERIALIZED', // 维修拆分出的记录默认维持序列化追踪
+          manage_code: equipment.manage_code + '-repairing',
+          health_status: 'repairing',
+          usage_status: 'idle',
+          location_status: 'repairing',
+          location_id: equipment.location_id, // 维持原物理位置ID
+          keeper_id: equipment.keeper_id // 维持原保管人
+        });
         console.log(`[EnhancedWorkflowEngine] 已创建维修中设备记录: ${repairingId}`);
       }
-      
+
       await db.execute(
         `UPDATE equipment_repair_orders 
          SET status = 'repairing', 
@@ -1445,7 +1506,7 @@ export class EnhancedWorkflowEngine {
          WHERE id = ?`,
         [businessId]
       );
-      
+
       logger.info(`设备维修发货服务执行成功: 流程实例 ${instance.id}`);
     } catch (error) {
       logger.error('设备维修发货服务任务执行失败', error as Error);
@@ -1462,43 +1523,43 @@ export class EnhancedWorkflowEngine {
   ): Promise<void> {
     try {
       console.log('[EnhancedWorkflowEngine] 开始执行设备维修收货服务任务');
-      
+
       const formData = instance.variables?.formData || {};
       const businessId = instance.business_id;
-      
+
       logger.debug('设备维修收货服务 - formData', { formData, businessId })
-      
+
       if (!businessId) {
         logger.error('业务ID为空，无法执行维修收货服务')
         return;
       }
-      
+
       const [orderRows] = await db.query<any>(
         'SELECT * FROM equipment_repair_orders WHERE id = ?',
         [businessId]
       );
       const order = orderRows && orderRows.length > 0 ? orderRows[0] : null;
-      
+
       if (!order) {
         logger.error('维修单不存在', { businessId })
         return;
       }
-      
+
       const repairQuantity = order.repair_quantity || 1;
-      
+
       if (order.equipment_category === 'instrument') {
         const originalLocationId = order.original_location_id ?? null;
         const locationStatus = order.original_location_type === 'warehouse' ? 'warehouse' : 'in_project';
-        
-        await db.execute(
-          `UPDATE equipment_instances 
-           SET location_id = ?, 
-               health_status = 'normal',
-               location_status = ?,
-               updated_at = NOW()
-           WHERE id = ?`,
-          [originalLocationId, locationStatus, order.equipment_id]
-        );
+
+        // 解析最新负责人
+        const locDetails = await equipmentServiceV3.getLocationDetails(originalLocationId);
+
+        await equipmentServiceV3.updateInstanceStatus(order.equipment_id, {
+          location_id: originalLocationId,
+          health_status: 'normal',
+          location_status: locationStatus as any,
+          keeper_id: locDetails.manager_id || undefined
+        });
         console.log(`[EnhancedWorkflowEngine] 仪器类设备状态已恢复: ${order.equipment_id}`);
       } else {
         const [equipmentRows] = await db.query<any>(
@@ -1506,12 +1567,12 @@ export class EnhancedWorkflowEngine {
           [order.equipment_id]
         );
         const equipment = equipmentRows && equipmentRows.length > 0 ? equipmentRows[0] : null;
-        
+
         if (!equipment) {
           logger.error('设备不存在', { equipment_id: order.equipment_id })
           return;
         }
-        
+
         await db.execute(
           `DELETE FROM equipment_instances 
            WHERE location_id = 'repairing' 
@@ -1520,14 +1581,14 @@ export class EnhancedWorkflowEngine {
              AND model_no = ?`,
           [order.equipment_name, equipment.model_no ?? null]
         );
-        
+
         await db.execute(
           `UPDATE equipment_instances SET quantity = quantity + ? WHERE id = ?`,
           [repairQuantity, order.equipment_id]
         );
         console.log(`[EnhancedWorkflowEngine] 设备数量已恢复: ${order.equipment_id}`);
       }
-      
+
       await db.execute(
         `UPDATE equipment_repair_orders 
          SET status = 'completed', 
@@ -1536,7 +1597,7 @@ export class EnhancedWorkflowEngine {
          WHERE id = ?`,
         [businessId]
       );
-      
+
       logger.info(`设备维修收货服务执行成功: 流程实例 ${instance.id}`);
     } catch (error) {
       logger.error('设备维修收货服务任务执行失败', error as Error);
@@ -1549,7 +1610,7 @@ export class EnhancedWorkflowEngine {
   private async getCachedDefinition(processKey: string): Promise<WorkflowDefinition> {
     const cacheKey = `latest_${processKey}`;
     const cached = this.definitionCache.get(cacheKey);
-    
+
     if (cached && Date.now() - cached.timestamp < this.config.cacheTTL) {
       this.metrics.cacheHitRate = (this.metrics.cacheHitRate * 99 + 1) / 100;
       return cached.value;
@@ -1562,15 +1623,15 @@ export class EnhancedWorkflowEngine {
 
     this.definitionCache.set(cacheKey, { value: definition, timestamp: Date.now() });
     this.definitionCache.set(definition.id, { value: definition, timestamp: Date.now() });
-    
+
     this.cleanupCache();
-    
+
     return definition;
   }
 
   private async getCachedDefinitionById(definitionId: string): Promise<WorkflowDefinition> {
     const cached = this.definitionCache.get(definitionId);
-    
+
     if (cached && Date.now() - cached.timestamp < this.config.cacheTTL) {
       return cached.value;
     }
@@ -1581,7 +1642,7 @@ export class EnhancedWorkflowEngine {
     }
 
     this.definitionCache.set(definitionId, { value: definition, timestamp: Date.now() });
-    
+
     return definition;
   }
 
@@ -1592,16 +1653,16 @@ export class EnhancedWorkflowEngine {
   ): Promise<any[]> {
     const cacheKey = `${node.id}_${JSON.stringify(approverSource)}_${JSON.stringify(context.formData)}`;
     const cached = this.approverCache.get(cacheKey);
-    
+
     if (cached && Date.now() - cached.timestamp < this.config.cacheTTL) {
       return cached.value;
     }
 
     const approvers = await approverResolver.resolveApprovers(approverSource, context);
-    
+
     this.approverCache.set(cacheKey, { value: approvers, timestamp: Date.now() });
     this.cleanupApproverCache();
-    
+
     return approvers;
   }
 
@@ -1632,7 +1693,7 @@ export class EnhancedWorkflowEngine {
     if (this.definitionCache.size > this.config.cacheSize) {
       const entries = Array.from(this.definitionCache.entries());
       entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-      
+
       const toDelete = entries.slice(0, Math.floor(this.config.cacheSize * 0.2));
       for (const [key] of toDelete) {
         this.definitionCache.delete(key);
@@ -1644,7 +1705,7 @@ export class EnhancedWorkflowEngine {
     if (this.approverCache.size > this.config.cacheSize) {
       const entries = Array.from(this.approverCache.entries());
       entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-      
+
       const toDelete = entries.slice(0, Math.floor(this.config.cacheSize * 0.2));
       for (const [key] of toDelete) {
         this.approverCache.delete(key);
@@ -1655,13 +1716,13 @@ export class EnhancedWorkflowEngine {
   private startCacheCleanup(): void {
     setInterval(() => {
       const now = Date.now();
-      
+
       for (const [key, item] of this.definitionCache.entries()) {
         if (now - item.timestamp > this.config.cacheTTL) {
           this.definitionCache.delete(key);
         }
       }
-      
+
       for (const [key, item] of this.approverCache.entries()) {
         if (now - item.timestamp > this.config.cacheTTL) {
           this.approverCache.delete(key);
@@ -1678,22 +1739,22 @@ export class EnhancedWorkflowEngine {
     operation: string
   ): Promise<T> {
     let attempts = 0;
-    
+
     while (attempts < this.config.retryAttempts) {
       try {
         return await fn();
       } catch (error) {
         attempts++;
-        
+
         if (attempts >= this.config.retryAttempts) {
           throw error;
         }
-        
+
         logger.warn(`${operation} 失败，第 ${attempts} 次重试...`, { operation, attempts })
         await this.delay(this.config.retryDelay * attempts);
       }
     }
-    
+
     throw new Error(`${operation} 执行失败，已重试 ${attempts} 次`);
   }
 
@@ -1746,9 +1807,9 @@ export class EnhancedWorkflowEngine {
     } else {
       this.metrics.failedExecutions++;
     }
-    
-    this.metrics.avgExecutionTime = 
-      (this.metrics.avgExecutionTime * (this.metrics.totalExecutions - 1) + duration) / 
+
+    this.metrics.avgExecutionTime =
+      (this.metrics.avgExecutionTime * (this.metrics.totalExecutions - 1) + duration) /
       this.metrics.totalExecutions;
   }
 
@@ -1790,7 +1851,7 @@ export class EnhancedWorkflowEngine {
 
     const definition = await this.getCachedDefinitionById(instance.definition_id);
     const targetNode = definition.node_config.nodes.find((n: WorkflowNode) => n.id === targetNodeId);
-    
+
     if (!targetNode) {
       throw new Error('目标节点不存在');
     }
@@ -1842,7 +1903,7 @@ export class EnhancedWorkflowEngine {
     }
 
     const definition = await this.getCachedDefinitionById(instance.definition_id);
-    
+
     // 查找前一个节点（通过边反向查找）
     const previousNodeId = this.findPreviousNode(definition, currentNodeId);
     if (!previousNodeId) {
@@ -1993,9 +2054,9 @@ export class EnhancedWorkflowEngine {
         taskId,
         operator,
         reason,
-        metadata: { 
+        metadata: {
           oldAssignee: { id: task.assignee_id, name: task.assignee_name },
-          newAssignee 
+          newAssignee
         },
         timestamp: new Date()
       });
@@ -2072,10 +2133,10 @@ export class EnhancedWorkflowEngine {
     reason?: string
   ): Promise<void> {
     const tasks = await taskService.getTasksByInstance(instanceId, ['created', 'assigned', 'in_progress']);
-    
+
     for (const task of tasks) {
       await taskService.cancelTask(task.id, `[管理员干预] ${reason || ''}`);
-      
+
       if (this.config.enableExecutionLog) {
         await executionLogger.log({
           executionId: uuidv4(),
@@ -2093,7 +2154,7 @@ export class EnhancedWorkflowEngine {
   // 辅助方法：查找前一个节点
   private findPreviousNode(definition: WorkflowDefinition, nodeId: string): string | null {
     if (!definition.node_config?.edges) return null;
-    
+
     const edge = definition.node_config.edges.find(e => e.target === nodeId);
     return edge?.source || null;
   }
@@ -2114,16 +2175,6 @@ export class EnhancedWorkflowEngine {
 
   getMetrics(): typeof this.metrics {
     return { ...this.metrics };
-  }
-
-  // ==================== 事件总线方法 ====================
-
-  on(event: string, listener: (...args: any[]) => void): void {
-    this.eventBus.on(event, listener);
-  }
-
-  off(event: string, listener: (...args: any[]) => void): void {
-    this.eventBus.off(event, listener);
   }
 
   emit(event: string, ...args: any[]): void {

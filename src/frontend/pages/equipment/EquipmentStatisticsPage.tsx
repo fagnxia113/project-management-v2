@@ -371,13 +371,13 @@ export default function EquipmentStatisticsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {statistics.modelStats.map((model) => (
-                  <tr key={model.id}>
+                {statistics.modelStats.map((model, idx) => (
+                  <tr key={`${model.name}-${model.model_no}-${idx}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{model.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{model.model_no}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{model.brand || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {model.category === 'instrument' ? '仪器类' : model.category === 'fake_load' ? '假负载类' : '线材类'}
+                      {model.category === 'instrument' ? '仪器类' : model.category === 'fake_load' ? '假负载类' : '配件类'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{model.total_count}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">{model.available_count}</td>

@@ -21,6 +21,7 @@ const TransferDetailPage = lazy(() => import('../pages/equipment/TransferDetailP
 const RepairCreatePage = lazy(() => import('../pages/equipment/RepairCreatePage'))
 const ScrapSaleCreatePage = lazy(() => import('../pages/equipment/ScrapSaleCreatePage'))
 const AccessoryManagementPage = lazy(() => import('../pages/equipment/AccessoryManagementPage'))
+const AccessoryDetailPage = lazy(() => import('../pages/equipment/AccessoryDetailPage'))
 
 // 人员
 const PersonnelListPage = lazy(() => import('../pages/personnel/PersonnelListPage'))
@@ -120,6 +121,7 @@ export const routes: RouteObject[] = [
             { path: '', element: <EquipmentListPage /> },
             { path: 'statistics', element: <EquipmentStatisticsPage /> },
             { path: 'accessories', element: <AccessoryManagementPage /> },
+            { path: 'accessories/:id', element: <AccessoryDetailPage /> },
             { path: 'scrap-sales', element: <ScrapSaleListPage /> },
             { path: 'scrap-sales/create', element: <ScrapSaleCreatePage /> },
             { path: 'repairs/create', element: <RepairCreatePage /> },

@@ -221,13 +221,19 @@ export const equipmentInboundSchema: FormSchemaConfig = {
         title: '设备名称',
         required: true,
         'x-decorator': 'FormItem',
-        'x-component': 'Input'
+        'x-component': 'Input',
+        'x-component-props': {
+          placeholder: '请输入设备名称'
+        }
       },
       model: {
         type: 'string',
         title: '型号规格',
         'x-decorator': 'FormItem',
-        'x-component': 'Input'
+        'x-component': 'Input',
+        'x-component-props': {
+          placeholder: '请输入设备型号规格'
+        }
       },
       category: {
         type: 'string',
@@ -235,6 +241,9 @@ export const equipmentInboundSchema: FormSchemaConfig = {
         required: true,
         'x-decorator': 'FormItem',
         'x-component': 'Select',
+        'x-component-props': {
+          placeholder: '请选择设备类型'
+        },
         enum: [
           { label: '电脑', value: 'computer' },
           { label: '打印机', value: 'printer' },
@@ -251,7 +260,8 @@ export const equipmentInboundSchema: FormSchemaConfig = {
         'x-decorator': 'FormItem',
         'x-component': 'NumberPicker',
         'x-component-props': {
-          min: 1
+          min: 1,
+          placeholder: '请输入数量'
         }
       },
       warehouse_id: {
@@ -260,6 +270,9 @@ export const equipmentInboundSchema: FormSchemaConfig = {
         required: true,
         'x-decorator': 'FormItem',
         'x-component': 'Select',
+        'x-component-props': {
+          placeholder: '请选择入库仓库'
+        },
         'x-reactions': {
           fulfill: {
             state: {
@@ -272,13 +285,19 @@ export const equipmentInboundSchema: FormSchemaConfig = {
         type: 'string',
         title: '供应商',
         'x-decorator': 'FormItem',
-        'x-component': 'Input'
+        'x-component': 'Input',
+        'x-component-props': {
+          placeholder: '请输入供应商名称'
+        }
       },
       purchase_date: {
         type: 'string',
         title: '采购日期',
         'x-decorator': 'FormItem',
-        'x-component': 'DatePicker'
+        'x-component': 'DatePicker',
+        'x-component-props': {
+          placeholder: '请选择采购日期'
+        }
       },
       price: {
         type: 'number',
@@ -287,14 +306,19 @@ export const equipmentInboundSchema: FormSchemaConfig = {
         'x-component': 'NumberPicker',
         'x-component-props': {
           prefix: '¥',
-          precision: 2
+          precision: 2,
+          placeholder: '请输入单价'
         }
       },
       notes: {
         type: 'string',
         title: '备注',
         'x-decorator': 'FormItem',
-        'x-component': 'TextArea'
+        'x-component': 'TextArea',
+        'x-component-props': {
+          placeholder: '请输入备注信息（选填）',
+          rows: 3
+        }
       }
     }
   }

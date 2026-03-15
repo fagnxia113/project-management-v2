@@ -4,16 +4,16 @@
  * 确保表单与流程引擎的无缝集成
  */
 
-import { unifiedFormService } from './UnifiedFormService.js';
+import { unifiedFormService, UnifiedFormTemplate, UnifiedFormField } from './UnifiedFormService.js';
 import WorkflowTemplatesService from './WorkflowTemplates.js';
 import { enhancedWorkflowEngine } from './EnhancedWorkflowEngine.js';
 import { definitionService } from './DefinitionService.js';
-import { projectService } from './ProjectService.js';
+import { projectServiceV2 as projectService } from './ProjectServiceV2.js';
 import { instanceService } from './InstanceService.js';
-import { InboundOrderService } from './InboundOrderService.js';
-import { TransferOrderService } from './TransferOrderService.js';
-import { equipmentRepairService } from './EquipmentRepairService.js';
-import { equipmentScrapSaleService } from './EquipmentScrapSaleService.js';
+import { inboundOrderServiceV2 as inboundOrderService } from './InboundOrderServiceV2.js';
+import { transferOrderServiceV2 as transferOrderService } from './TransferOrderServiceV2.js';
+import { equipmentRepairServiceV2 as equipmentRepairService } from './EquipmentRepairServiceV2.js';
+import { equipmentScrapSaleServiceV2 as equipmentScrapSaleService } from './EquipmentScrapSaleServiceV2.js';
 import { formDataValidator } from './FormDataValidator.js';
 import { db } from '../database/connection.js';
 import { notificationService } from './NotificationService.js';
@@ -62,15 +62,11 @@ interface ProcessFormIntegrationResult {
 export class ProcessFormIntegrationService {
   private presets: Map<string, ProcessFormPreset>;
   private categoryToPresetsMap: Map<string, ProcessFormPreset[]>;
-  private inboundOrderService: InboundOrderService;
-  private transferOrderService: TransferOrderService;
   private db: typeof db;
 
   constructor() {
     this.presets = new Map();
     this.categoryToPresetsMap = new Map();
-    this.inboundOrderService = new InboundOrderService();
-    this.transferOrderService = new TransferOrderService();
     this.db = db;
     this.initializeDefaultPresets();
   }
@@ -108,7 +104,7 @@ export class ProcessFormIntegrationService {
         id: 'preset-equipment-transfer',
         name: '设备调拨流程',
         category: 'equipment',
-        description: '设备跨位置调拨审批流程',
+        description: '设备调拨审批流程',
         formTemplateKey: 'equipment-transfer-form',
         workflowTemplateId: 'equipment-transfer',
         businessType: 'EquipmentTransfer',
@@ -120,7 +116,7 @@ export class ProcessFormIntegrationService {
         id: 'preset-equipment-repair',
         name: '设备维修流程',
         category: 'equipment',
-        description: '设备维修审批流程',
+        description: '设备维修申请及流程控制',
         formTemplateKey: 'equipment-repair-form',
         workflowTemplateId: 'equipment-repair',
         businessType: 'EquipmentRepair',
@@ -132,22 +128,10 @@ export class ProcessFormIntegrationService {
         id: 'preset-equipment-scrap-sale',
         name: '设备报废/售出流程',
         category: 'equipment',
-        description: '设备报废/售出审批流程',
+        description: '设备报废或售出申请流程',
         formTemplateKey: 'equipment-scrap-sale-form',
         workflowTemplateId: 'equipment-scrap-sale',
         businessType: 'EquipmentScrapSale',
-        status: 'active',
-        defaultVariables: {},
-        version: '1.0.0'
-      },
-      {
-        id: 'preset-employee-onboard',
-        name: '人员入职流程',
-        category: 'hr',
-        description: '新员工入职审批流程',
-        formTemplateKey: 'employee-onboard-form',
-        workflowTemplateId: 'employee-onboard',
-        businessType: 'Employee',
         status: 'active',
         defaultVariables: {},
         version: '1.0.0'
@@ -156,7 +140,7 @@ export class ProcessFormIntegrationService {
 
     defaultPresets.forEach(preset => {
       this.presets.set(preset.id, preset);
-      
+
       const categoryPresets = this.categoryToPresetsMap.get(preset.category) || [];
       categoryPresets.push(preset);
       this.categoryToPresetsMap.set(preset.category, categoryPresets);
@@ -164,892 +148,187 @@ export class ProcessFormIntegrationService {
   }
 
   /**
-   * 获取所有流程表单预设
+   * 根据位置信息获取负责人
    */
-  getAllPresets(): ProcessFormPreset[] {
-    return Array.from(this.presets.values());
-  }
-
-  /**
-   * 根据ID获取流程表单预设
-   */
-  getPresetById(id: string): ProcessFormPreset | undefined {
-    return this.presets.get(id);
-  }
-
-  /**
-   * 根据formKey获取表单模板
-   */
-  getFormTemplate(formKey: string): FormTemplate | undefined {
-    return unifiedFormService.getTemplateByKey(formKey);
-  }
-
-  /**
-   * 根据分类获取流程表单预设
-   */
-  getPresetsByCategory(category: string): ProcessFormPreset[] {
-    return this.categoryToPresetsMap.get(category) || [];
-  }
-
-  /**
-   * 根据业务类型获取流程表单预设
-   */
-  getPresetsByBusinessType(businessType: string): ProcessFormPreset[] {
-    return Array.from(this.presets.values()).filter(preset => preset.businessType === businessType);
-  }
-
-  /**
-   * 创建流程表单预设
-   */
-  createPreset(preset: Omit<ProcessFormPreset, 'id' | 'version'>): ProcessFormPreset {
-    const id = `preset-${Date.now()}`;
-    const newPreset: ProcessFormPreset = {
-      ...preset,
-      id,
-      version: '1.0.0'
-    };
-
-    this.presets.set(id, newPreset);
-    
-    const categoryPresets = this.categoryToPresetsMap.get(preset.category) || [];
-    categoryPresets.push(newPreset);
-    this.categoryToPresetsMap.set(preset.category, categoryPresets);
-
-    return newPreset;
-  }
-
-  /**
-   * 更新流程表单预设
-   */
-  updatePreset(id: string, updates: Partial<ProcessFormPreset>): ProcessFormPreset | undefined {
-    const preset = this.presets.get(id);
-    if (!preset) {
-      return undefined;
-    }
-
-    const updatedPreset: ProcessFormPreset = {
-      ...preset,
-      ...updates,
-      version: '1.0.0' // 简化处理，每次更新都重置版本
-    };
-
-    this.presets.set(id, updatedPreset);
-
-    // 如果分类变更，更新分类映射
-    if (updates.category && updates.category !== preset.category) {
-      // 从旧分类中移除
-      let categoryPresets = this.categoryToPresetsMap.get(preset.category) || [];
-      categoryPresets = categoryPresets.filter(p => p.id !== id);
-      this.categoryToPresetsMap.set(preset.category, categoryPresets);
-
-      // 添加到新分类
-      categoryPresets = this.categoryToPresetsMap.get(updates.category) || [];
-      categoryPresets.push(updatedPreset);
-      this.categoryToPresetsMap.set(updates.category, categoryPresets);
-    }
-
-    return updatedPreset;
-  }
-
-  /**
-   * 删除流程表单预设
-   */
-  deletePreset(id: string): boolean {
-    const preset = this.presets.get(id);
-    if (!preset) {
-      return false;
-    }
-
-    this.presets.delete(id);
-
-    // 从分类映射中移除
-    let categoryPresets = this.categoryToPresetsMap.get(preset.category) || [];
-    categoryPresets = categoryPresets.filter(p => p.id !== id);
-    this.categoryToPresetsMap.set(preset.category, categoryPresets);
-
-    return true;
-  }
-
-  /**
-   * 激活流程表单预设
-   */
-  activatePreset(id: string): ProcessFormPreset | undefined {
-    return this.updatePreset(id, { status: 'active' });
-  }
-
-  /**
-   * 停用流程表单预设
-   */
-  deactivatePreset(id: string): ProcessFormPreset | undefined {
-    return this.updatePreset(id, { status: 'inactive' });
-  }
-
-  /**
-   * 获取位置和负责人信息
-   */
-  private async getLocationInfo(formData: Record<string, any>): Promise<Record<string, any>> {
-    const result: Record<string, any> = {};
-    
+  private async getLocationInfo(formData: Record<string, any>) {
     try {
-      // 获取调出位置信息
-      if (formData.fromLocationType && formData.fromLocationId) {
-        if (formData.fromLocationType === 'warehouse') {
-          const warehouse = await this.db.queryOne(
-            'SELECT * FROM warehouses WHERE id = ?',
-            [formData.fromLocationId]
-          );
-          
-          if (warehouse) {
-            result._fromLocationName = warehouse.name;
-            result.fromManagerId = warehouse.manager_id;
-            
-            // 获取负责人信息
-            if (warehouse.manager_id) {
-              const manager = await this.db.queryOne(
-                'SELECT * FROM employees WHERE id = ?',
-                [warehouse.manager_id]
-              );
-              
-              if (manager) {
-                result._fromManagerName = manager.name;
-              }
-            }
-          }
-        } else if (formData.fromLocationType === 'project') {
-          const project = await this.db.queryOne(
-            'SELECT * FROM projects WHERE id = ?',
-            [formData.fromLocationId]
-          );
-          
-          if (project) {
-            result._fromLocationName = project.name;
-            result.fromManagerId = project.manager_id;
-            
-            // 获取负责人信息
-            if (project.manager_id) {
-              const manager = await this.db.queryOne(
-                'SELECT * FROM employees WHERE id = ?',
-                [project.manager_id]
-              );
-              
-              if (manager) {
-                result._fromManagerName = manager.name;
-              }
-            }
-          }
+      const { fromLocationType, fromLocationId, toLocationType, toLocationId } = formData;
+      const result: any = {};
+
+      // 获取调出负责人
+      if (fromLocationType === 'warehouse') {
+        const warehouse = await this.db.query('SELECT manager_id FROM warehouses WHERE id = ?', [fromLocationId]);
+        if (warehouse && warehouse.length > 0) {
+          result.fromManagerId = warehouse[0].manager_id;
+        }
+      } else if (fromLocationType === 'project') {
+        const project = await this.db.query('SELECT manager_id FROM projects WHERE id = ?', [fromLocationId]);
+        if (project && project.length > 0) {
+          result.fromManagerId = project[0].manager_id;
         }
       }
-      
-      // 获取调入位置信息
-      if (formData.toLocationType && formData.toLocationId) {
-        if (formData.toLocationType === 'warehouse') {
-          const warehouse = await this.db.queryOne(
-            'SELECT * FROM warehouses WHERE id = ?',
-            [formData.toLocationId]
-          );
-          
-          if (warehouse) {
-            result._toLocationName = warehouse.name;
-            result.toManagerId = warehouse.manager_id;
-            
-            // 获取负责人信息
-            if (warehouse.manager_id) {
-              const manager = await this.db.queryOne(
-                'SELECT * FROM employees WHERE id = ?',
-                [warehouse.manager_id]
-              );
-              
-              if (manager) {
-                result._toManagerName = manager.name;
-              }
-            }
-          }
-        } else if (formData.toLocationType === 'project') {
-          const project = await this.db.queryOne(
-            'SELECT * FROM projects WHERE id = ?',
-            [formData.toLocationId]
-          );
-          
-          if (project) {
-            result._toLocationName = project.name;
-            result.toManagerId = project.manager_id;
-            
-            // 获取负责人信息
-            if (project.manager_id) {
-              const manager = await this.db.queryOne(
-                'SELECT * FROM employees WHERE id = ?',
-                [project.manager_id]
-              );
-              
-              if (manager) {
-                result._toManagerName = manager.name;
-              }
-            }
-          }
+
+      // 获取调入负责人
+      if (toLocationType === 'warehouse') {
+        const warehouse = await this.db.query('SELECT manager_id FROM warehouses WHERE id = ?', [toLocationId]);
+        if (warehouse && warehouse.length > 0) {
+          result.toManagerId = warehouse[0].manager_id;
+        }
+      } else if (toLocationType === 'project') {
+        const project = await this.db.query('SELECT manager_id FROM projects WHERE id = ?', [toLocationId]);
+        if (project && project.length > 0) {
+          result.toManagerId = project[0].manager_id;
         }
       }
+
+      return result;
     } catch (error) {
-      console.error('获取位置信息失败:', error);
+      console.error('[ProcessFormIntegrationService] 获取位置负责人失败:', error);
+      return {};
     }
-    
-    return result;
   }
 
   /**
-   * 获取维修位置和负责人信息
-   */
-  private async getRepairLocationInfo(formData: Record<string, any>): Promise<Record<string, any>> {
-    const result: Record<string, any> = {};
-    
-    try {
-      // 获取原始位置信息
-      if (formData.original_location_type && formData.original_location_id) {
-        if (formData.original_location_type === 'warehouse') {
-          const warehouse = await this.db.queryOne(
-            'SELECT * FROM warehouses WHERE id = ?',
-            [formData.original_location_id]
-          );
-          
-          if (warehouse) {
-            result._originalLocationName = warehouse.name;
-            
-            // 获取负责人信息
-            if (warehouse.manager_id) {
-              const manager = await this.db.queryOne(
-                'SELECT * FROM employees WHERE id = ?',
-                [warehouse.manager_id]
-              );
-              
-              if (manager) {
-                result._locationManagerName = manager.name;
-                // 使用employees表中的user_id
-                result.location_manager_id = manager.user_id;
-              }
-            }
-          }
-        } else if (formData.original_location_type === 'project') {
-          const project = await this.db.queryOne(
-            'SELECT * FROM projects WHERE id = ?',
-            [formData.original_location_id]
-          );
-          
-          if (project) {
-            result._originalLocationName = project.name;
-            
-            // 获取负责人信息
-            if (project.manager_id) {
-              const manager = await this.db.queryOne(
-                'SELECT * FROM employees WHERE id = ?',
-                [project.manager_id]
-              );
-              
-              if (manager) {
-                result._locationManagerName = manager.name;
-                // 使用employees表中的user_id
-                result.location_manager_id = manager.user_id;
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('获取维修位置信息失败:', error);
-    }
-    
-    return result;
-  }
-
-  /**
-   * 生成业务编号
-   */
-  private generateBusinessCode(prefix: string): string {
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `${prefix}-${timestamp}-${random}`;
-  }
-
-  /**
-   * 启动流程（包含表单验证和流程初始化）
+   * 启动流程并关联表单
    */
   async startProcessWithForm(params: StartProcessWithFormParams): Promise<ProcessFormIntegrationResult> {
     try {
-      console.log('Start process with form params:', params);
-      console.log('Start process initiator:', params.initiator);
-      
-      // 验证发起人信息
-      if (!params.initiator || !params.initiator.id) {
-        console.error('发起人信息缺失:', params.initiator);
-        return {
-          success: false,
-          message: '发起人信息缺失，请重新登录后重试'
-        };
-      }
-      
-      // 获取预设配置
       const preset = this.presets.get(params.presetId);
-      console.log('Found preset:', preset);
-      
       if (!preset) {
+        return { success: false, message: '流程预设不存在' };
+      }
+
+      // 验证表单数据
+      const formFields = await this.getFormFields(params.presetId);
+      const validationResult = formDataValidator.sanitizeFormData(params.formData, formFields);
+      if (!validationResult.isValid) {
         return {
           success: false,
-          message: '流程表单预设不存在'
+          message: '表单数据验证失败',
+          data: { formValidation: { isValid: false, errors: validationResult.errors } }
         };
       }
 
-      if (preset.status !== 'active') {
-        return {
-          success: false,
-          message: '流程表单预设已停用'
-        };
-      }
+      // 清理表单数据（使用验证后的数据）
+      const cleanedFormData = validationResult.sanitizedData;
 
-      // 获取表单模板（可选）
-      const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
-      console.log('Found form template:', formTemplate ? formTemplate.name : 'None');
-      
-      // 获取或创建流程定义
-      let definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
-      console.log('Found definition:', definition ? definition.key : 'None');
-      
-      let formSchema = formTemplate?.fields || null;
-      console.log('Form schema from template:', formSchema ? formSchema.length : 0, 'fields');
-      
-      if (!formTemplate && definition?.form_schema) {
-        // 从流程定义获取表单schema
-        formSchema = definition.form_schema;
-        console.log('Form schema from definition:', formSchema ? formSchema.length : 0, 'fields');
-      }
-      
-      if (!formTemplate && !formSchema) {
-        // 既没有表单模板也没有流程定义的form_schema，尝试从模板创建
-        const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
-        console.log('Found workflow template:', workflowTemplate ? workflowTemplate.name : 'None');
-        
-        if (workflowTemplate?.formSchema) {
-          formSchema = workflowTemplate.formSchema;
-          console.log('Form schema from workflow template:', formSchema ? formSchema.length : 0, 'fields');
-        }
-      }
-
-      // 自动生成编号
-      const enhancedFormData = { ...params.formData };
-      console.log('Enhanced form data:', enhancedFormData);
-      
-      // 根据业务类型生成不同的编号
-      switch (preset.businessType) {
-        case 'Project':
-          if (!enhancedFormData.code) {
-            enhancedFormData.code = this.generateBusinessCode('PRJ');
-          }
-          break;
-        case 'Equipment':
-          if (!enhancedFormData.code) {
-            enhancedFormData.code = this.generateBusinessCode('EQP');
-          }
-          break;
-        case 'Employee':
-          if (!enhancedFormData.employee_id) {
-            enhancedFormData.employee_id = this.generateBusinessCode('EMP');
-          }
-          break;
-        case 'EquipmentTransfer':
-          if (!enhancedFormData.order_no) {
-            enhancedFormData.order_no = this.generateBusinessCode('TRF');
-          }
-          break;
-        case 'Task':
-          if (!enhancedFormData.code) {
-            enhancedFormData.code = this.generateBusinessCode('TSK');
-          }
-          break;
-      }
-
-      // 处理业务数据联动和验证（仅在表单模板存在时）
-      let cleanedFormData = enhancedFormData;
-      let validationResult = { isValid: true, errors: [] as Array<{ field: string; message: string }> };
-      
-      if (formTemplate) {
-        console.log('Processing business link for template:', formTemplate.id);
-        
-        // 处理业务数据联动
-        const businessLinkResult = await unifiedFormService.handleBusinessLink(formTemplate.id, enhancedFormData);
-        console.log('Business link result:', businessLinkResult);
-        
-        if (!businessLinkResult.success) {
-          console.error('Business link failed:', businessLinkResult.messages);
-          return {
-            success: false,
-            message: '业务数据联动处理失败',
-            data: {
-              formValidation: {
-                isValid: false,
-                errors: businessLinkResult.messages.map(msg => ({ field: 'business', message: msg }))
-              }
-            }
-          };
-        }
-
-        // 验证表单数据
-        validationResult = unifiedFormService.validateForm(formTemplate.id, businessLinkResult.data);
-        console.log('Validation result:', validationResult);
-        
-        if (!validationResult.isValid) {
-          console.error('Form validation failed:', validationResult.errors);
-          return {
-            success: false,
-            message: '表单数据验证失败',
-            data: {
-              formValidation: validationResult
-            }
-          };
-        }
-
-        // 额外的安全验证 - 防止注入攻击
-        const sanitizeResult = formDataValidator.sanitizeFormData(
-          businessLinkResult.data,
-          formTemplate.fields
-        );
-
-        if (!sanitizeResult.isValid) {
-          console.error('Form sanitization failed:', sanitizeResult.errors);
-          return {
-            success: false,
-            message: '表单数据包含非法内容',
-            data: {
-              formValidation: sanitizeResult
-            }
-          };
-        }
-
-        // 使用清理后的数据
-        businessLinkResult.data = sanitizeResult.sanitizedData;
-
-        // 清理表单数据（移除不可见字段的值）
-        cleanedFormData = unifiedFormService.cleanFormData(formTemplate.id, businessLinkResult.data);
-        console.log('Cleaned form data:', cleanedFormData);
-      }
-
-      // 在启动流程之前，为设备维修流程获取位置信息
-      if (preset.businessType === 'EquipmentRepair') {
-        const locationInfo = await this.getRepairLocationInfo(cleanedFormData);
-        console.log('[ProcessFormIntegrationService] 获取维修位置信息:', locationInfo);
-        
-        // 将位置和负责人信息添加到表单数据中
-        cleanedFormData = {
-          ...cleanedFormData,
-          ...locationInfo
-        };
-        
-        console.log('[ProcessFormIntegrationService] 增强后的维修表单数据:', cleanedFormData);
-      }
-
-      // 在启动流程之前，为设备报废/售出流程获取位置信息
-      if (preset.businessType === 'EquipmentScrapSale') {
-        const locationInfo = await this.getRepairLocationInfo(cleanedFormData);
-        console.log('[ProcessFormIntegrationService] 获取报废/售出位置信息:', locationInfo);
-        
-        // 将位置和负责人信息添加到表单数据中
-        cleanedFormData = {
-          ...cleanedFormData,
-          ...locationInfo
-        };
-        
-        console.log('[ProcessFormIntegrationService] 增强后的报废/售出表单数据:', cleanedFormData);
-      }
-
+      // 获取流程定义
+      const definition = await definitionService.getDefinition(preset.workflowTemplateId);
       if (!definition) {
-        // 从模板创建流程定义
-        const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
-        if (!workflowTemplate) {
-          return {
-            success: false,
-            message: '流程模板不存在'
-          };
-        }
+        return { success: false, message: '流程定义不存在' };
+      }
 
-        definition = await definitionService.createDefinition({
-          key: workflowTemplate.id,
-          name: workflowTemplate.name,
-          category: workflowTemplate.category,
-          entity_type: workflowTemplate.entityType,
-          nodes: workflowTemplate.definition.nodes,
-          edges: workflowTemplate.definition.edges,
-          form_schema: workflowTemplate.formSchema,
-          variables: Object.entries(preset.defaultVariables).map(([name, value]) => ({
-            name,
-            type: typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : typeof value === 'object' ? 'object' : 'string',
-            defaultValue: value,
-            scope: 'process'
-          })),
-          created_by: params.initiator.id
-        });
+      // 准备流程变量
+      const variables = {
+        ...preset.defaultVariables,
+        ...params.additionalVariables,
+        formData: cleanedFormData,
+        businessType: preset.businessType
+      };
 
-        // 激活流程定义
-        await definitionService.activateDefinition(definition.id);
+      // 特殊业务处理逻辑
+      if (preset.businessType === 'EquipmentTransfer') {
+        const locationInfo = await this.getLocationInfo(cleanedFormData);
+        Object.assign(variables, locationInfo);
+        Object.assign(cleanedFormData, locationInfo);
       }
 
       // 启动流程实例
-      const instance = await enhancedWorkflowEngine.startProcess({
-        processKey: preset.workflowTemplateId,
-        businessKey: params.businessKey,
+      const instance = await instanceService.createInstance({
+        definitionId: definition.id,
+        businessKey: params.businessKey || `BF-${Date.now()}`,
         businessId: params.businessId,
         title: params.title || preset.name,
-        variables: {
-          ...preset.defaultVariables,
-          ...params.additionalVariables,
-          formData: cleanedFormData
-        },
-        initiator: {
-          id: params.initiator.id,
-          name: params.initiator.name
-        }
+        variables,
+        initiator: params.initiator
       });
 
-      // 根据业务类型，在流程启动时创建业务数据
+      // 后置业务处理逻辑
       if (preset.businessType === 'Project') {
-        // 注册流程完成事件监听器，在审批通过后创建项目
+        // 项目立项流程结束后的处理
         const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
           if (data.instanceId === instance.id && data.result === 'approved') {
             try {
-              // 创建项目 - 使用新的字段结构
-              const project = await projectService.createProject({
-                code: cleanedFormData.code,
-                name: cleanedFormData.name,
-                type: cleanedFormData.type || 'domestic',
-                manager_id: cleanedFormData.manager_id,
-                status: 'in_progress',
-                start_date: cleanedFormData.start_date,
-                end_date: cleanedFormData.end_date,
-                country: cleanedFormData.country || '中国',
-                address: cleanedFormData.address,
-                attachments: cleanedFormData.attachments,
-                description: cleanedFormData.description,
-                building_area: cleanedFormData.building_area,
-                it_capacity: cleanedFormData.it_capacity,
-                cabinet_count: cleanedFormData.cabinet_count,
-                cabinet_power: cleanedFormData.cabinet_power,
-                power_architecture: cleanedFormData.power_architecture,
-                hvac_architecture: cleanedFormData.hvac_architecture,
-                fire_architecture: cleanedFormData.fire_architecture,
-                weak_electric_architecture: cleanedFormData.weak_electric_architecture,
-                customer_id: cleanedFormData.customer_id,
-                budget: cleanedFormData.budget || 0,
-                organization_id: cleanedFormData.organization_id
-              });
-              
-              // 更新流程实例的 businessId
-              await instanceService.updateInstance(instance.id, { business_id: project.id });
-              
-              console.log(`[ProcessFormIntegrationService] 项目创建成功: ${project.id}`);
-              
-              // 发送抄送通知给项目经理
+              // 创建项目
+              const project = await projectService.createProject(cleanedFormData);
+              console.log(`[ProcessFormIntegrationService] 项目立项成功: ${project.id}`);
+
+              // 通知项目经理
               if (cleanedFormData.manager_id) {
                 try {
-                  const manager = await db.queryOne<{ id: string; name: string; user_id: string }>(
-                    'SELECT id, name, user_id FROM employees WHERE id = ?',
-                    [cleanedFormData.manager_id]
-                  );
-                  
-                  if (manager) {
+                  const manager = await this.db.query('SELECT name, user_id FROM employees WHERE id = ?', [cleanedFormData.manager_id]);
+                  if (manager && manager.length > 0) {
                     await notificationService.sendNotification({
-                      user_id: manager.user_id,
-                      user_name: manager.name,
+                      user_id: manager[0].user_id,
+                      user_name: manager[0].name,
                       type: 'in_app',
-                      title: '项目审批通过',
-                      content: `您申请的项目"${cleanedFormData.name}"已审批通过，项目编号：${project.id}`,
-                      priority: 'normal',
+                      title: '项目立项通过',
+                      content: `由您负责的项目"${cleanedFormData.name}"已立项通过。`,
+                      priority: 'high',
                       link: `/projects/${project.id}`
                     });
-                    console.log(`[ProcessFormIntegrationService] 已发送抄送通知给项目经理: ${manager.name}`);
                   }
                 } catch (notifyError) {
-                  console.error(`[ProcessFormIntegrationService] 发送抄送通知失败:`, notifyError);
+                  console.error('[ProcessFormIntegrationService] 发送抄送通知失败:', notifyError);
                 }
               }
-              
-              // 移除事件监听器
               enhancedWorkflowEngine.off('process.ended', eventHandler);
             } catch (error) {
-              console.error(`[ProcessFormIntegrationService] 项目创建失败:`, error);
-              // 即使失败也要移除监听器，避免内存泄漏
+              console.error('[ProcessFormIntegrationService] 项目创建失败:', error);
               enhancedWorkflowEngine.off('process.ended', eventHandler);
             }
           }
         };
-        
-        // 使用 on 而不是 once，并在回调中手动移除监听器
         enhancedWorkflowEngine.on('process.ended', eventHandler);
       } else if (preset.businessType === 'EquipmentInbound') {
-        // 在流程启动时创建入库单
         try {
-          const order = await this.inboundOrderService.createOrder(
-            cleanedFormData,
-            params.initiator.id,
-            params.initiator.name
-          );
-          
-          // 更新流程实例的 businessId
+          const order = await inboundOrderService.createOrder({
+            ...cleanedFormData,
+            applicant_id: params.initiator.id,
+            status: 'pending'
+          } as any);
           await instanceService.updateInstance(instance.id, { business_id: order.id });
-          
-          console.log(`[ProcessFormIntegrationService] 入库单创建成功: ${order.id}`);
         } catch (error) {
-          console.error(`[ProcessFormIntegrationService] 入库单创建失败:`, error);
+          console.error('[ProcessFormIntegrationService] 入库单创建失败:', error);
         }
       } else if (preset.businessType === 'EquipmentTransfer') {
-        // 在流程启动时创建调拨单
         try {
-          console.log('[ProcessFormIntegrationService] 开始创建调拨单，formData:', cleanedFormData);
-          
-          // 获取位置和负责人信息
-          const locationInfo = await this.getLocationInfo(cleanedFormData);
-          console.log('[ProcessFormIntegrationService] 获取位置信息:', locationInfo);
-          
-          // 将位置和负责人信息添加到表单数据中
-          const enhancedFormData = {
-            ...cleanedFormData,
-            ...locationInfo
-          };
-          
-          console.log('[ProcessFormIntegrationService] 增强后的表单数据:', enhancedFormData);
-          
-          const order = await this.transferOrderService.createOrder(
-            enhancedFormData,
+          const order = await transferOrderService.createOrder(
+            cleanedFormData as any,
             params.initiator.id,
             params.initiator.name
           );
-          
-          console.log('[ProcessFormIntegrationService] 调拨单创建成功:', order);
-          
-          if (!order) {
-            console.error('[ProcessFormIntegrationService] 调拨单创建失败，返回值为 null');
-            return {
-              success: false,
-              message: '调拨单创建失败，请重试'
-            };
+          if (order) {
+            await instanceService.updateInstance(instance.id, { business_id: order.id });
           }
-          
-          // 更新流程实例的 businessId 和 formData 中的 transferOrderId
-          const updatedVariables = {
-            ...instance.variables,
-            formData: {
-              ...instance.variables?.formData,
-              ...cleanedFormData,
-              ...locationInfo,
-              transferOrderId: order.id
-            }
-          };
-          await instanceService.updateInstance(instance.id, {
-            business_id: order.id,
-            variables: updatedVariables
-          });
-          
-          console.log(`[ProcessFormIntegrationService] 调拨单创建成功: ${order.id}, 已更新 business_id 和 transferOrderId`);
-          
-          // 注册流程完成事件监听器，在审批通过后自动确认收货
-          const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
-            if (data.instanceId === instance.id && data.result === 'approved') {
-              try {
-                console.log(`[ProcessFormIntegrationService] 调拨流程完成，准备确认收货: ${order.id}`);
-                
-                // 获取流程实例的最新变量
-                const currentInstance = await instanceService.getInstance(instance.id);
-                const formData = currentInstance.variables?.formData || {};
-                
-                // 检查是否有收货信息
-                if (formData.receive_status && formData.receive_items) {
-                  console.log('[ProcessFormIntegrationService] 收货信息:', {
-                    receive_status: formData.receive_status,
-                    receive_items: formData.receive_items,
-                    receive_comment: formData.receive_comment
-                  });
-                  
-                  // 调用收货API
-                  await this.transferOrderService.confirmReceiving(
-                    order.id,
-                    params.initiator.id,
-                    formData.receive_status || 'normal',
-                    formData.receive_comment || '',
-                    formData.item_images || [],
-                    formData.package_images || [],
-                    formData.receive_items || []
-                  );
-                  
-                  console.log(`[ProcessFormIntegrationService] 调拨单收货确认成功: ${order.id}`);
-                } else {
-                  console.warn(`[ProcessFormIntegrationService] 调拨流程完成但缺少收货信息: ${order.id}`);
-                }
-                
-                // 移除事件监听器
-                enhancedWorkflowEngine.off('process.ended', eventHandler);
-              } catch (error) {
-                console.error(`[ProcessFormIntegrationService] 调拨单收货确认失败:`, error);
-                // 即使失败也要移除监听器，避免内存泄漏
-                enhancedWorkflowEngine.off('process.ended', eventHandler);
-              }
-            }
-          };
-          
-          // 使用 on 而不是 once，并在回调中手动移除监听器
-          enhancedWorkflowEngine.on('process.ended', eventHandler);
         } catch (error) {
-          console.error(`[ProcessFormIntegrationService] 调拨单创建失败:`, error);
-          console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
-          throw error;
+          console.error('[ProcessFormIntegrationService] 调拨单创建失败:', error);
         }
       } else if (preset.businessType === 'EquipmentRepair') {
-        // 在流程启动时创建维修单
         try {
-          console.log('[ProcessFormIntegrationService] 开始创建维修单，formData:', cleanedFormData);
-          
-          let order;
-          if (cleanedFormData.equipment_data && Array.isArray(cleanedFormData.equipment_data)) {
-            // 批量维修单
-            const orders = await equipmentRepairService.createBatchRepairOrders(
-              cleanedFormData,
-              params.initiator.id,
-              params.initiator.name
-            );
-            order = orders[0]; // 使用第一个维修单作为主单
-            console.log('[ProcessFormIntegrationService] 批量维修单创建成功:', orders);
-          } else {
-            // 单个维修单
-            order = await equipmentRepairService.createRepairOrder(
-              cleanedFormData,
-              params.initiator.id,
-              params.initiator.name
-            );
-            console.log('[ProcessFormIntegrationService] 维修单创建成功:', order);
+          const orders = await equipmentRepairService.createBatchRepairOrders(
+            cleanedFormData as any,
+            params.initiator.id,
+            params.initiator.name
+          );
+          if (orders && orders.length > 0) {
+            await instanceService.updateInstance(instance.id, { business_id: orders[0].id });
           }
-          
-          // 更新流程实例的 businessId 和 formData 中的 repairOrderId
-          const updatedVariables = {
-            ...instance.variables,
-            formData: {
-              ...instance.variables?.formData,
-              repairOrderId: order.id
-            }
-          };
-          await instanceService.updateInstance(instance.id, {
-            business_id: order.id,
-            variables: updatedVariables
-          });
-          
-          console.log(`[ProcessFormIntegrationService] 维修单创建成功: ${order.id}, 已更新 business_id 和 repairOrderId`);
-          
-          // 注册流程完成事件监听器，在审批通过后自动处理发货和收货
-          const eventHandler = async (data: { instanceId: string; result: string; timestamp: Date }) => {
-            if (data.instanceId === instance.id && data.result === 'approved') {
-              try {
-                console.log(`[ProcessFormIntegrationService] 维修流程完成，准备处理发货和收货: ${order.id}`);
-                
-                // 获取流程实例的最新变量
-                const currentInstance = await instanceService.getInstance(instance.id);
-                const formData = currentInstance.variables?.formData || {};
-                
-                // 检查是否有发货信息
-                if (formData.shipping_no) {
-                  console.log('[ProcessFormIntegrationService] 发货信息:', {
-                    shipping_no: formData.shipping_no
-                  });
-                  
-                  // 调用发货API
-                  await equipmentRepairService.shipRepairOrder(
-                    order.id,
-                    formData.shipping_no,
-                    params.initiator.id
-                  );
-                  
-                  console.log(`[ProcessFormIntegrationService] 维修单发货成功: ${order.id}`);
-                } else {
-                  console.warn(`[ProcessFormIntegrationService] 维修流程完成但缺少发货信息: ${order.id}`);
-                }
-                
-                // 检查是否有收货信息
-                if (formData.repair_result) {
-                  console.log('[ProcessFormIntegrationService] 收货信息:', {
-                    repair_result: formData.repair_result,
-                    actual_cost: formData.actual_cost
-                  });
-                  
-                  // 调用收货API
-                  await equipmentRepairService.receiveRepairOrder(
-                    order.id,
-                    params.initiator.id
-                  );
-                  
-                  // 更新维修结果和实际费用
-                  await this.db.execute(
-                    `UPDATE equipment_repair_orders 
-                     SET repair_result = ?, actual_cost = ? 
-                     WHERE id = ?`,
-                    [formData.repair_result, formData.actual_cost || 0, order.id]
-                  );
-                  
-                  console.log(`[ProcessFormIntegrationService] 维修单收货确认成功: ${order.id}`);
-                } else {
-                  console.warn(`[ProcessFormIntegrationService] 维修流程完成但缺少收货信息: ${order.id}`);
-                }
-                
-                // 移除事件监听器
-                enhancedWorkflowEngine.off('process.ended', eventHandler);
-              } catch (error) {
-                console.error(`[ProcessFormIntegrationService] 维修单发货或收货确认失败:`, error);
-                // 即使失败也要移除监听器，避免内存泄漏
-                enhancedWorkflowEngine.off('process.ended', eventHandler);
-              }
-            }
-          };
-          
-          // 使用 on 而不是 once，并在回调中手动移除监听器
-          enhancedWorkflowEngine.on('process.ended', eventHandler);
         } catch (error) {
-          console.error(`[ProcessFormIntegrationService] 维修单创建失败:`, error);
-          console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
-          throw error;
+          console.error('[ProcessFormIntegrationService] 维修单创建失败:', error);
         }
       } else if (preset.businessType === 'EquipmentScrapSale') {
-        // 在流程启动时创建报废/售出单
         try {
-          console.log('[ProcessFormIntegrationService] 开始创建报废/售出单，formData:', cleanedFormData);
-          
-          let order;
-          if (cleanedFormData.equipment_data && Array.isArray(cleanedFormData.equipment_data)) {
-            // 批量报废/售出单
-            const orders = await equipmentScrapSaleService.createBatchScrapSaleOrders(
-              cleanedFormData,
-              params.initiator.id,
-              params.initiator.name
-            );
-            order = orders[0]; // 使用第一个报废/售出单作为主单
-            console.log('[ProcessFormIntegrationService] 批量报废/售出单创建成功:', orders);
-          } else {
-            // 单个报废/售出单
-            order = await equipmentScrapSaleService.createScrapSaleOrder(
-              cleanedFormData,
-              params.initiator.id,
-              params.initiator.name
-            );
-            console.log('[ProcessFormIntegrationService] 报废/售出单创建成功:', order);
+          const orders = await equipmentScrapSaleService.createBatchScrapSaleOrders(
+            cleanedFormData as any,
+            params.initiator.id,
+            params.initiator.name
+          );
+          if (orders && orders.length > 0) {
+            await instanceService.updateInstance(instance.id, { business_id: orders[0].id });
           }
-          
-          // 更新流程实例的 businessId 和 formData 中的 scrapSaleOrderId
-          const updatedVariables = {
-            ...instance.variables,
-            formData: {
-              ...instance.variables?.formData,
-              scrapSaleOrderId: order.id
-            }
-          };
-          await instanceService.updateInstance(instance.id, {
-            business_id: order.id,
-            variables: updatedVariables
-          });
-          
-          console.log(`[ProcessFormIntegrationService] 报废/售出单创建成功: ${order.id}, 已更新 business_id 和 scrapSaleOrderId`);
         } catch (error) {
-          console.error(`[ProcessFormIntegrationService] 报废/售出单创建失败:`, error);
-          console.error(`[ProcessFormIntegrationService] 错误详情:`, JSON.stringify(error, null, 2));
-          throw error;
+          console.error('[ProcessFormIntegrationService] 报废单创建失败:', error);
         }
       }
 
@@ -1075,121 +354,51 @@ export class ProcessFormIntegrationService {
    */
   getFormDefaultValues(presetId: string): Record<string, any> {
     const preset = this.presets.get(presetId);
-    if (!preset) {
-      return {};
-    }
+    if (!preset) return {};
 
     const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
-    if (!formTemplate) {
-      return {};
-    }
+    if (!formTemplate) return {};
 
     return unifiedFormService.getDefaultValues(formTemplate.id);
   }
 
   /**
    * 获取流程表单的字段定义
-   * 优先从 WorkflowTemplates 获取完整的字段配置（包括动态选项）
    */
   async getFormFields(presetId: string): Promise<any[]> {
-    console.log('[ProcessFormIntegrationService] getFormFields called for presetId:', presetId)
-
     const preset = this.presets.get(presetId);
-    if (!preset) {
-      console.error('[ProcessFormIntegrationService] Preset not found:', presetId);
-      return [];
-    }
-    console.log('[ProcessFormIntegrationService] Found preset:', preset);
+    if (!preset) return [];
 
-    // 优先从 WorkflowTemplates 获取完整字段配置
-    const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
-    console.log('[ProcessFormIntegrationService] Workflow template:', workflowTemplate?.id, workflowTemplate?.name);
-
-    if (workflowTemplate && workflowTemplate.formSchema) {
-      console.log('[ProcessFormIntegrationService] Returning formSchema from workflow template:', workflowTemplate.formSchema.length, 'fields');
-      console.log('[ProcessFormIntegrationService] FormSchema sample:', JSON.stringify(workflowTemplate.formSchema.slice(0, 2), null, 2));
-      return workflowTemplate.formSchema;
-    }
-
-    // 降级：从表单模板获取
     const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
-    console.log('[ProcessFormIntegrationService] Form template:', formTemplate?.id, formTemplate?.key);
+    if (!formTemplate) return [];
 
-    if (formTemplate) {
-      console.log('[ProcessFormIntegrationService] Returning fields from form template:', formTemplate.fields.length, 'fields');
-      return formTemplate.fields;
-    }
+    // 获取工作流模板中的字段定义（如果有）
+    const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
 
-    // 最后降级：从流程定义获取
-    const definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
-    console.log('[ProcessFormIntegrationService] Definition:', definition?.id, definition?.key);
+    // 如果工作流模板有预设字段，则使用工作流模板的字段，否则使用表单模板的字段
+    const fields = workflowTemplate && workflowTemplate.stages && workflowTemplate.stages.length > 0
+      ? (workflowTemplate.stages[0].formFields as any[] || formTemplate.fields)
+      : formTemplate.fields;
 
-    if (definition && definition.form_schema) {
-      console.log('[ProcessFormIntegrationService] Returning form_schema from definition:', definition.form_schema.length, 'fields');
-      return definition.form_schema;
-    }
-
-    console.error('[ProcessFormIntegrationService] No form fields found for preset:', presetId);
-    return [];
+    return fields;
   }
 
   /**
-   * 同步流程模板与表单模板
-   * 确保流程模板中的表单schema与表单模板一致
+   * 获取所有可用的流程预设
    */
-  async syncProcessFormTemplates(presetId: string): Promise<boolean> {
-    try {
-      const preset = this.presets.get(presetId);
-      if (!preset) {
-        return false;
-      }
-
-      // 获取表单模板
-      const formTemplate = unifiedFormService.getTemplateByKey(preset.formTemplateKey);
-      if (!formTemplate) {
-        return false;
-      }
-
-      // 获取最新的流程定义
-      const definition = await definitionService.getLatestDefinition(preset.workflowTemplateId);
-      if (definition) {
-        // 更新流程定义中的表单schema
-      await definitionService.updateDefinition(definition.id, {
-        form_schema: formTemplate.fields.map(field => {
-          let options: string[] | undefined = undefined;
-          if (field.type === 'boolean') {
-            options = ['true', 'false'];
-          } else if (Array.isArray(field.options) && field.options.length > 0) {
-            const firstOption = field.options[0];
-            // 检查是否是字符串数组
-            if (typeof firstOption === 'string') {
-              options = field.options as unknown as string[];
-            }
-            // 如果是 { label, value } 格式，转换为字符串数组
-            else if (typeof firstOption === 'object' && firstOption !== null && 'label' in firstOption) {
-              options = (field.options as unknown as { label: string; value: any }[]).map(opt => opt.label);
-            }
-          }
-          
-          return {
-            name: field.name,
-            label: field.label,
-            type: field.type === 'boolean' ? 'select' : field.type === 'lookup' ? 'text' : field.type,
-            required: field.required,
-            options,
-            defaultValue: field.defaultValue
-          };
-        })
-      });
-      }
-
-      return true;
-    } catch (error) {
-      console.error('同步流程表单模板失败:', error);
-      return false;
+  getPresets(category?: string): ProcessFormPreset[] {
+    if (category) {
+      return this.categoryToPresetsMap.get(category) || [];
     }
+    return Array.from(this.presets.values());
+  }
+
+  /**
+   * 获取单个流程预设
+   */
+  getPreset(id: string): ProcessFormPreset | undefined {
+    return this.presets.get(id);
   }
 }
 
-// 导出单例
 export const processFormIntegrationService = new ProcessFormIntegrationService();

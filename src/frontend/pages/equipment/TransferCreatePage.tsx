@@ -7,11 +7,12 @@ interface Equipment {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   quantity: number
   manage_code: string
   serial_number: string | null
+  is_accessory?: boolean
   location_status: string
   location_id: string
   location_name?: string
@@ -43,10 +44,11 @@ interface TransferItem {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   manage_code: string
   serial_number: string | null
+  is_accessory?: boolean
   quantity: number
   available_quantity: number
   accessories?: any[]
@@ -140,8 +142,36 @@ export default function TransferCreatePage() {
       const result = await response.json()
 
       setEquipment(result.data || [])
+
+      // 加载独立配件
+      const accParams = new URLSearchParams({
+        location_id: fromLocationId,
+        location_status: fromLocationType === 'warehouse' ? 'warehouse' : 'in_project'
+      })
+      const accResponse = await fetch(`${API_URL.BASE}/api/equipment/accessories?${accParams}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const accResult = await accResponse.json()
+      
+      if (accResult.success && accResult.list) {
+        const accessoryEquipment = accResult.list.map((acc: any) => ({
+          id: acc.id,
+          equipment_name: acc.accessory_name,
+          model_no: acc.model_no || '',
+          brand: acc.brand || '',
+          category: acc.category,
+          unit: acc.unit || '个',
+          quantity: acc.quantity || 1,
+          manage_code: acc.manage_code,
+          serial_number: acc.serial_number,
+          is_accessory: true,
+          location_id: acc.location_id,
+          location_status: acc.location_status
+        }))
+        setEquipment(prev => [...prev, ...accessoryEquipment])
+      }
     } catch (error) {
-      console.error('加载设备失败:', error)
+      console.error('加载设备/配件失败:', error)
     } finally {
       setLoading(false)
     }
@@ -247,7 +277,8 @@ export default function TransferCreatePage() {
       quantity: 1,
       available_quantity: eq.quantity || 1,
       accessories: eq.accessories || [],
-      accessory_desc: eq.accessory_desc || null
+      accessory_desc: eq.accessory_desc || null,
+      is_accessory: eq.is_accessory || false
     }
 
     setTransferItems(prev => [...prev, newItem])
@@ -267,10 +298,19 @@ export default function TransferCreatePage() {
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
       instrument: '仪器类',
-      fake_load: '假负载类',
-      cable: '线材类'
+      'fake_load': '假负载类',
+      'accessory': '配件类'
     }
     return labels[category] || category
+  }
+
+  const getCategoryColorClass = (category: string) => {
+    const styles: Record<string, string> = {
+      instrument: 'bg-purple-100 text-purple-700',
+      fake_load: 'bg-blue-100 text-blue-700',
+      accessory: 'bg-green-100 text-green-700'
+    }
+    return styles[category] || 'bg-gray-100 text-gray-700'
   }
 
   const handleSubmit = async () => {
@@ -330,7 +370,8 @@ export default function TransferCreatePage() {
           quantity: item.quantity,
           accessories: item.accessories || [],
           accessory_list: item.accessories || [], // 兼容某些组件
-          accessory_desc: item.accessory_desc || null
+          accessory_desc: item.accessory_desc || null,
+          is_accessory: item.is_accessory || false
         }))
       }
 
@@ -519,10 +560,7 @@ export default function TransferCreatePage() {
                         </td>
                         <td className="px-4 py-3 text-sm">{item.model_no}</td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs ${item.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                            item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
+                           <span className={`px-2 py-1 rounded text-xs ${getCategoryColorClass(item.category)}`}>
                             {getCategoryLabel(item.category)}
                           </span>
                         </td>
@@ -648,7 +686,9 @@ export default function TransferCreatePage() {
                 <option value="">全部类别</option>
                 <option value="instrument">仪器类</option>
                 <option value="fake_load">假负载类</option>
-                <option value="cable">线材类</option>
+                <option value="accessory">配件类</option>
+                <option value="accessory">配件类</option>
+                <option value="accessory">配件类</option>
               </select>
             </div>
 
@@ -686,9 +726,8 @@ export default function TransferCreatePage() {
                         <td className="px-4 py-3 text-sm">{eq.model_no}</td>
                         <td className="px-4 py-3 text-sm">
                           <span className={`px-2 py-1 rounded text-xs ${eq.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                            eq.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>
+                             'bg-orange-100 text-orange-700'
+                             }`}>
                             {getCategoryLabel(eq.category)}
                           </span>
                         </td>

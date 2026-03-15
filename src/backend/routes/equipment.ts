@@ -1,13 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { equipmentServiceV2 as equipmentService } from '../services/EquipmentServiceV2.js';
+import { equipmentServiceV3 as equipmentService } from '../services/EquipmentServiceV3.js';
 import { equipmentAccessoryService } from '../services/EquipmentAccessoryService.js';
 
 const router = Router();
 
-router.use((req, res, next) => {
-  console.log('[EquipmentRoute] 收到请求:', req.method, req.path, req.params);
-  next();
-});
 
 // --- Instances ---
 router.get('/instances', async (req: Request, res: Response) => {
@@ -17,33 +13,33 @@ router.get('/instances', async (req: Request, res: Response) => {
     const { model_id, location_id, status, search, location_status, category, health_status, usage_status, equipment_source, aggregated } = req.query;
 
     const useAggregated = aggregated !== 'false';
-    
-    const result = useAggregated 
+
+    const result = useAggregated
       ? await equipmentService.getAggregatedInstances({
-          location_id: (location_id as string),
-          status: (status as string),
-          search: (search as string),
-          location_status: (location_status as string),
-          category: (category as string),
-          health_status: (health_status as string),
-          usage_status: (usage_status as string),
-          equipment_source: (equipment_source as string),
-          page,
-          pageSize
-        })
+        location_id: (location_id as string),
+        status: (status as string),
+        search: (search as string),
+        location_status: (location_status as string),
+        category: (category as string),
+        health_status: (health_status as string),
+        usage_status: (usage_status as string),
+        equipment_source: (equipment_source as string),
+        page,
+        pageSize
+      })
       : await equipmentService.getInstances({
-          model_id: (model_id as string),
-          location_id: (location_id as string),
-          status: (status as string),
-          search: (search as string),
-          location_status: (location_status as string),
-          category: (category as string),
-          health_status: (health_status as string),
-          usage_status: (usage_status as string),
-          equipment_source: (equipment_source as string),
-          page,
-          pageSize
-        });
+        model_id: (model_id as string),
+        location_id: (location_id as string),
+        status: (status as string),
+        search: (search as string),
+        location_status: (location_status as string),
+        category: (category as string),
+        health_status: (health_status as string),
+        usage_status: (usage_status as string),
+        equipment_source: (equipment_source as string),
+        page,
+        pageSize
+      });
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -103,11 +99,11 @@ router.get('/stock-distribution', async (req: Request, res: Response) => {
   try {
     const equipmentName = req.query.equipment_name as string;
     const modelNo = req.query.model_no as string;
-    
+
     if (!equipmentName || !modelNo) {
       return res.status(400).json({ success: false, error: 'equipment_name and model_no are required' });
     }
-    
+
     const distribution = await equipmentService.getStockDistribution(equipmentName, modelNo);
     res.json({ success: true, data: distribution });
   } catch (error: any) {
@@ -142,7 +138,7 @@ router.get('/models', async (req: Request, res: Response) => {
   try {
     const equipmentName = req.query.equipment_name as string;
     const category = req.query.category as string;
-    
+
     if (equipmentName) {
       const models = await equipmentService.getModelsByName(equipmentName);
       res.json({ success: true, data: models });
@@ -161,7 +157,7 @@ router.get('/models', async (req: Request, res: Response) => {
 // --- Equipment Images ---
 router.get('/images/equipment/:equipmentId', async (req: Request, res: Response) => {
   try {
-    const images = await equipmentService.getImagesByEquipmentId(req.params.equipmentId);
+    const images = await equipmentService.getImagesByEquipmentId(req.params.equipmentId as string);
     res.json({ success: true, data: images });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -176,17 +172,18 @@ router.get('/images/equipment/:equipmentId', async (req: Request, res: Response)
 router.get('/accessories', async (req: Request, res: Response) => {
   try {
     const { category, status, location_status, bound, keyword, page, pageSize } = req.query;
-    
+
     const result = await equipmentAccessoryService.getAllAccessories({
       category: category as string,
       status: status as string,
       location_status: location_status as string,
-      bound: bound !== undefined ? bound === 'true' : undefined,
+      bound: bound !== undefined ? (bound === 'true' ? true : (bound === 'false' ? false : undefined)) : undefined,
       keyword: keyword as string,
+      location_id: req.query.location_id as string,
       page: page ? parseInt(page as string) : 1,
       pageSize: pageSize ? parseInt(pageSize as string) : 20
     });
-    
+
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -197,13 +194,13 @@ router.get('/accessories', async (req: Request, res: Response) => {
 router.get('/accessories/unbound', async (req: Request, res: Response) => {
   try {
     const { category, status, keyword } = req.query;
-    
+
     const accessories = await equipmentAccessoryService.getUnboundAccessories({
       category: category as string,
       status: status as string,
       keyword: keyword as string
     });
-    
+
     res.json({ success: true, data: accessories });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -213,7 +210,7 @@ router.get('/accessories/unbound', async (req: Request, res: Response) => {
 // 获取单个配件详情
 router.get('/accessories/:id', async (req: Request, res: Response) => {
   try {
-    const accessory = await equipmentAccessoryService.getAccessoryById(req.params.id);
+    const accessory = await equipmentAccessoryService.getAccessoryById(req.params.id as string);
     if (!accessory) {
       return res.status(404).json({ success: false, error: '配件不存在' });
     }
@@ -238,7 +235,7 @@ router.post('/accessories', async (req: Request, res: Response) => {
 router.put('/accessories/:id', async (req: Request, res: Response) => {
   try {
     const updates = req.body;
-    const result = await equipmentAccessoryService.updateAccessoryInstance(req.params.id, updates);
+    const result = await equipmentAccessoryService.updateAccessoryInstance(req.params.id as string, updates);
     res.json({ success: result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -248,7 +245,7 @@ router.put('/accessories/:id', async (req: Request, res: Response) => {
 // 删除配件
 router.delete('/accessories/:id', async (req: Request, res: Response) => {
   try {
-    const result = await equipmentAccessoryService.deleteAccessoryInstance(req.params.id);
+    const result = await equipmentAccessoryService.deleteAccessoryInstance(req.params.id as string);
     res.json({ success: result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

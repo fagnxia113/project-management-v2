@@ -6,7 +6,7 @@ import {
   PlatformType
 } from '../types/organization.js';
 import { BaseThirdPartyAdapter, thirdPartyConfigService, syncLogService } from './ThirdPartyService.js';
-import { departmentService } from './DepartmentService.js';
+import { departmentServiceV2 as departmentService } from './DepartmentServiceV2.js';
 
 interface WeChatWorkTokenResponse {
   errcode: number;
@@ -187,10 +187,10 @@ export class WeChatWorkAdapter extends BaseThirdPartyAdapter {
       `${process.env.API_BASE_URL || 'http://localhost:8081'}/api/organization/departments?include_inactive=true`
     );
     const data = await result.json();
-    
+
     if (data.success && Array.isArray(data.data)) {
-      return data.data.find((dept: any) => 
-        dept.third_party_id === thirdPartyId && 
+      return data.data.find((dept: any) =>
+        dept.third_party_id === thirdPartyId &&
         dept.third_party_source === 'wechat_work'
       );
     }
@@ -198,8 +198,8 @@ export class WeChatWorkAdapter extends BaseThirdPartyAdapter {
   }
 
   private async updateDepartmentThirdPartyId(
-    departmentId: string, 
-    thirdPartyId: string, 
+    departmentId: string,
+    thirdPartyId: string,
     source: PlatformType
   ): Promise<void> {
     const { db } = await import('../database/connection.js');

@@ -444,15 +444,17 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
   const renderField = (field: FormField) => {
     if (!isFieldVisible(field)) return null
 
+    const hasError = !!errors[field.name];
+
     return (
-      <div key={field.name} className="space-y-2">
-        <label htmlFor={field.name} className={`block text-sm font-medium ${field.required ? 'text-red-600' : 'text-gray-700'}`}>
-          {field.label}{field.required && ' *'}
+      <div key={field.name} className="form-group animate-fade-in group/field">
+        <label htmlFor={field.name} className={`form-label ${field.required ? 'after:content-["*"] after:ml-1 after:text-red-500' : ''} ${hasError ? 'text-red-600' : 'group-focus-within/field:text-blue-600'}`}>
+          {field.label}
         </label>
-        <div className="space-y-1">
+        <div className="relative">
           {field.type === 'text' && (
             <input type="text" id={field.name} name={field.name}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+              className={`form-control ${hasError ? 'form-control-error' : ''}`}
               placeholder={field.placeholder} defaultValue={field.defaultValue} value={formData[field.name] || ''}
               onChange={(e) => handleInputChange(field.name, e.target.value)}
               disabled={field.disabled} readOnly={field.readonly}
@@ -460,7 +462,7 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
           )}
           {field.type === 'number' && (
             <input type="number" id={field.name} name={field.name}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+              className={`form-control ${hasError ? 'form-control-error' : ''}`}
               placeholder={field.placeholder} defaultValue={field.defaultValue}
               value={formData[field.name] !== undefined ? formData[field.name] : ''}
               onChange={(e) => handleInputChange(field.name, parseFloat(e.target.value) || '')}
@@ -468,68 +470,60 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
           )}
           {field.type === 'date' && (
             <input type="date" id={field.name} name={field.name}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+              className={`form-control ${hasError ? 'form-control-error' : ''}`}
               defaultValue={field.defaultValue} value={formData[field.name] || ''}
               onChange={(e) => handleInputChange(field.name, e.target.value)}
               disabled={field.disabled} readOnly={field.readonly} />
           )}
-          {(field.type === 'select' || field.type === 'reference') && (
-            <>
+          {(field.type === 'select' || field.type === 'reference' || field.type === 'user' || field.type === 'lookup') && (
+            <div className="relative group/select">
               <select id={field.name} name={field.name}
-                className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+                className={`form-control appearance-none ${hasError ? 'form-control-error' : ''}`}
                 defaultValue={field.defaultValue} value={formData[field.name] || ''}
                 onChange={(e) => handleInputChange(field.name, e.target.value)}
                 disabled={field.disabled || field.readonly}>
-                <option value="">{field.placeholder || '请选择'}</option>
+                <option value="">{field.placeholder || `请选择${field.label}`}</option>
                 {(dynamicOptions[field.name] || field.options || []).map((option: any, idx: number) => (
                   <option key={option.value || idx} value={option.value}>{option.label}</option>
                 ))}
               </select>
-            </>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within/select:text-blue-500 transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
           )}
           {field.type === 'textarea' && (
-            <textarea id={field.name} name={field.name} rows={field.rows || 3} cols={field.cols || 50}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+            <textarea id={field.name} name={field.name} rows={field.rows || 4}
+              className={`form-control min-h-[120px] resize-none ${hasError ? 'form-control-error' : ''}`}
               placeholder={field.placeholder} defaultValue={field.defaultValue} value={formData[field.name] || ''}
               onChange={(e) => handleInputChange(field.name, e.target.value)}
               disabled={field.disabled} readOnly={field.readonly}
               minLength={field.minLength} maxLength={field.maxLength} />
           )}
           {field.type === 'boolean' && (
-            <div className="flex items-center">
-              <input type="checkbox" id={field.name} name={field.name}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                defaultChecked={field.defaultValue || false} checked={formData[field.name] || false}
-                onChange={(e) => handleInputChange(field.name, e.target.checked)}
-                disabled={field.disabled} readOnly={field.readonly} />
-              <label htmlFor={field.name} className="ml-2 block text-sm text-gray-700">{field.label}</label>
+            <div className="flex items-center gap-3 p-1">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id={field.name} name={field.name}
+                  className="sr-only peer"
+                  defaultChecked={field.defaultValue || false} checked={formData[field.name] || false}
+                  onChange={(e) => handleInputChange(field.name, e.target.checked)}
+                  disabled={field.disabled} readOnly={field.readonly} />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <span className="ml-3 text-sm font-medium text-slate-700">{field.label}</span>
+              </label>
             </div>
           )}
-          {field.type === 'user' && (
-            <select id={field.name} name={field.name}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-              defaultValue={field.defaultValue} value={formData[field.name] || ''}
-              onChange={(e) => handleInputChange(field.name, e.target.value)}
-              disabled={field.disabled || field.readonly}>
-              <option value="">{field.placeholder || '请选择用户'}</option>
-              {(dynamicOptions[field.name] || []).map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+          
+          {hasError && (
+            <div className="flex items-center gap-1.5 mt-1.5 ml-1 text-red-500 animate-in fade-in slide-in-from-top-1">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <span className="text-[11px] font-bold uppercase tracking-tight">{errors[field.name]}</span>
+            </div>
           )}
-          {field.type === 'lookup' && (
-            <select id={field.name} name={field.name}
-              className={`w-full px-3 py-2 border ${errors[field.name] ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-              defaultValue={field.defaultValue} value={formData[field.name] || ''}
-              onChange={(e) => handleInputChange(field.name, e.target.value)}
-              disabled={field.disabled || field.readonly}>
-              <option value="">{field.placeholder || '请选择'}</option>
-              {(dynamicOptions[field.name] || []).map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          )}
-          {errors[field.name] && <p className="mt-1 text-sm text-red-600">{errors[field.name]}</p>}
         </div>
       </div>
     )
@@ -537,18 +531,30 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-8 h-8 bg-blue-500/20 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+        <span className="text-sm font-bold text-slate-400 tracking-widest uppercase">正在构建智能表单...</span>
       </div>
     )
   }
 
   if (!preset) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-red-600">流程表单预设不存在</h3>
-          <button className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300" onClick={onCancel}>返回</button>
+      <div className="flex items-center justify-center h-96">
+        <div className="premium-card p-10 text-center max-w-sm">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-black text-slate-800 tracking-tight">配置加载失败</h3>
+          <p className="text-slate-500 text-sm mt-2">流程表单预设不存在或已失效</p>
+          <button className="btn-secondary w-full mt-6" onClick={onCancel}>返回控制台</button>
         </div>
       </div>
     )
@@ -556,10 +562,16 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
 
   if (preset.status !== 'active') {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-yellow-600">流程表单预设已停用</h3>
-          <button className="mt-4 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300" onClick={onCancel}>返回</button>
+      <div className="flex items-center justify-center h-96">
+        <div className="premium-card p-10 text-center max-w-sm">
+          <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-black text-slate-800 tracking-tight">业务已停用</h3>
+          <p className="text-slate-500 text-sm mt-2">该流程表单预设目前处于非活动状态</p>
+          <button className="btn-secondary w-full mt-6" onClick={onCancel}>返回控制台</button>
         </div>
       </div>
     )
@@ -581,30 +593,64 @@ const ProcessFormLauncher: React.FC<ProcessFormLauncherProps> = ({ presetId, onS
   })
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900">{preset.name}</h2>
-        <p className="text-gray-600 mt-1">{preset.description}</p>
+    <div className="space-y-10 animate-fade-in">
+      <div className="relative">
+        <div className="absolute -left-6 top-0 bottom-0 w-1 bg-blue-600 rounded-full"></div>
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter">{preset.name}</h2>
+        <p className="text-slate-500 font-medium mt-2 flex items-center gap-2">
+          <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+          {preset.description}
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-8">
         {groupOrder.map(groupName => {
           const fields = groupedFields[groupName]
-          if (!fields || fields.length === 0) return null
+          const visibleFields = fields?.filter(isFieldVisible)
+          if (!visibleFields || visibleFields.length === 0) return null
           
           return (
-            <div key={groupName} className="bg-white border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-gray-800 mb-4 pb-2 border-b border-gray-200">{groupName}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div key={groupName} className="premium-card p-10 relative overflow-hidden group/card">
+              <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover/card:opacity-[0.05] transition-opacity pointer-events-none">
+                <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14h-2i-2h-2v-2h2v-2h-2v-2h2V7h2v2h2v2h-2v2h2v2z"/>
+                </svg>
+              </div>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-black text-xs">
+                  {groupOrder.indexOf(groupName) + 1}
+                </div>
+                <h3 className="text-xl font-black text-slate-800 tracking-tight">{groupName}</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
                 {fields.map(renderField)}
               </div>
             </div>
           )
         })}
 
-        <div className="flex justify-end space-x-3 pt-4 border-t">
-          <button type="button" className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400" onClick={onCancel} disabled={submitting}>取消</button>
-          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2" disabled={submitting}>{submitting ? '提交中...' : '提交并启动流程'}</button>
+        <div className="flex justify-between items-center bg-white/50 backdrop-blur-md sticky bottom-0 -mx-10 px-10 py-6 border-t border-slate-200/60 z-10 transition-all hover:bg-white/80">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">
+            请确保以上所有 <span className="text-red-500">*</span> 必填项已准确填写
+          </p>
+          <div className="flex gap-4">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={submitting}>取消操作</button>
+            <button type="submit" className="btn-primary" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  数据处理中...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                  校验并启动流程
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
     </div>

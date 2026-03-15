@@ -47,6 +47,11 @@ export interface FormField {
     field: string
     value: any
   }
+  arrayConfig?: {
+    fields: FormField[]
+    min?: number
+    max?: number
+  }
 }
 
 export interface FieldPermissionConfig {

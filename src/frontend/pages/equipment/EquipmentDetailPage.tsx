@@ -2,6 +2,39 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { API_URL } from '../../config/api'
 
+interface Accessory {
+  id: string
+  accessory_name: string
+  model_no: string
+  brand?: string
+  category: 'instrument' | 'fake_load'
+  unit: string
+  quantity: number
+  serial_number?: string
+  manage_code?: string
+  status: string
+  health_status: string
+  usage_status: string
+  location_status: string
+  location_id?: string
+  host_equipment_id?: string
+  bound_at?: string
+  source_type?: string
+  keeper_id?: string
+  purchase_date?: string
+  purchase_price?: number
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+interface BindAccessoryModalProps {
+  isOpen: boolean
+  onClose: () => void
+  equipmentId: string
+  onBindSuccess: () => void
+}
+
 interface EquipmentImage {
   id: string
   image_type: string
@@ -37,7 +70,7 @@ interface Equipment {
   model_no: string
   manufacturer: string | null
   technical_params: string | null
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load'
   unit: string
   quantity: number
   manage_code: string
@@ -54,7 +87,7 @@ interface Equipment {
   certificate_issuer: string | null
   accessory_desc: string | null
   notes: string | null
-  attachment: string | null
+  attachments: any[] | null
   created_at: string
   updated_at: string
   keeper_id: string | null
@@ -72,6 +105,272 @@ interface RepairCreateModalProps {
   isOpen: boolean
   onClose: () => void
   currentEquipment: Equipment | null
+}
+
+function BindAccessoryModal({ isOpen, onClose, equipmentId, onBindSuccess }: BindAccessoryModalProps) {
+  const [availableAccessories, setAvailableAccessories] = useState<Accessory[]>([])
+  const [selectedAccessories, setSelectedAccessories] = useState<Accessory[]>([])
+  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      loadAvailableAccessories()
+      setSelectedAccessories([])
+    }
+  }, [isOpen])
+
+  const loadAvailableAccessories = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('token')
+      
+      const response = await fetch(`${API_URL.BASE}/api/equipment/accessories/unbound`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('加载配件信息失败')
+      }
+
+      const result = await response.json()
+      if (result.success && result.data) {
+        setAvailableAccessories(result.data)
+      }
+    } catch (err) {
+      console.error('加载配件信息失败:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddAccessory = (accessory: Accessory) => {
+    if (!selectedAccessories.find(a => a.id === accessory.id)) {
+      setSelectedAccessories([...selectedAccessories, accessory])
+    }
+  }
+
+  const handleRemoveAccessory = (id: string) => {
+    setSelectedAccessories(selectedAccessories.filter(a => a.id !== id))
+  }
+
+  const handleBindAccessories = async () => {
+    if (selectedAccessories.length === 0) {
+      alert('请选择需要绑定的配件')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const token = localStorage.getItem('token')
+
+      for (const accessory of selectedAccessories) {
+        const response = await fetch(`${API_URL.BASE}/api/equipment/accessories/${accessory.id}/bind`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          },
+          body: JSON.stringify({ equipment_id: equipmentId })
+        })
+
+        if (!response.ok) {
+          throw new Error('绑定失败')
+        }
+      }
+
+      alert('配件绑定成功')
+      onBindSuccess()
+      onClose()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '绑定失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const getCategoryLabel = (category: string) => {
+    const labels: Record<string, string> = {
+      instrument: '仪器',
+      fake_load: '假负载'
+    }
+    return labels[category] || category
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-900">绑定配件</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">可用配件（未绑定）</h3>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : availableAccessories.length === 0 ? (
+              <div className="border border-gray-200 rounded-lg p-4 text-center text-gray-500">
+                暂无未绑定的配件
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        配件名称
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        型号
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        类别
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        数量
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        单位
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        操作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {availableAccessories.map((accessory) => (
+                      <tr key={accessory.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.accessory_name}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.model_no}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {getCategoryLabel(accessory.category)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.quantity}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.unit}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => handleAddAccessory(accessory)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            添加
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">已选配件</h3>
+            {selectedAccessories.length === 0 ? (
+              <div className="border border-gray-200 rounded-lg p-4 text-center text-gray-500">
+                请从上方选择配件
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        配件名称
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        型号
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        类别
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        数量
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        单位
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        操作
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {selectedAccessories.map((accessory) => (
+                      <tr key={accessory.id}>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.accessory_name}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.model_no}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {getCategoryLabel(accessory.category)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.quantity}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {accessory.unit}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => handleRemoveAccessory(accessory.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            移除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleBindAccessories}
+            disabled={submitting || selectedAccessories.length === 0}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
+          >
+            {submitting ? '绑定中...' : `绑定配件 (${selectedAccessories.length})`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function RepairCreateModal({ isOpen, onClose, currentEquipment }: RepairCreateModalProps) {
@@ -199,8 +498,7 @@ function RepairCreateModal({ isOpen, onClose, currentEquipment }: RepairCreateMo
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
       instrument: '仪器',
-      fake_load: '假负载',
-      cable: '线材'
+      fake_load: '假负载'
     }
     return labels[category] || category
   }
@@ -413,6 +711,7 @@ export default function EquipmentDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<EquipmentInstance>>({})
   const [showRepairModal, setShowRepairModal] = useState(false)
+  const [showBindAccessoryModal, setShowBindAccessoryModal] = useState(false)
   const [images, setImages] = useState<EquipmentImage[]>([])
 
   useEffect(() => {
@@ -566,6 +865,36 @@ export default function EquipmentDetailPage() {
     }
   }
 
+  const handleUnbindAccessory = async (accessoryId: string) => {
+    if (!equipment) return
+
+    if (!confirm('确定要解绑这个配件吗？')) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(`${API_URL.BASE}/api/equipment/accessories/${accessoryId}/unbind`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: JSON.stringify({ equipment_id: equipment.id })
+      })
+
+      if (!response.ok) {
+        throw new Error('解绑失败')
+      }
+
+      alert('配件解绑成功')
+      loadEquipmentData()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '解绑失败')
+    }
+  }
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-'
     const date = new Date(dateString)
@@ -659,6 +988,13 @@ export default function EquipmentDetailPage() {
         onClose={() => setShowRepairModal(false)}
         currentEquipment={equipment}
       />
+      
+      <BindAccessoryModal
+        isOpen={showBindAccessoryModal}
+        onClose={() => setShowBindAccessoryModal(false)}
+        equipmentId={equipment?.id || ''}
+        onBindSuccess={loadEquipmentData}
+      />
 
       <div className="mb-6">
         <button
@@ -721,6 +1057,14 @@ export default function EquipmentDetailPage() {
               >
                 申请维修
               </button>
+              {equipment?.category === 'instrument' && (
+                <button
+                  onClick={() => setShowBindAccessoryModal(true)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                >
+                  绑定配件
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -887,15 +1231,31 @@ export default function EquipmentDetailPage() {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">型号</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">单位</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {equipment.accessories.map((acc: any, idx: number) => (
                           <tr key={idx}>
-                            <td className="px-4 py-3 text-sm text-gray-900">{acc.accessory_name || '-'}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{acc.accessory_model || '-'}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{acc.accessory_quantity || '-'}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{acc.accessory_unit || '-'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span
+                                onClick={() => navigate(`/equipment/accessories/${acc.id}`)}
+                                className="text-blue-600 hover:text-blue-800 cursor-pointer"
+                              >
+                                {acc.accessory_name || '-'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{acc.model_no || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{acc.quantity || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{acc.unit || '-'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <button
+                                onClick={() => handleUnbindAccessory(acc.id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                解绑
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -910,9 +1270,9 @@ export default function EquipmentDetailPage() {
 
           <div className="mt-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">设备图片</h2>
-            {images.filter(img => img.image_type === 'main').length > 0 ? (
+            {images.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {images.filter(img => img.image_type === 'main').map((image) => (
+                {images.map((image) => (
                   <div key={image.id} className="relative group">
                     <img
                       src={image.image_url}
@@ -920,47 +1280,17 @@ export default function EquipmentDetailPage() {
                       className="w-full h-40 object-cover rounded-lg border border-gray-200 cursor-pointer hover:shadow-lg"
                       onClick={() => window.open(image.image_url, '_blank')}
                     />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg">
-                      主机照片
-                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-4">暂无主机图片</div>
-            )}
-          </div>
-
-          <div className="mt-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">配件图片</h2>
-            {images.filter(img => img.image_type === 'accessory').length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {images.filter(img => img.image_type === 'accessory').map((image) => (
-                  <div key={image.id} className="relative group">
-                    <img
-                      src={image.image_url}
-                      alt={image.image_name || '配件图片'}
-                      className="w-full h-40 object-cover rounded-lg border border-gray-200 cursor-pointer hover:shadow-lg"
-                      onClick={() => window.open(image.image_url, '_blank')}
-                    />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 rounded-b-lg">
-                      配件照片
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-4">暂无配件图片</div>
+              <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-4">暂无设备图片</div>
             )}
           </div>
 
           <div className="mt-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">其他信息</h2>
             <div className="space-y-3">
-              <div>
-                <label className="text-sm text-gray-500">附件描述</label>
-                <div className="text-sm font-medium text-gray-900">{equipment.accessory_desc || '-'}</div>
-              </div>
               <div>
                 <label className="text-sm text-gray-500">备注</label>
                 {isEditing ? (

@@ -28,7 +28,9 @@ export default function ProjectCompletionPage() {
     remarks: ''
   })
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { 
+    loadData()
+  }, [])
 
   const loadData = async () => {
     try {

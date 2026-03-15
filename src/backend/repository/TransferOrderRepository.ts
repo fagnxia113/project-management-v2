@@ -70,6 +70,7 @@ export interface CreateOrderItemData {
     notes?: string
     accessory_info?: any
     accessory_desc?: string
+    is_accessory?: boolean
 }
 
 // =====================================================================
@@ -178,14 +179,15 @@ export class TransferOrderRepository {
     }
 
     /**
-     * 创建调拨单（事务）
+     * 创建调拨单（支持事务嵌套）
      */
     async createWithItems(
         orderData: CreateOrderData,
-        itemsData: CreateOrderItemData[]
+        itemsData: CreateOrderItemData[],
+        tx?: Prisma.TransactionClient
     ): Promise<TransferOrderWithItems> {
-        return this.db.$transaction(async (tx) => {
-            const order = await tx.equipment_transfer_orders.create({
+        const execute = async (client: Prisma.TransactionClient) => {
+            const order = await client.equipment_transfer_orders.create({
                 data: {
                     id: orderData.id,
                     order_no: orderData.order_no,
@@ -213,7 +215,7 @@ export class TransferOrderRepository {
 
             const items = await Promise.all(
                 itemsData.map(item =>
-                    tx.equipment_transfer_order_items.create({
+                    client.equipment_transfer_order_items.create({
                         data: {
                             id: item.id,
                             order_id: order.id,
@@ -228,14 +230,17 @@ export class TransferOrderRepository {
                             quantity: item.quantity,
                             notes: item.notes,
                             accessory_info: item.accessory_info ?? undefined,
-                            accessory_desc: item.accessory_desc
-                        }
+                            accessory_desc: item.accessory_desc,
+                            is_accessory: (item as any).is_accessory ?? false
+                        } as any
                     })
                 )
             )
 
             return { ...order, items }
-        })
+        }
+
+        return tx ? execute(tx) : this.db.$transaction(execute)
     }
 
     /**
@@ -244,9 +249,11 @@ export class TransferOrderRepository {
     async updateStatus(
         id: string,
         status: string,
-        extra?: Partial<Prisma.equipment_transfer_ordersUpdateInput>
+        extra?: Partial<Prisma.equipment_transfer_ordersUpdateInput>,
+        tx?: Prisma.TransactionClient
     ): Promise<TransferOrder> {
-        return this.db.equipment_transfer_orders.update({
+        const client = tx || this.db
+        return client.equipment_transfer_orders.update({
             where: { id },
             data: {
                 status: status as any,
@@ -270,9 +277,11 @@ export class TransferOrderRepository {
      */
     async updateItem(
         itemId: string,
-        data: Partial<Prisma.equipment_transfer_order_itemsUpdateInput>
+        data: Partial<Prisma.equipment_transfer_order_itemsUpdateInput>,
+        tx?: Prisma.TransactionClient
     ): Promise<TransferOrderItem> {
-        return this.db.equipment_transfer_order_items.update({
+        const client = tx || this.db
+        return client.equipment_transfer_order_items.update({
             where: { id: itemId },
             data: { ...data, updated_at: new Date() }
         })
@@ -289,9 +298,11 @@ export class TransferOrderRepository {
             shipped_at?: Date
             shipping_attachment?: string
             shipping_package_images?: any
-        }
+        },
+        tx?: Prisma.TransactionClient
     ): Promise<TransferOrder> {
-        return this.db.equipment_transfer_orders.update({
+        const client = tx || this.db
+        return client.equipment_transfer_orders.update({
             where: { id },
             data: {
                 status: 'in_transit' as any,
@@ -317,10 +328,12 @@ export class TransferOrderRepository {
             receiving_package_images?: any
             total_received_quantity?: number
             isPartial?: boolean
-        }
+        },
+        tx?: Prisma.TransactionClient
     ): Promise<TransferOrder> {
+        const client = tx || this.db
         const status = receivingData.isPartial ? 'partial_received' : 'completed'
-        return this.db.equipment_transfer_orders.update({
+        return client.equipment_transfer_orders.update({
             where: { id },
             data: {
                 status: status as any,

@@ -5,6 +5,7 @@
  */
 import { ProjectRepository, projectRepository } from '../repository/ProjectRepository.js'
 import { Prisma } from '@prisma/client'
+import { equipmentServiceV3 } from './EquipmentServiceV3.js'
 
 export interface Project {
   id: string
@@ -52,7 +53,11 @@ export class ProjectServiceV2 {
   }
 
   async updateProject(id: string, data: Partial<Project>): Promise<Project> {
-    return (await this.repo.update(id, data as any)) as Project
+    const project = (await this.repo.update(id, data as any)) as unknown as Project
+    if (data.manager_id) {
+      await equipmentServiceV3.syncKeepersByLocation(project.id, data.manager_id);
+    }
+    return project
   }
 
   async deleteProject(id: string): Promise<void> {

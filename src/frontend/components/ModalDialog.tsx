@@ -50,39 +50,44 @@ export default function ModalDialog({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in">
       {/* 背景遮罩 */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
       
       {/* 对话框内容 */}
       <div
         ref={dialogRef}
-        className={`relative bg-white rounded-lg shadow-xl ${sizeClasses[size]} w-full max-h-[90vh] flex flex-col`}
+        className={`relative glass-card rounded-[2.5rem] shadow-2xl ${sizeClasses[size]} w-full max-h-[90vh] flex flex-col overflow-hidden animate-slide-up border border-white/50`}
       >
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+
         {/* 头部 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between px-10 py-8">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">{title}</h2>
+            <div className="h-1 w-12 bg-blue-600 rounded-full mt-2"></div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="w-10 h-10 flex items-center justify-center bg-slate-100 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* 内容区域 */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-10 pb-10 custom-scrollbar">
           {children}
         </div>
 
         {/* 底部 */}
         {footer && (
-          <div className="flex items-center justify-end px-6 py-4 border-t border-gray-200 space-x-3">
+          <div className="flex items-center justify-end px-10 py-8 bg-slate-50/50 border-t border-slate-200/60 space-x-4">
             {footer}
           </div>
         )}

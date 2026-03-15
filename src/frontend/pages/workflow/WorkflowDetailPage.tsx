@@ -161,6 +161,11 @@ export default function WorkflowDetailPage() {
 
   const [activeTab, setActiveTab] = useState<'form' | 'workflow' | 'history'>('form')
 
+  // 确认弹窗状态
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null)
+  const [confirmMessage, setConfirmMessage] = useState('')
+
   const [deptMap, setDeptMap] = useState<Record<string, string>>({})
   const [posMap, setPosMap] = useState<Record<string, string>>({})
   const [warehouseMap, setWarehouseMap] = useState<Record<string, string>>({})
@@ -191,7 +196,7 @@ export default function WorkflowDetailPage() {
         }
       }
 
-      const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout: number = 5000) => {
+      const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout: number = 5000): Promise<any> => {
         return Promise.race([
           fetch(url, options),
           new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeout))
@@ -332,7 +337,6 @@ export default function WorkflowDetailPage() {
           const warehouseIds: string[] = []
           const projectIds: string[] = []
           const userIds: string[] = []
-          
           // 设备入库相关ID
           if (formData.warehouse_id) {
             warehouseIds.push(formData.warehouse_id)
@@ -373,6 +377,11 @@ export default function WorkflowDetailPage() {
           }
           if (formData.location_manager_id) {
             userIds.push(formData.location_manager_id)
+          }
+
+          // 项目相关ID
+          if (formData.manager_id) {
+            userIds.push(formData.manager_id)
           }
 
           // 加载所有需要的映射数据
@@ -568,7 +577,16 @@ export default function WorkflowDetailPage() {
       }
     }
     
-    if (!confirm('确定要通过此申请吗？')) return
+    // 显示确认弹窗
+    setConfirmAction('approve')
+    setConfirmMessage('确定要通过此申请吗？')
+    setShowConfirmDialog(true)
+  }
+
+  // 确认通过
+  const confirmApprove = async () => {
+    setShowConfirmDialog(false)
+    if (!currentTask || !instance) return
 
     setSubmitting(true)
     try {
@@ -789,7 +807,17 @@ export default function WorkflowDetailPage() {
       alert('请填写驳回原因')
       return
     }
-    if (!confirm('确定要驳回此申请吗？')) return
+    
+    // 显示确认弹窗
+    setConfirmAction('reject')
+    setConfirmMessage('确定要驳回此申请吗？')
+    setShowConfirmDialog(true)
+  }
+
+  // 确认驳回
+  const confirmReject = async () => {
+    setShowConfirmDialog(false)
+    if (!currentTask) return
 
     setSubmitting(true)
     try {
@@ -915,6 +943,7 @@ export default function WorkflowDetailPage() {
       alert('撤回失败，请重试')
     }
   }
+
 
   const handleAddSigner = async () => {
     if (!currentTask) return
@@ -1185,7 +1214,7 @@ export default function WorkflowDetailPage() {
                       if (arrayField.name === 'images' || arrayField.name === 'main_images' || arrayField.name === 'accessory_images') {
                         return (
                           <div key={arrayField.name} className="md:col-span-2">
-                            <div className="text-gray-500 mb-1">{arrayField.label}</div>
+                            <div className="text-gray-500 mb-1">设备图片</div>
                             <div className="flex flex-wrap gap-2">
                               {fieldValue.map((img: any, imgIndex: number) => {
                                 const imgUrl = typeof img === 'string' ? img : (img.image_url || img.url)
@@ -1433,7 +1462,7 @@ export default function WorkflowDetailPage() {
                           item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                           'bg-green-100 text-green-700'
                         }`}>
-                          {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                          {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-sm">{item.manage_code || '-'}</td>
@@ -1755,7 +1784,7 @@ export default function WorkflowDetailPage() {
           {logs.length > 0 ? (
             <div className="space-y-4">
               {displayLogs.map((log, index) => (
-                <div key={log.id} className="flex gap-4">
+                <div key={`${log.id}-${index}`} className="flex gap-4">
                   <div className="flex flex-col items-center">
                     <div className={`w-3 h-3 rounded-full ${
                       log.action === 'approved' ? 'bg-green-500' :
@@ -1885,12 +1914,12 @@ export default function WorkflowDetailPage() {
               </div>
 
               {currentTask && (
-                <div className="flex gap-2">
-                  {getNodeActions().map(action => (
+                <div className="flex flex-wrap gap-3">
+                  {getNodeActions().map((action: any) => (
                     <button
                       key={action.type}
                       onClick={() => setActionType(action.type)}
-                      className={`px-4 py-2 text-white rounded-lg hover:opacity-90 flex items-center gap-2 ${action.className}`}
+                      className={`px-5 py-2.5 text-white rounded-lg hover:opacity-90 transition-all duration-200 flex items-center gap-2 shadow-sm ${action.className}`}
                     >
                       {action.icon}
                       {action.label}
@@ -1902,12 +1931,13 @@ export default function WorkflowDetailPage() {
               {instance.status === 'running' && !currentTask && currentUserId === instance.initiator_id && (
                 <button
                   onClick={handleWithdraw}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                  className="px-5 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 flex items-center gap-2 shadow-sm"
                 >
                   <RotateCcw className="w-4 h-4" />
                   撤回
                 </button>
               )}
+
             </div>
           </div>
         </div>
@@ -2056,7 +2086,7 @@ export default function WorkflowDetailPage() {
                                 item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                                 'bg-green-100 text-green-700'
                               }`}>
-                                {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                                {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                               </span>
                             </div>
                             <span className="text-sm text-gray-500">{item.quantity} {item.unit}</span>
@@ -2310,7 +2340,7 @@ export default function WorkflowDetailPage() {
                                 item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                                 'bg-green-100 text-green-700'
                               }`}>
-                                {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                                {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                               </span>
                             </div>
                             <span className="text-sm text-gray-500">发货数量: {item.quantity} {item.unit}</span>
@@ -2660,6 +2690,41 @@ export default function WorkflowDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 确认弹窗 */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowConfirmDialog(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full p-6 z-10">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">确认操作</h3>
+            <p className="text-gray-600 mb-6">{confirmMessage}</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowConfirmDialog(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmAction === 'approve') {
+                    confirmApprove()
+                  } else if (confirmAction === 'reject') {
+                    confirmReject()
+                  }
+                }}
+                className={`px-4 py-2 text-white rounded-lg ${
+                  confirmAction === 'approve' 
+                    ? 'bg-green-600 hover:bg-green-700' 
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                确认{confirmAction === 'approve' ? '通过' : '驳回'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

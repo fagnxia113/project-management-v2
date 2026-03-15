@@ -44,15 +44,18 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
   const formData = formDataProp || data || {}
   const effectiveNodeId = currentNodeId || nodeId || ''
   const isReadonly = isReadonlyProp ?? mode === 'view'
-  
+
   const [equipmentOptions, setEquipmentOptions] = useState<EquipmentOption[]>([])
   const [loadingEquipment, setLoadingEquipment] = useState(false)
   const [customFields, setCustomFields] = useState<Record<string, boolean>>({})
   const [warehouseManager, setWarehouseManager] = useState<any>(null)
   const [selectedImageType, setSelectedImageType] = useState<Record<string, string>>({})
+  const [accessoryOptions, setAccessoryOptions] = useState<any[]>([])
+  const [loadingAccessory, setLoadingAccessory] = useState(false)
 
   useEffect(() => {
     loadEquipmentOptions()
+    loadAccessoryOptions()
   }, [])
 
   useEffect(() => {
@@ -106,20 +109,68 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     try {
       setLoadingEquipment(true)
       const response = await fetch('/api/equipment/instances?page=1&pageSize=1000')
-      const result = await response.json()
-      if (result.success && result.data) {
-        const options = result.data.map((eq: any) => ({
-          equipment_name: eq.equipment_name,
-          model_no: eq.model_no,
-          category: eq.category
-        }))
-        setEquipmentOptions(options)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data) {
+          const options = result.data.map((eq: any) => ({
+            equipment_name: eq.equipment_name,
+            model_no: eq.model_no,
+            category: eq.category
+          }))
+          setEquipmentOptions(options)
+        } else {
+          throw new Error(result.message || '加载设备数据失败')
+        }
+      } else {
+        const text = await response.text()
+        console.error('API 错误响应:', text)
+        throw new Error(`服务器返回错误: ${response.status}`)
       }
     } catch (error) {
       console.error('加载设备选项失败:', error)
     } finally {
       setLoadingEquipment(false)
     }
+  }
+
+  const loadAccessoryOptions = async () => {
+    try {
+      setLoadingAccessory(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.BASE}/api/equipment/accessories`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+      const result = await response.json()
+      console.log('配件数据:', result)
+      if (Array.isArray(result)) {
+        setAccessoryOptions(result)
+      } else if (result.success && result.data && Array.isArray(result.data)) {
+        setAccessoryOptions(result.data)
+      } else if (result.list && Array.isArray(result.list)) {
+        setAccessoryOptions(result.list)
+      } else if (result.success && result.total > 0 && Array.isArray(result.data)) {
+        setAccessoryOptions(result.data)
+      }
+    } catch (error) {
+      console.error('加载配件选项失败:', error)
+    } finally {
+      setLoadingAccessory(false)
+    }
+  }
+
+  const getUniqueAccessoryNames = () => {
+    const names = accessoryOptions.map(acc => acc.accessory_name || acc.name).filter(Boolean)
+    return [...new Set(names)].sort()
+  }
+
+  const getUniqueAccessoryModels = (name?: string) => {
+    let models: string[]
+    if (name) {
+      models = accessoryOptions.filter(acc => (acc.accessory_name || acc.name) === name).map(acc => acc.model_no || acc.model || acc.accessory_model).filter(Boolean)
+    } else {
+      models = accessoryOptions.map(acc => acc.model_no || acc.model || acc.accessory_model).filter(Boolean)
+    }
+    return [...new Set(models)].sort()
   }
 
   const getUniqueEquipmentNames = (category: string) => {
@@ -190,7 +241,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     if (mode === 'approval') {
       const visibleOn = (field as any).visibleOn
       const editableOn = (field as any).editableOn
-      
+
       if (visibleOn && Array.isArray(visibleOn)) {
         const isVisible = visibleOn.includes(effectiveNodeId)
         if (!isVisible) {
@@ -201,7 +252,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           }
         }
       }
-      
+
       let isEditable = false
       if (editableOn && Array.isArray(editableOn)) {
         isEditable = editableOn.includes(effectiveNodeId)
@@ -213,7 +264,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           isEditable = field.permissions.default.editable === true
         }
       }
-      
+
       return {
         visible: true,
         editable: isEditable,
@@ -265,9 +316,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -282,9 +332,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             readOnly={isReadonly}
             min={field.validation?.min}
             max={field.validation?.max}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -296,9 +345,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
             rows={field.rows || 4}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -309,16 +357,15 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value ?? ''}
             onChange={(e) => onChange(field.name, e.target.value)}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
       case 'select':
         let selectOptions: { label: string; value: any }[] = []
         let displayValue = value ?? ''
-        
+
         if (field.name === 'warehouse_manager_id' && formData.warehouse_id) {
           if (warehouseManager) {
             selectOptions = [{ label: warehouseManager.name, value: warehouseManager.id }]
@@ -368,7 +415,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             }
           }
         }
-        
+
         const isDisabled = isReadonly || field.disabled
         if (isDisabled) {
           return (
@@ -377,15 +424,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             </div>
           )
         }
-        
+
         return (
           <select
             value={value ?? ''}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isDisabled}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">{field.placeholder || `请选择${field.label}`}</option>
             {selectOptions.map((opt, idx) => (
@@ -397,18 +443,18 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
       case 'user':
         let userOptions: { label: string; value: any }[] = []
         let userDisplayValue = value ?? ''
-        
+
         if (field.dynamicOptionsConfig?.source === 'warehouse_id' && formData.warehouse_id) {
           userOptions = Object.entries(userMap).map(([id, name]) => ({ label: name, value: id }))
         } else {
           userOptions = Object.entries(userMap).map(([id, name]) => ({ label: name, value: id }))
         }
-        
+
         const selectedUser = userOptions.find(opt => opt.value === value)
         if (selectedUser) {
           userDisplayValue = selectedUser.label
         }
-        
+
         if (field.name === 'fromManagerId' && value) {
           if (userMap[value]) {
             userDisplayValue = userMap[value]
@@ -418,7 +464,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             userDisplayValue = userMap[value]
           }
         }
-        
+
         if (isReadonly) {
           return (
             <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700">
@@ -426,15 +472,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             </div>
           )
         }
-        
+
         return (
           <select
             value={value ?? ''}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">{field.placeholder || `请选择${field.label}`}</option>
             {userOptions.map((opt, idx) => (
@@ -445,16 +490,16 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'array':
         const arrayValue = Array.isArray(value) ? value : []
-        const arrayConfig = field.arrayConfig || {}
-        const arrayFields = Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []
+        const arrayConfig = field.arrayConfig
+        const arrayFields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
         const isMainImages = field.name === 'main_images'
         const isAccessoryImages = field.name === 'accessory_images'
         const isAttachments = field.name === 'attachments'
-        
+
         if (isMainImages || isAccessoryImages) {
           const imagesValue = Array.isArray(arrayValue) ? arrayValue : []
-          const imageLabel = isMainImages ? '主机图片' : '配件图片'
-          
+          const imageLabel = '设备图片'
+
           return (
             <div>
               {imagesValue.length === 0 ? (
@@ -502,22 +547,22 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   type="button"
                   onClick={() => {
                     const newItem: any = {}
-                    ;(arrayFields || []).forEach((f: any) => {
-                      newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
-                    })
+                      ; (arrayFields || []).forEach((f: any) => {
+                        newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
+                      })
                     newItem.id = `${field.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                     onChange(field.name, [...imagesValue, newItem])
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  + 添加{imageLabel}
+                  + 上传设备图片
                 </button>
               )}
             </div>
           )
         } else if (isAttachments) {
           const attachmentsValue = Array.isArray(arrayValue) ? arrayValue : []
-          
+
           return (
             <div>
               {attachmentsValue.length === 0 ? (
@@ -565,9 +610,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   type="button"
                   onClick={() => {
                     const newItem: any = {}
-                    ;(arrayFields || []).forEach((f: any) => {
-                      newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
-                    })
+                      ; (arrayFields || []).forEach((f: any) => {
+                        newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
+                      })
                     newItem.id = `attachment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                     onChange(field.name, [...attachmentsValue, newItem])
                   }}
@@ -621,7 +666,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                       } else if (subField.name === 'images' || subField.name === 'attachments') {
                         colSpan = 2
                       }
-                      
+
                       let shouldShow = true
                       if (subField.visibleWhen) {
                         const { field: conditionField, equals, in: inValues } = subField.visibleWhen
@@ -631,11 +676,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                           shouldShow = item[conditionField] === equals
                         }
                       }
-                      
+
                       if (!shouldShow) return null
-                      
+
                       const colSpanClass = colSpan === 2 ? 'col-span-2' : colSpan === 4 ? 'col-span-4' : ''
-                      
+
                       return (
                         <div key={subField.name} className={colSpanClass}>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -644,7 +689,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                           </label>
                           {renderArrayFieldInput(subField, item, index, (subFieldName: string, subFieldValue: any) => {
                             const newArray = [...arrayValue]
-                            
+
                             // 当更改设备类别时，清空所有其他字段
                             if (subFieldName === 'category') {
                               // 创建一个新对象，只保留ID和类别
@@ -652,25 +697,25 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                 id: newArray[index].id,
                                 category: subFieldValue
                               }
-                              
+
                               // 对于仪器类，默认数量为1
                               if (subFieldValue === 'instrument') {
                                 resetItem.quantity = 1
                               }
-                              
+
                               newArray[index] = resetItem
                             } else {
                               newArray[index] = { ...newArray[index], [subFieldName]: subFieldValue }
-                              
+
                               if (subFieldName === 'purchase_price' || subFieldName === 'quantity') {
                                 const price = subFieldName === 'purchase_price' ? subFieldValue : (newArray[index].purchase_price || 0)
                                 const qty = subFieldName === 'quantity' ? subFieldValue : (newArray[index].quantity || 0)
                                 newArray[index].total_price = price * qty
                               }
                             }
-                            
+
                             onChange(field.name, newArray)
-                            
+
                             const totalAmount = newArray.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0)
                             onChange('total_price', totalAmount)
                           }, isReadonly)}
@@ -685,9 +730,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   type="button"
                   onClick={() => {
                     const newItem: any = {}
-                    ;(arrayFields || []).forEach((f: any) => {
-                      newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
-                    })
+                      ; (arrayFields || []).forEach((f: any) => {
+                        newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
+                      })
                     newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                     onChange(field.name, [...arrayValue, newItem])
                   }}
@@ -705,9 +750,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           <div>
             {value && typeof value === 'string' && (
               <div className="mb-2">
-                <a 
-                  href={value} 
-                  target="_blank" 
+                <a
+                  href={value}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 underline"
                 >
@@ -724,14 +769,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                     try {
                       const formData = new FormData()
                       formData.append('file', file)
-                      
+
                       const token = localStorage.getItem('token')
                       const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
                         method: 'POST',
                         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                         body: formData
                       })
-                      
+
                       const result = await response.json()
                       if (result.success && result.data?.url) {
                         onChange(field.name, result.data.url)
@@ -746,9 +791,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   }
                 }}
                 disabled={isReadonly}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
               />
             )}
           </div>
@@ -762,9 +806,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
     }
@@ -779,11 +822,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     }
 
     let value = formData[field.name] ?? ''
-    
+
     if (repairOrder && (field.name === 'equipment_name' || field.name === 'equipment_category' || field.name === 'repair_quantity')) {
       value = repairOrder[field.name] ?? ''
     }
-    
+
     const isAutoGenerate = (field as any).autoGenerate === true || field.readonly === true || (field as any).disabled === true
     const isReadonly = !permissions.editable || isAutoGenerate
     const showRequired = permissions.required && !isAutoGenerate
@@ -791,14 +834,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     const fieldWrapper = (content: React.ReactNode) => {
       const isArrayField = field.type === 'array' || field.name === 'items'
       const colSpan = isArrayField ? 'col-span-2' : (field.layout?.width === 'full' ? 'col-span-2' : 'col-span-1')
-      
+
       return (
-        <div 
-          key={field.name} 
-          className={`mb-3 ${colSpan}`}
+        <div
+          key={field.name}
+          className={`mb-4 ${colSpan}`}
         >
           {field.displayConfig?.showLabel !== false && (
-            <label className="block text-sm font-medium text-gray-700 mb-0.5">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
               {field.label}
               {showRequired && <span className="text-red-500 ml-1">*</span>}
               {isAutoGenerate && <span className="text-blue-500 text-xs ml-2">(系统自动生成)</span>}
@@ -821,9 +864,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={placeholder}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -850,9 +892,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             disabled={isFieldDisabled}
             min={field.validation?.min}
             max={field.validation?.max}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isFieldDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isFieldDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -864,9 +905,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
             rows={4}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -877,9 +917,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -976,9 +1015,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isDisabled}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">请选择{field.label}</option>
             {selectOptions.map((option) => (
@@ -991,7 +1029,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'user':
         let userDisplayValue = value ?? ''
-        
+
         if (field.name === 'warehouse_manager_id' && warehouseManager) {
           userDisplayValue = warehouseManager.name
         } else if (field.name === 'fromManagerId' && value) {
@@ -1008,9 +1046,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             userDisplayValue = selectedUser[1]
           }
         }
-        
+
         console.log('[FormTemplateRenderer] userDisplayValue:', userDisplayValue)
-        
+
         const isUserDisabled = isReadonly || field.disabled
         if (isUserDisabled) {
           return fieldWrapper(
@@ -1019,15 +1057,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             </div>
           )
         }
-        
+
         return fieldWrapper(
           <select
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isUserDisabled}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isUserDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isUserDisabled ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">请选择{field.label}</option>
             {Object.entries(userMap).map(([id, name]) => (
@@ -1063,9 +1100,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">请选择{field.label}</option>
             {refOptions.map((option) => (
@@ -1082,9 +1118,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">请选择{field.label}</option>
             {Object.entries(departmentMap).map(([id, name]) => (
@@ -1100,9 +1135,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           <div>
             {value && typeof value === 'string' && (
               <div className="mb-2">
-                <a 
-                  href={value} 
-                  target="_blank" 
+                <a
+                  href={value}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 underline"
                 >
@@ -1119,14 +1154,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                     try {
                       const formData = new FormData()
                       formData.append('file', file)
-                      
+
                       const token = localStorage.getItem('token')
                       const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
                         method: 'POST',
                         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                         body: formData
                       })
-                      
+
                       const result = await response.json()
                       if (result.success && result.data?.url) {
                         onChange(field.name, result.data.url)
@@ -1141,9 +1176,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   }
                 }}
                 disabled={isReadonly}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
               />
             )}
           </div>
@@ -1152,15 +1186,15 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
       case 'images':
         const imagesValue = Array.isArray(value) ? value : []
         const imageAccept = field.accept || 'image/*'
-        
+
         return fieldWrapper(
           <div>
             {imagesValue.length > 0 && (
               <div className="grid grid-cols-4 gap-2 mb-2">
                 {imagesValue.map((img: any, imgIndex: number) => (
                   <div key={imgIndex} className="relative group">
-                    <img 
-                      src={typeof img === 'string' ? img : img.url} 
+                    <img
+                      src={typeof img === 'string' ? img : img.url}
                       alt={`图片 ${imgIndex + 1}`}
                       className="w-full h-20 object-cover rounded border border-gray-200"
                     />
@@ -1223,14 +1257,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
       case 'files':
         const filesValue = Array.isArray(value) ? value : []
-        
+
         return fieldWrapper(
           <div>
             {filesValue.length > 0 && (
               <div className="space-y-2 mb-2">
                 {filesValue.map((file: any, fileIndex: number) => (
                   <div key={fileIndex} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded border border-gray-200">
-                    <a 
+                    <a
                       href={typeof file === 'string' ? file : file.url}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -1315,7 +1349,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           }
           return opt
         }) || []
-        
+
         return fieldWrapper(
           <div className="space-y-2">
             {radioOptions.map((option) => (
@@ -1343,9 +1377,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
     }
@@ -1353,20 +1386,20 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
   const renderArrayFieldInput = (field: FormField, item: any, index: number, onChange: (name: string, value: any) => void, isReadonly: boolean) => {
     const value = item[field.name] ?? ''
-    
+
     switch (field.type) {
       case 'array':
         const arrayValue = Array.isArray(value) ? value : []
-        const arrayConfig = field.arrayConfig || {}
-        const arrayFields = Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []
+        const arrayConfig = field.arrayConfig
+        const arrayFields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
         const isMainImages = field.name === 'main_images'
         const isAccessoryImages = field.name === 'accessory_images'
         const isAttachments = field.name === 'attachments'
-        
+
         if (isMainImages || isAccessoryImages) {
           const imagesValue = Array.isArray(arrayValue) ? arrayValue : []
-          const imageLabel = isMainImages ? '主机图片' : '配件图片'
-          
+          const imageLabel = '设备图片'
+
           return (
             <div>
               {imagesValue.length === 0 ? (
@@ -1414,22 +1447,22 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   type="button"
                   onClick={() => {
                     const newItem: any = {}
-                    ;(arrayFields || []).forEach((f: any) => {
-                      newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
-                    })
+                      ; (arrayFields || []).forEach((f: any) => {
+                        newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
+                      })
                     newItem.id = `${field.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                     onChange(field.name, [...imagesValue, newItem])
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  + 添加{imageLabel}
+                  + 上传设备图片
                 </button>
               )}
             </div>
           )
         } else if (isAttachments) {
           const attachmentsValue = Array.isArray(arrayValue) ? arrayValue : []
-          
+
           return (
             <div>
               {attachmentsValue.length === 0 ? (
@@ -1477,9 +1510,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   type="button"
                   onClick={() => {
                     const newItem: any = {}
-                    ;(arrayFields || []).forEach((f: any) => {
-                      newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
-                    })
+                      ; (arrayFields || []).forEach((f: any) => {
+                        newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : ''
+                      })
                     newItem.id = `attachment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                     onChange(field.name, [...attachmentsValue, newItem])
                   }}
@@ -1491,7 +1524,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             </div>
           )
         }
-        
+
         return null
 
       case 'text':
@@ -1504,19 +1537,18 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
       case 'number':
       case 'currency':
         const isQuantityField = field.name === 'quantity'
-        const isInstrumentCategory = item.category === 'instrument'
-        const shouldLockQuantity = isQuantityField && isInstrumentCategory
+        const isIndependent = item.is_independent_code === true || item.is_independent_code === 'true'
+        const shouldLockQuantity = isQuantityField && isIndependent
         const finalValue = shouldLockQuantity ? 1 : value
-        
+
         return (
           <input
             type="number"
@@ -1529,9 +1561,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             readOnly={isReadonly || shouldLockQuantity}
             min={field.validation?.min}
             max={field.validation?.max}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly || shouldLockQuantity ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly || shouldLockQuantity ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -1543,9 +1574,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
             rows={field.rows || 2}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -1556,15 +1586,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
       case 'select':
         let options: any[] = []
-        
+
         if (field.name === 'unit') {
           options = Array.isArray(field.options) ? field.options : []
         } else if (field.dynamicOptionsConfig) {
@@ -1598,9 +1627,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
               onChange={(e) => onChange(field.name, e.target.value)}
               placeholder={`请输入${field.label}`}
               readOnly={isReadonly}
-              className={`w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-              }`}
+              className={`w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
             />
           )
         }
@@ -1622,9 +1650,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
               }
             }}
             disabled={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">请选择{field.label}</option>
             {options.map((option) => (
@@ -1653,23 +1680,23 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
       case 'file':
         const fileId = `nested-file-${field.name}-${index}-${Date.now()}`
         const isImageField = field.name === 'image_url'
-        
+
         const handleNestedFileUpload = async (file: File, inputElement: HTMLInputElement) => {
           try {
             inputElement.disabled = true
             const label = inputElement.parentElement?.querySelector('label')
             if (label) label.textContent = '上传中...'
-            
+
             const formData = new FormData()
             formData.append('file', file)
-            
+
             const token = localStorage.getItem('token')
             const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
               method: 'POST',
               headers: token ? { 'Authorization': `Bearer ${token}` } : {},
               body: formData
             })
-            
+
             const result = await response.json()
             if (result.success && result.data?.url) {
               onChange(field.name, result.data.url)
@@ -1685,7 +1712,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             if (label) label.textContent = value ? '重新上传' : (isImageField ? '上传图片' : '上传附件')
           }
         }
-        
+
         return (
           <div>
             {value && (
@@ -1693,9 +1720,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                 {isImageField ? (
                   <img src={value} alt="预览" className="w-40 h-40 object-cover rounded-lg border border-gray-300 shadow-sm" />
                 ) : (
-                  <a 
-                    href={value} 
-                    target="_blank" 
+                  <a
+                    href={value}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 underline"
                   >
@@ -1737,17 +1764,33 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
     }
   }
 
   const renderNestedArrayFieldInput = (field: FormField, item: any, index: number, onChange: (name: string, value: any) => void, isReadonly: boolean) => {
+    // 特殊处理 manage_code 字段：配件类设备在不勾选独立编码时禁用
+    if (field.name === 'manage_code') {
+      const isAccessoryCategory = item.category === 'accessory' || item.category === 'fake_load';
+      const isIndependentCode = item.is_independent_code === true || item.is_independent_code === 'true';
+      const shouldDisable = isAccessoryCategory && !isIndependentCode;
+
+      return (
+        <input
+          type="text"
+          className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${shouldDisable || isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+          value={item.manage_code || ''}
+          disabled={shouldDisable || isReadonly}
+          onChange={(e) => onChange('manage_code', e.target.value)}
+          placeholder={field.placeholder || ''}
+        />
+      );
+    }
     const value = item[field.name] ?? ''
-    
+
     switch (field.type) {
       case 'text':
       case 'phone':
@@ -1759,9 +1802,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -1796,9 +1838,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             readOnly={isReadonly}
             min={field.validation?.min}
             max={field.validation?.max}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -1810,9 +1851,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
             rows={field.rows || 2}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
@@ -1823,15 +1863,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
 
       case 'select':
         let options: any[] = []
-        
+
         if (field.options) {
           options = Array.isArray(field.options) ? field.options.map(opt => {
             if (typeof opt === 'string') {
@@ -1846,9 +1885,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             value={value}
             onChange={(e) => onChange(field.name, e.target.value)}
             disabled={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           >
             <option value="">请选择{field.label}</option>
             {options.map((option) => (
@@ -1864,9 +1902,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           <div>
             {value && typeof value === 'string' && (
               <div className="mb-2">
-                <a 
-                  href={value} 
-                  target="_blank" 
+                <a
+                  href={value}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 underline"
                 >
@@ -1883,14 +1921,14 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                     try {
                       const formData = new FormData()
                       formData.append('file', file)
-                      
+
                       const token = localStorage.getItem('token')
                       const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
                         method: 'POST',
                         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                         body: formData
                       })
-                      
+
                       const result = await response.json()
                       if (result.success && result.data?.url) {
                         onChange(field.name, result.data.url)
@@ -1905,9 +1943,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                   }
                 }}
                 disabled={isReadonly}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
               />
             )}
           </div>
@@ -1935,9 +1972,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={field.placeholder || `请输入${field.label}`}
             readOnly={isReadonly}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
           />
         )
     }
@@ -1956,9 +1992,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           onChange={(e) => onFieldChange(field.name, e.target.value)}
           placeholder="请输入新设备名称"
           readOnly={isReadonly}
-          className={`w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-          }`}
+          className={`w-full px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+            }`}
         />
       )
     } else {
@@ -1972,9 +2007,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           </select>
         )
       }
-      
+
       const equipmentNames = getUniqueEquipmentNames(category)
-      
+
       return (
         <select
           value={value}
@@ -1994,9 +2029,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
             }
           }}
           disabled={isReadonly}
-          className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-          }`}
+          className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+            }`}
         >
           <option value="">请选择设备名称</option>
           {equipmentNames.map(name => (
@@ -2023,13 +2057,12 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           onChange={(e) => onFieldChange(field.name, e.target.value)}
           placeholder="请输入设备型号"
           readOnly={isReadonly}
-          className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-          }`}
+          className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+            }`}
         />
       )
     }
-    
+
     if (!category) {
       return (
         <select
@@ -2040,7 +2073,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         </select>
       )
     }
-    
+
     if (!equipmentName) {
       return (
         <select
@@ -2051,9 +2084,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
         </select>
       )
     }
-    
+
     const modelNos = getModelNosByEquipmentName(equipmentName, category)
-    
+
     return (
       <select
         value={value}
@@ -2071,9 +2104,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
           }
         }}
         disabled={isReadonly}
-        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
-        }`}
+        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+          }`}
       >
         <option value="">请选择型号</option>
         {modelNos.map(modelNo => (
@@ -2084,17 +2116,149 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
     )
   }
 
+  const renderAccessoryNameField = (value: string, item: any, onFieldChange: (updates: any) => void, isReadonly: boolean, placeholder: string = "配件名称", fieldName: string = "accessory_name") => {
+    const isCustom = item.isCustomAccessoryName || false
+
+    if (isCustom) {
+      return (
+        <div className="relative group">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onFieldChange({ [fieldName]: e.target.value })}
+            placeholder={`请输入${placeholder}`}
+            readOnly={isReadonly}
+            className={`w-full text-sm border border-blue-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
+          />
+          {!isReadonly && (
+            <button
+              type="button"
+              onClick={() => onFieldChange({ isCustomAccessoryName: false, [fieldName]: '' })}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="切换到选择模式"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )
+    }
+
+    const options = getUniqueAccessoryNames()
+
+    return (
+      <select
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === '__other__') {
+            onFieldChange({ isCustomAccessoryName: true, [fieldName]: '' })
+          } else {
+            onFieldChange({ [fieldName]: e.target.value })
+          }
+        }}
+        disabled={isReadonly}
+        className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+          }`}
+      >
+        <option value="">{`请选择${placeholder}`}</option>
+        {options.map(name => (
+          <option key={name} value={name}>{name}</option>
+        ))}
+        <option value="__other__">其他（手动输入）</option>
+      </select>
+    )
+  }
+
+  const renderAccessoryModelField = (value: string, item: any, onFieldChange: (updates: any) => void, isReadonly: boolean, placeholder: string = "规格型号", fieldName: string = "accessory_model", parentNameField: string = "accessory_name") => {
+    const isCustom = item.isCustomAccessoryModel || false
+    const accessoryName = item[parentNameField] || ''
+
+    if (isCustom || item.isCustomAccessoryName) {
+      return (
+        <div className="relative group">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onFieldChange({ [fieldName]: e.target.value })}
+            placeholder={`请输入${placeholder}`}
+            readOnly={isReadonly}
+            className={`w-full text-sm border border-blue-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
+          />
+          {!isReadonly && !item.isCustomAccessoryName && (
+            <button
+              type="button"
+              onClick={() => onFieldChange({ isCustomAccessoryModel: false, [fieldName]: '' })}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="切换到选择模式"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )
+    }
+
+    if (!accessoryName) {
+      return (
+        <select
+          disabled
+          className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 bg-gray-100 cursor-not-allowed"
+        >
+          <option value="">请先选择名称</option>
+        </select>
+      )
+    }
+
+    const models = getUniqueAccessoryModels(accessoryName)
+
+    return (
+      <select
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === '__other__') {
+            onFieldChange({ isCustomAccessoryModel: true, [fieldName]: '' })
+          } else {
+            onFieldChange({ [fieldName]: e.target.value })
+          }
+        }}
+        disabled={isReadonly}
+        className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly ? 'bg-gray-100 cursor-not-allowed' : ''
+          }`}
+      >
+        <option value="">{`请选择${placeholder}`}</option>
+        {models.map(model => (
+          <option key={model} value={model}>{model}</option>
+        ))}
+        <option value="__other__">其他（手动输入）</option>
+      </select>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">基本信息</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {fields.map(field => {
-            if (field.type === 'array' && field.name === 'items') return null
-            return renderField(field)
-          })}
-        </div>
-      </div>
+      {(() => {
+        const items = formData.items || []
+        const hasAccessory = items.some((item: any) => item.category === 'accessory')
+        if (hasAccessory) return null
+
+        return (
+          <div className="bg-white shadow rounded-lg p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">基本信息</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 sm:gap-5">
+              {fields.map(field => {
+                if (field.type === 'array' && field.name === 'items') return null
+                return renderField(field)
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {fields.map(field => {
         const permissions = getFieldPermissions(field)
@@ -2102,7 +2266,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
 
         if (field.type === 'array' && field.name === 'items') {
           const arrayValue = Array.isArray(formData[field.name]) ? formData[field.name] : []
-          const arrayConfig = field.arrayConfig || {}
+          const arrayConfig = field.arrayConfig
           const isReadonly = !permissions.editable
 
           return (
@@ -2162,15 +2326,18 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                           <div className="grid grid-cols-4 gap-2">
                             {(() => {
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
+                              const isAccessory = item.category === 'accessory'
+
                               return fields.map((subField: any) => {
                                 const shouldShowField = (() => {
+                                  if (isAccessory && subField.name !== 'category') return false
                                   const basicFields = ['category', 'equipment_name', 'model_no', 'unit', 'quantity', 'purchase_price', 'total_price']
                                   if (!basicFields.includes(subField.name)) return false
                                   return true
                                 })()
-                                
+
                                 if (!shouldShowField) return null
-                                
+
                                 return (
                                   <div key={subField.name} className={`${subField.name === 'total_price' ? 'col-span-1' : ''}`}>
                                     <label className="block text-sm font-medium text-gray-700 mb-0.5">
@@ -2206,27 +2373,250 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                         }, isReadonly)
                                       }
                                     })()}
-                                </div>
-                              )
-                            })})()}
+                                  </div>
+                                )
+                              })
+                            })()}
                           </div>
                         </div>
 
-                        <div>
+                        <div className={item.category === 'accessory' ? '' : 'hidden'}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
+                            <h4 className="text-base font-semibold text-gray-800">配件信息</h4>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={item.is_independent_code === true || item.is_independent_code === 'true'}
+                                  onChange={(e) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = {
+                                      ...newArray[index],
+                                      is_independent_code: e.target.checked,
+                                      quantity: e.target.checked ? 1 : (newArray[index].quantity || 1)
+                                    }
+                                    onChange(field.name, newArray)
+                                  }}
+                                  disabled={isReadonly}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                独立编码
+                              </label>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-gray-500">设备名称</label>
+                                {renderAccessoryNameField(
+                                  item.equipment_name || '',
+                                  item,
+                                  (updates) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = { ...newArray[index], ...updates, model: '' }
+                                    onChange(field.name, newArray)
+                                  },
+                                  isReadonly,
+                                  "设备名称",
+                                  "equipment_name"
+                                )}
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-gray-500">设备型号</label>
+                                {renderAccessoryModelField(
+                                  item.model || '',
+                                  item,
+                                  (updates) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = { ...newArray[index], ...updates }
+                                    onChange(field.name, newArray)
+                                  },
+                                  isReadonly,
+                                  "设备型号",
+                                  "model",
+                                  "equipment_name"
+                                )}
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-gray-500">单位</label>
+                                <select
+                                  value={item.unit || ''}
+                                  onChange={(e) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = { ...newArray[index], unit: e.target.value }
+                                    onChange(field.name, newArray)
+                                  }}
+                                  disabled={isReadonly}
+                                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                                >
+                                  <option value="">请选择</option>
+                                  <option value="个">个</option>
+                                  <option value="套">套</option>
+                                  <option value="件">件</option>
+                                  <option value="台">台</option>
+                                  <option value="把">把</option>
+                                  <option value="根">根</option>
+                                  <option value="块">块</option>
+                                  <option value="张">张</option>
+                                  <option value="条">条</option>
+                                  <option value="支">支</option>
+                                </select>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-gray-500">数量</label>
+                                <input
+                                  type="number"
+                                  value={item.quantity || ''}
+                                  onChange={(e) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = { ...newArray[index], quantity: Number(e.target.value) }
+                                    onChange(field.name, newArray)
+                                  }}
+                                  disabled={isReadonly || item.is_independent_code === true || item.is_independent_code === 'true'}
+                                  className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly || item.is_independent_code === true || item.is_independent_code === 'true' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-gray-500">采购单价</label>
+                                <input
+                                  type="number"
+                                  value={item.purchase_price || ''}
+                                  onChange={(e) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = { ...newArray[index], purchase_price: Number(e.target.value) }
+                                    onChange(field.name, newArray)
+                                  }}
+                                  disabled={isReadonly}
+                                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-gray-500">管理编码</label>
+                                <input
+                                  type="text"
+                                  value={item.manage_code || ''}
+                                  onChange={(e) => {
+                                    const newArray = [...arrayValue]
+                                    newArray[index] = { ...newArray[index], manage_code: e.target.value }
+                                    onChange(field.name, newArray)
+                                  }}
+                                  disabled={isReadonly || !(item.is_independent_code === true || item.is_independent_code === 'true')}
+                                  placeholder="选填"
+                                  className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly || !(item.is_independent_code === true || item.is_independent_code === 'true') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <label className="text-xs font-medium text-gray-500 mb-2 block">上传图片</label>
+                              <div className="flex flex-wrap gap-2">
+                                {Array.isArray(item.main_images) && item.main_images.map((img: string, imgIdx: number) => (
+                                  <div key={imgIdx} className="relative group">
+                                    <img src={img} alt="" className="w-20 h-20 object-cover rounded border border-gray-200" />
+                                    {!isReadonly && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const newArray = [...arrayValue]
+                                          const newImages = [...(newArray[index].main_images || [])]
+                                          newImages.splice(imgIdx, 1)
+                                          newArray[index] = { ...newArray[index], main_images: newImages }
+                                          onChange(field.name, newArray)
+                                        }}
+                                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                {!isReadonly && (
+                                  <label className="flex items-center justify-center w-20 h-20 border border-dashed border-gray-300 rounded cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                                    <span className="text-gray-500 text-xs">+ 上传</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      className="hidden"
+                                      onChange={async (e) => {
+                                        const files = Array.from(e.target.files || [])
+                                        const uploadedImages: string[] = []
+
+                                        for (const file of files) {
+                                          const formData = new FormData()
+                                          formData.append('file', file)
+
+                                          const token = localStorage.getItem('token')
+                                          const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                                            method: 'POST',
+                                            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                                            body: formData
+                                          })
+
+                                          if (response.ok) {
+                                            const result = await response.json()
+                                            if (result.success && result.fileUrl) {
+                                              uploadedImages.push(result.fileUrl)
+                                            }
+                                          }
+                                        }
+
+                                        if (uploadedImages.length > 0) {
+                                          const newArray = [...arrayValue]
+                                          const currentImages = Array.isArray(newArray[index].main_images) ? newArray[index].main_images : []
+                                          newArray[index] = {
+                                            ...newArray[index],
+                                            main_images: [...currentImages, ...uploadedImages]
+                                          }
+                                          onChange(field.name, newArray)
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={(item.category === 'instrument' || item.category === 'fake_load' || item.category === 'cable') ? '' : 'hidden'}>
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">详细信息</h4>
                           </div>
                           <div className="space-y-3">
+                            {/* 仪器类和假负载类设备不显示独立编码选择框；独立配件类显示 */}
+                            {item.category === 'accessory' && (
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.is_independent_code === true || item.is_independent_code === 'true'}
+                                    onChange={(e) => {
+                                      const newArray = [...arrayValue]
+                                      newArray[index] = {
+                                        ...newArray[index],
+                                        is_independent_code: e.target.checked,
+                                        quantity: e.target.checked ? 1 : (newArray[index].quantity || 1)
+                                      }
+                                      onChange(field.name, newArray)
+                                    }}
+                                    disabled={isReadonly}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  />
+                                  独立编码
+                                </label>
+                              </div>
+                            )}
                             {(() => {
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                               const isInstrument = item.category === 'instrument'
-                              
+
                               if (isInstrument) {
                                 return (
                                   <>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {fields.filter((f: any) => ['manufacturer', 'technical_params'].includes(f.name)).map((subField: any) => (
+                                    <div className="grid grid-cols-4 gap-2">
+                                      {fields.filter((f: any) => ['manage_code', 'serial_numbers', 'manufacturer', 'technical_params'].includes(f.name)).map((subField: any) => (
                                         <div key={subField.name}>
                                           <label className="block text-sm font-medium text-gray-700 mb-0.5">
                                             {subField.label}
@@ -2245,8 +2635,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                         <div className="w-0.5 h-4 bg-blue-500 rounded-full"></div>
                                         <h5 className="text-sm font-medium text-blue-800">校准证书信息</h5>
                                       </div>
-                                      <div className="grid grid-cols-4 gap-2">
-                                        {fields.filter((f: any) => ['serial_numbers', 'certificate_no', 'certificate_issuer', 'certificate_expiry_date'].includes(f.name)).map((subField: any) => (
+                                      <div className="grid grid-cols-3 gap-2">
+                                        {fields.filter((f: any) => ['certificate_no', 'certificate_issuer', 'certificate_expiry_date'].includes(f.name)).map((subField: any) => (
                                           <div key={subField.name}>
                                             <label className="block text-sm font-medium text-gray-700 mb-0.5">
                                               {subField.label}
@@ -2261,8 +2651,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                         ))}
                                       </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {fields.filter((f: any) => ['accessory_desc', 'item_notes'].includes(f.name)).map((subField: any) => (
+                                    <div className="grid grid-cols-1 gap-2">
+                                      {fields.filter((f: any) => ['item_notes'].includes(f.name)).map((subField: any) => (
                                         <div key={subField.name}>
                                           <label className="block text-sm font-medium text-gray-700 mb-0.5">
                                             {subField.label}
@@ -2279,10 +2669,18 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                   </>
                                 )
                               }
-                              
+
                               return (
                                 <div className="grid grid-cols-2 gap-2">
-                                  {fields.filter((f: any) => ['manufacturer', 'technical_params', 'accessory_desc', 'item_notes'].includes(f.name)).map((subField: any) => (
+                                  {fields.filter((f: any) => {
+                                    const baseFields = ['manufacturer', 'technical_params', 'item_notes'];
+                                    if (item.category !== 'fake_load') {
+                                      baseFields.push('manage_code', 'serial_numbers', 'accessory_desc');
+                                    } else {
+                                      baseFields.push('manage_code');
+                                    }
+                                    return baseFields.includes(f.name);
+                                  }).map((subField: any) => (
                                     <div key={subField.name}>
                                       <label className="block text-sm font-medium text-gray-700 mb-0.5">
                                         {subField.label}
@@ -2301,7 +2699,7 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                           </div>
                         </div>
 
-                        <div>
+                        <div className={(item.category === 'instrument' || item.category === 'fake_load' || item.category === 'cable') ? '' : 'hidden'}>
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">图片信息</h4>
@@ -2311,11 +2709,11 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                               return fields.map((subField: any) => {
                                 if (subField.type !== 'images') return null
-                                
+
                                 const imageValue = Array.isArray(item[subField.name]) ? item[subField.name] : []
                                 const imageLabel = subField.label
                                 const imageAccept = subField.accept || 'image/*'
-                                
+
                                 return (
                                   <div key={subField.name} className="border border-gray-200 rounded-lg p-2">
                                     <span className="text-sm font-medium text-gray-700">{imageLabel}</span>
@@ -2323,8 +2721,8 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                       <div className="grid grid-cols-3 gap-2 mt-2 mb-2">
                                         {imageValue.map((img: any, imgIndex: number) => (
                                           <div key={imgIndex} className="relative group">
-                                            <img 
-                                              src={typeof img === 'string' ? img : img.url} 
+                                            <img
+                                              src={typeof img === 'string' ? img : img.url}
                                               alt={`图片 ${imgIndex + 1}`}
                                               className="w-full h-16 object-cover rounded border border-gray-200"
                                             />
@@ -2333,9 +2731,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 type="button"
                                                 onClick={() => {
                                                   const newArray = [...arrayValue]
-                                                  newArray[index] = { 
-                                                    ...newArray[index], 
-                                                    [subField.name]: imageValue.filter((_: any, i: number) => i !== imgIndex) 
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    [subField.name]: imageValue.filter((_: any, i: number) => i !== imgIndex)
                                                   }
                                                   onChange(field.name, newArray)
                                                 }}
@@ -2376,9 +2774,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 })
                                                 const uploadedUrls = (await Promise.all(uploadPromises)).filter(Boolean)
                                                 const newArray = [...arrayValue]
-                                                newArray[index] = { 
-                                                  ...newArray[index], 
-                                                  [subField.name]: [...imageValue, ...uploadedUrls] 
+                                                newArray[index] = {
+                                                  ...newArray[index],
+                                                  [subField.name]: [...imageValue, ...uploadedUrls]
                                                 }
                                                 onChange(field.name, newArray)
                                               } catch (error) {
@@ -2393,11 +2791,12 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                     )}
                                   </div>
                                 )
-                            })})()}
+                              })
+                            })()}
                           </div>
                         </div>
 
-                        <div>
+                        <div className={(item.category === 'instrument' || item.category === 'fake_load' || item.category === 'cable') ? '' : 'hidden'}>
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                             <h4 className="text-base font-semibold text-gray-800">附件信息</h4>
@@ -2407,16 +2806,16 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                               const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                               return fields.map((subField: any) => {
                                 if (subField.type !== 'files') return null
-                                
+
                                 const filesValue = Array.isArray(item[subField.name]) ? item[subField.name] : []
-                                
+
                                 return (
                                   <div key={subField.name}>
                                     {filesValue.length > 0 && (
                                       <div className="space-y-1 mb-2">
                                         {filesValue.map((file: any, fileIndex: number) => (
                                           <div key={fileIndex} className="flex items-center justify-between bg-gray-50 px-3 py-1.5 rounded border border-gray-200">
-                                            <a 
+                                            <a
                                               href={typeof file === 'string' ? file : file.url}
                                               target="_blank"
                                               rel="noopener noreferrer"
@@ -2429,9 +2828,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 type="button"
                                                 onClick={() => {
                                                   const newArray = [...arrayValue]
-                                                  newArray[index] = { 
-                                                    ...newArray[index], 
-                                                    [subField.name]: filesValue.filter((_: any, i: number) => i !== fileIndex) 
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    [subField.name]: filesValue.filter((_: any, i: number) => i !== fileIndex)
                                                   }
                                                   onChange(field.name, newArray)
                                                 }}
@@ -2471,9 +2870,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                                 })
                                                 const uploadedFiles = (await Promise.all(uploadPromises)).filter(Boolean)
                                                 const newArray = [...arrayValue]
-                                                newArray[index] = { 
-                                                  ...newArray[index], 
-                                                  [subField.name]: [...filesValue, ...uploadedFiles] 
+                                                newArray[index] = {
+                                                  ...newArray[index],
+                                                  [subField.name]: [...filesValue, ...uploadedFiles]
                                                 }
                                                 onChange(field.name, newArray)
                                               } catch (error) {
@@ -2488,20 +2887,22 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                     )}
                                   </div>
                                 )
-                            })})()}
+                              })
+                            })()}
                           </div>
                         </div>
 
+                        {/* 只有仪器类设备显示配件清单；独立配件类本身已是配件，不显示配件清单 */}
                         {item.category === 'instrument' && (() => {
                           const fields = Array.isArray(arrayConfig?.fields) ? arrayConfig.fields : []
                           const accessoryListField = fields.find((f: any) => f.name === 'accessory_list')
                           if (!accessoryListField) return null
-                          
+
                           const accessoryValue = Array.isArray(item.accessory_list) ? item.accessory_list : []
                           const accessoryFields = Array.isArray(accessoryListField.arrayConfig?.fields) ? accessoryListField.arrayConfig.fields : []
-                          
+
                           return (
-                            <div className="border-b border-gray-200 pb-3">
+                            <div className="border-b border-gray-200 pb-3" key="instrument-info">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-1 h-5 bg-blue-600 rounded-full"></div>
                                 <h4 className="text-base font-semibold text-gray-800">配件清单</h4>
@@ -2517,9 +2918,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                       })
                                       newItem.id = `accessory-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                                       const newArray = [...arrayValue]
-                                      newArray[index] = { 
-                                        ...newArray[index], 
-                                        accessory_list: [...accessoryValue, newItem] 
+                                      newArray[index] = {
+                                        ...newArray[index],
+                                        accessory_list: [...accessoryValue, newItem]
                                       }
                                       onChange(field.name, newArray)
                                     }}
@@ -2539,96 +2940,221 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                               ) : (
                                 <div className="space-y-2">
                                   {accessoryValue.map((accItem: any, accIndex: number) => (
-                                    <div key={accIndex} className="bg-white border border-gray-200 rounded-lg p-2 shadow-sm hover:shadow-md transition-shadow">
+                                    <div key={accItem.id || accIndex} className="bg-white border border-gray-200 rounded-lg p-2 shadow-sm hover:shadow-md transition-shadow">
                                       <div className="flex items-start gap-3">
                                         <span className="text-sm font-medium text-gray-600 w-8 flex-shrink-0">{accIndex + 1}</span>
-                                        <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-2">
-                                          <div className="flex flex-col gap-1">
-                                            <label className="text-xs font-medium text-gray-500">配件名称</label>
-                                            <input
-                                              type="text"
-                                              value={accItem.accessory_name || ''}
-                                              onChange={(e) => {
-                                                const newArray = [...arrayValue]
-                                                newArray[index] = { 
-                                                  ...newArray[index], 
-                                                  accessory_list: accessoryValue.map((item: any, i: number) => 
-                                                    i === accIndex ? { ...item, accessory_name: e.target.value } : item
-                                                  ) 
-                                                }
-                                                onChange(field.name, newArray)
-                                              }}
-                                              disabled={isReadonly}
-                                              className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
-                                            />
+                                        <div className="flex-1 space-y-2">
+                                          <div className="flex items-center gap-2">
+                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                                              <input
+                                                type="checkbox"
+                                                checked={accItem.is_independent_code === true || accItem.is_independent_code === 'true'}
+                                                onChange={(e) => {
+                                                  const newArray = [...arrayValue]
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                      i === accIndex ? {
+                                                        ...item,
+                                                        is_independent_code: e.target.checked,
+                                                        accessory_quantity: e.target.checked ? 1 : (item.accessory_quantity || 1)
+                                                      } : item
+                                                    )
+                                                  }
+                                                  onChange(field.name, newArray)
+                                                }}
+                                                disabled={isReadonly}
+                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                              />
+                                              独立编码
+                                            </label>
                                           </div>
-                                          <div className="flex flex-col gap-1">
-                                            <label className="text-xs font-medium text-gray-500">规格型号</label>
-                                            <input
-                                              type="text"
-                                              value={accItem.accessory_model || ''}
-                                              onChange={(e) => {
-                                                const newArray = [...arrayValue]
-                                                newArray[index] = { 
-                                                  ...newArray[index], 
-                                                  accessory_list: accessoryValue.map((item: any, i: number) => 
-                                                    i === accIndex ? { ...item, accessory_model: e.target.value } : item
-                                                  ) 
-                                                }
-                                                onChange(field.name, newArray)
-                                              }}
-                                              disabled={isReadonly}
-                                              className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
-                                            />
+                                          <div className="grid grid-cols-3 gap-3">
+                                            <div className="flex flex-col gap-1">
+                                              <label className="text-xs font-medium text-gray-500">配件名称</label>
+                                              {renderAccessoryNameField(
+                                                accItem.accessory_name || '',
+                                                accItem,
+                                                (updates) => {
+                                                  const newArray = [...arrayValue]
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                      i === accIndex ? { ...item, ...updates, accessory_model: '' } : item
+                                                    )
+                                                  }
+                                                  onChange(field.name, newArray)
+                                                },
+                                                isReadonly,
+                                                "配件名称",
+                                                "accessory_name"
+                                              )}
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <label className="text-xs font-medium text-gray-500">规格型号</label>
+                                              {renderAccessoryModelField(
+                                                accItem.accessory_model || '',
+                                                accItem,
+                                                (updates) => {
+                                                  const newArray = [...arrayValue]
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                      i === accIndex ? { ...item, ...updates } : item
+                                                    )
+                                                  }
+                                                  onChange(field.name, newArray)
+                                                },
+                                                isReadonly,
+                                                "规格型号",
+                                                "accessory_model",
+                                                "accessory_name"
+                                              )}
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <label className="text-xs font-medium text-gray-500">单位</label>
+                                              <select
+                                                value={accItem.accessory_unit || ''}
+                                                onChange={(e) => {
+                                                  const newArray = [...arrayValue]
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                      i === accIndex ? { ...item, accessory_unit: e.target.value } : item
+                                                    )
+                                                  }
+                                                  onChange(field.name, newArray)
+                                                }}
+                                                disabled={isReadonly}
+                                                className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                                              >
+                                                <option value="">-</option>
+                                                <option value="个">个</option>
+                                                <option value="套">套</option>
+                                                <option value="件">件</option>
+                                                <option value="台">台</option>
+                                                <option value="把">把</option>
+                                                <option value="根">根</option>
+                                                <option value="块">块</option>
+                                                <option value="张">张</option>
+                                                <option value="条">条</option>
+                                                <option value="支">支</option>
+                                              </select>
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <label className="text-xs font-medium text-gray-500">数量</label>
+                                              <input
+                                                type="number"
+                                                value={accItem.accessory_quantity || ''}
+                                                onChange={(e) => {
+                                                  const newArray = [...arrayValue]
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                      i === accIndex ? { ...item, accessory_quantity: Number(e.target.value) } : item
+                                                    )
+                                                  }
+                                                  onChange(field.name, newArray)
+                                                }}
+                                                disabled={isReadonly || accItem.is_independent_code === true || accItem.is_independent_code === 'true'}
+                                                className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly || accItem.is_independent_code === true || accItem.is_independent_code === 'true' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                              />
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                              <label className="text-xs font-medium text-gray-500">管理编码</label>
+                                              <input
+                                                type="text"
+                                                value={accItem.manage_code || ''}
+                                                onChange={(e) => {
+                                                  const newArray = [...arrayValue]
+                                                  newArray[index] = {
+                                                    ...newArray[index],
+                                                    accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                      i === accIndex ? { ...item, manage_code: e.target.value } : item
+                                                    )
+                                                  }
+                                                  onChange(field.name, newArray)
+                                                }}
+                                                disabled={isReadonly || !(accItem.is_independent_code === true || accItem.is_independent_code === 'true')}
+                                                placeholder="选填"
+                                                className={`w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 ${isReadonly || !(accItem.is_independent_code === true || accItem.is_independent_code === 'true') ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                                              />
+                                            </div>
                                           </div>
-                                          <div className="flex flex-col gap-1">
-                                            <label className="text-xs font-medium text-gray-500">数量</label>
-                                            <input
-                                              type="number"
-                                              value={accItem.accessory_quantity || ''}
-                                              onChange={(e) => {
-                                                const newArray = [...arrayValue]
-                                                newArray[index] = { 
-                                                  ...newArray[index], 
-                                                  accessory_list: accessoryValue.map((item: any, i: number) => 
-                                                    i === accIndex ? { ...item, accessory_quantity: Number(e.target.value) } : item
-                                                  ) 
-                                                }
-                                                onChange(field.name, newArray)
-                                              }}
-                                              disabled={isReadonly}
-                                              className="w-full max-w-[120px] text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
-                                            />
-                                          </div>
-                                          <div className="flex flex-col gap-1">
-                                            <label className="text-xs font-medium text-gray-500">单位</label>
-                                            <select
-                                              value={accItem.accessory_unit || ''}
-                                              onChange={(e) => {
-                                                const newArray = [...arrayValue]
-                                                newArray[index] = { 
-                                                  ...newArray[index], 
-                                                  accessory_list: accessoryValue.map((item: any, i: number) => 
-                                                    i === accIndex ? { ...item, accessory_unit: e.target.value } : item
-                                                  ) 
-                                                }
-                                                onChange(field.name, newArray)
-                                              }}
-                                              disabled={isReadonly}
-                                              className="w-full max-w-[100px] text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
-                                            >
-                                              <option value="">-</option>
-                                              <option value="个">个</option>
-                                              <option value="套">套</option>
-                                              <option value="件">件</option>
-                                              <option value="台">台</option>
-                                              <option value="把">把</option>
-                                              <option value="根">根</option>
-                                              <option value="块">块</option>
-                                              <option value="张">张</option>
-                                              <option value="条">条</option>
-                                              <option value="支">支</option>
-                                            </select>
+                                          <div className="col-span-2 mt-2">
+                                            <label className="text-xs font-medium text-gray-500 mb-1 block">图片</label>
+                                            <div className="flex flex-wrap gap-2">
+                                              {Array.isArray(accItem.accessory_images) && accItem.accessory_images.map((img: any, imgIdx: number) => (
+                                                <div key={imgIdx} className="relative group">
+                                                  <img
+                                                    src={typeof img === 'string' ? img : img.url}
+                                                    alt={`配件图片 ${imgIdx + 1}`}
+                                                    className="w-16 h-16 object-cover rounded border border-gray-200"
+                                                  />
+                                                  {!isReadonly && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        const newArray = [...arrayValue]
+                                                        newArray[index] = {
+                                                          ...newArray[index],
+                                                          accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                            i === accIndex ? {
+                                                              ...item,
+                                                              accessory_images: (item.accessory_images || []).filter((_: any, idx: number) => idx !== imgIdx)
+                                                            } : item
+                                                          )
+                                                        }
+                                                        onChange(field.name, newArray)
+                                                      }}
+                                                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100"
+                                                    >
+                                                      ×
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              ))}
+                                              {!isReadonly && (
+                                                <label className="flex items-center justify-center px-3 py-1.5 border border-dashed border-gray-300 rounded cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                                                  <span className="text-gray-500 text-sm">+ 上传</span>
+                                                  <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    multiple
+                                                    className="hidden"
+                                                    onChange={async (e) => {
+                                                      const files = Array.from(e.target.files || [])
+                                                      if (files.length > 0) {
+                                                        const token = localStorage.getItem('token')
+                                                        const uploadPromises = files.map(async (file) => {
+                                                          const formData = new FormData()
+                                                          formData.append('file', file)
+                                                          const response = await fetch(`${API_URL.BASE}/api/upload/upload`, {
+                                                            method: 'POST',
+                                                            headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                                                            body: formData
+                                                          })
+                                                          const result = await response.json()
+                                                          return result.success ? result.fileUrl : null
+                                                        })
+                                                        const uploadedUrls = (await Promise.all(uploadPromises)).filter(Boolean)
+                                                        const newArray = [...arrayValue]
+                                                        newArray[index] = {
+                                                          ...newArray[index],
+                                                          accessory_list: accessoryValue.map((item: any, i: number) =>
+                                                            i === accIndex ? {
+                                                              ...item,
+                                                              accessory_images: [...(item.accessory_images || []), ...uploadedUrls]
+                                                            } : item
+                                                          )
+                                                        }
+                                                        onChange(field.name, newArray)
+                                                      }
+                                                    }}
+                                                  />
+                                                </label>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                         {!isReadonly && (
@@ -2636,9 +3162,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                                             type="button"
                                             onClick={() => {
                                               const newArray = [...arrayValue]
-                                              newArray[index] = { 
-                                                ...newArray[index], 
-                                                accessory_list: accessoryValue.filter((_: any, i: number) => i !== accIndex) 
+                                              newArray[index] = {
+                                                ...newArray[index],
+                                                accessory_list: accessoryValue.filter((_: any, i: number) => i !== accIndex)
                                               }
                                               onChange(field.name, newArray)
                                             }}
@@ -2658,9 +3184,9 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                             </div>
                           )
                         })()}
-                      </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
                 </div>
               )}
               {!isReadonly && (
@@ -2672,22 +3198,22 @@ const FormTemplateRenderer: React.FC<FormTemplateRendererProps> = ({
                       console.log('[FormTemplateRenderer] field.name:', field.name)
                       console.log('[FormTemplateRenderer] arrayValue:', arrayValue)
                       console.log('[FormTemplateRenderer] arrayConfig.fields:', arrayConfig.fields)
-                      
+
                       const newItem: any = {}
-                      ;(Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []).forEach((f: any) => {
-                        if (f.type === 'array') {
-                          newItem[f.name] = []
-                        } else {
-                          newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : (f.type === 'number' ? 0 : '')
-                        }
-                      })
+                        ; (Array.isArray(arrayConfig.fields) ? arrayConfig.fields : []).forEach((f: any) => {
+                          if (f.type === 'array') {
+                            newItem[f.name] = []
+                          } else {
+                            newItem[f.name] = f.defaultValue !== undefined ? f.defaultValue : (f.type === 'number' ? 0 : '')
+                          }
+                        })
                       newItem.id = `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
                       newItem.isCustomName = false
                       newItem.isCustomModel = false
-                      
+
                       console.log('[FormTemplateRenderer] newItem:', newItem)
                       console.log('[FormTemplateRenderer] 调用 onChange，参数:', field.name, [...arrayValue, newItem])
-                      
+
                       onChange(field.name, [...arrayValue, newItem])
                     }}
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center"

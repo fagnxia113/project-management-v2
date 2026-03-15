@@ -72,9 +72,11 @@ export class WarehouseRepository {
      * 创建仓库
      */
     async create(data: Prisma.warehousesCreateInput): Promise<Warehouse> {
+        const id = data.id || require('uuid').v4();
         return this.db.warehouses.create({
             data: {
                 ...data,
+                id,
                 created_at: new Date(),
                 updated_at: new Date()
             }

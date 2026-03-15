@@ -2,6 +2,7 @@
  * 认证路由 - 连接真实数据库
  */
 import { Router, Request, Response } from 'express'
+import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../database/connection.js'
@@ -29,15 +30,16 @@ async function ensureUsersTable() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `)
-  
-// 检查是否有默认管理员，没有则插入
-  const count = await db.queryOne<{count: number}>('SELECT COUNT(*) as count FROM users')
+
+  // 检查是否有默认管理员，没有则插入
+  const count = await db.queryOne<{ count: number }>('SELECT COUNT(*) as count FROM users')
   if (!count || count.count === 0) {
+    const hashedPassword = await bcrypt.hash('admin123', 10)
     await db.query(`
       INSERT INTO users (id, username, password, name, email, role) VALUES
-      ('1', 'admin', 'admin123', '管理员', 'admin@company.com', 'admin')
-    `)
-    logger.info('默认管理员已初始化')
+      ('1', 'admin', ?, '管理员', 'admin@company.com', 'admin')
+    `, [hashedPassword])
+    logger.info('默认管理员已初始化（密码已哈希）')
   }
 }
 
@@ -52,11 +54,20 @@ router.post('/login', validateBody([
   const { username, password } = req.body
 
   const user = await db.queryOne<{ id: string; username: string; password: string; name: string; email: string; role: string; status: string }>(
-    'SELECT * FROM users WHERE username = ? AND password = ?',
-    [username, password]
+    'SELECT * FROM users WHERE username = ?',
+    [username]
   )
-  
+
   if (!user) {
+    throw new AuthenticationError('用户名或密码错误')
+  }
+
+  // 支持 bcrypt 哈希和明文密码的兼容性验证（迁移过渡期）
+  const isPasswordValid = user.password.startsWith('$2')
+    ? await bcrypt.compare(password, user.password)
+    : password === user.password
+
+  if (!isPasswordValid) {
     throw new AuthenticationError('用户名或密码错误')
   }
 
@@ -87,19 +98,19 @@ router.post('/login', validateBody([
 // 验证Token
 router.get('/verify', asyncHandler(async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization
-    
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new AuthenticationError('未提供认证令牌')
   }
 
   const token = authHeader.substring(7)
   const decoded = jwtService.verifyToken(token)
-    
+
   const user = await db.queryOne<{ id: string; username: string; name: string; email: string; role: string; status: string }>(
     'SELECT id, username, name, email, role, status FROM users WHERE id = ?',
     [decoded.id]
   )
-    
+
   if (!user) {
     throw new AuthenticationError('用户不存在')
   }
@@ -117,7 +128,7 @@ router.get('/verify', asyncHandler(async (req: Request, res: Response) => {
 }))
 
 // 登出
-router.post('/logout', asyncHandler((req: Request, res: Response) => {
+router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, message: '已退出登录' })
 }))
 
@@ -132,16 +143,17 @@ router.get('/users', asyncHandler(async (req: Request, res: Response) => {
 // 新增用户（管理员权限）
 router.post('/users', asyncHandler(async (req: Request, res: Response) => {
   const { username, password, name, email, role } = req.body
-  
+
   const existing = await db.queryOne('SELECT id FROM users WHERE username = ?', [username])
   if (existing) {
     throw new ValidationError('用户名已存在')
   }
 
   const id = uuidv4()
+  const hashedPassword = await bcrypt.hash(password, 10)
   await db.insert(
     'INSERT INTO users (id, username, password, name, email, role) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, username, password, name, email || `${username}@company.com`, role || 'user']
+    [id, username, hashedPassword, name, email || `${username}@company.com`, role || 'user']
   )
 
   res.json({ success: true, message: '用户创建成功', data: { id } })
@@ -163,7 +175,7 @@ router.put('/users/:id', asyncHandler(async (req: Request, res: Response) => {
 // 删除用户（管理员权限）
 router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
-  
+
   const user = await db.queryOne<{ username: string }>('SELECT username FROM users WHERE id = ?', [id])
   if (user?.username === 'admin') {
     throw new ValidationError('不能删除管理员账号')
@@ -176,35 +188,35 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
     const definitions = await connection.query<any>(
       'SELECT id, node_config FROM workflow_definitions'
     )
-    
+
     for (const def of definitions) {
       let nodeConfig = def.node_config
       let updated = false
-      
+
       if (typeof nodeConfig === 'string') {
         nodeConfig = JSON.parse(nodeConfig)
       }
-      
+
       if (nodeConfig && nodeConfig.nodes) {
-          nodeConfig.nodes.forEach((node: any) => {
-            if (node.config && node.config.approverSource) {
-              if (node.config.approverSource.type === 'user') {
-                const userIds = node.config.approverSource.value ? node.config.approverSource.value.split(',') : []
-                const filteredUserIds = userIds.filter((uid: string) => uid !== id)
-                
-                if (filteredUserIds.length !== userIds.length) {
-                  updated = true
-                  if (filteredUserIds.length === 0) {
-                    delete node.config.approverSource
-                  } else {
-                    node.config.approverSource.value = filteredUserIds.join(',')
-                  }
+        nodeConfig.nodes.forEach((node: any) => {
+          if (node.config && node.config.approverSource) {
+            if (node.config.approverSource.type === 'user') {
+              const userIds = node.config.approverSource.value ? node.config.approverSource.value.split(',') : []
+              const filteredUserIds = userIds.filter((uid: string) => uid !== id)
+
+              if (filteredUserIds.length !== userIds.length) {
+                updated = true
+                if (filteredUserIds.length === 0) {
+                  delete node.config.approverSource
+                } else {
+                  node.config.approverSource.value = filteredUserIds.join(',')
                 }
               }
             }
-          })
-        }
-        
+          }
+        })
+      }
+
       if (updated) {
         await connection.execute(
           'UPDATE workflow_definitions SET node_config = ? WHERE id = ?',
@@ -245,12 +257,13 @@ router.patch('/users/:id/status', asyncHandler(async (req: Request, res: Respons
 router.post('/users/:id/reset-password', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
   const { newPassword } = req.body
-  
+
   if (!newPassword || newPassword.length < 6) {
     throw new ValidationError('密码长度至少6位')
   }
 
-  await db.update('UPDATE users SET password = ? WHERE id = ?', [newPassword, id])
+  const hashedPassword = await bcrypt.hash(newPassword, 10)
+  await db.update('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, id])
   res.json({ success: true, message: '密码重置成功' })
 }))
 
@@ -258,7 +271,7 @@ router.post('/users/:id/reset-password', asyncHandler(async (req: Request, res: 
 router.put('/users/:id/username', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params
   const { username } = req.body
-  
+
   if (!username || username.length < 3) {
     throw new ValidationError('用户名长度至少3位')
   }
@@ -286,15 +299,25 @@ router.post('/change-password', asyncHandler(async (req: Request, res: Response)
 
   const token = authHeader.substring(7)
   const decoded = jwtService.verifyToken(token)
-  
+
   const { oldPassword, newPassword } = req.body
-  
+
   const user = await db.queryOne<{ password: string }>('SELECT password FROM users WHERE id = ?', [decoded.id])
-  if (!user || user.password !== oldPassword) {
+  if (!user) {
+    throw new ValidationError('用户不存在')
+  }
+
+  // 兼容 bcrypt 哈希和明文密码
+  const isOldPasswordValid = user.password.startsWith('$2')
+    ? await bcrypt.compare(oldPassword, user.password)
+    : oldPassword === user.password
+
+  if (!isOldPasswordValid) {
     throw new ValidationError('原密码错误')
   }
 
-  await db.update('UPDATE users SET password = ? WHERE id = ?', [newPassword, decoded.id])
+  const hashedPassword = await bcrypt.hash(newPassword, 10)
+  await db.update('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, decoded.id])
   res.json({ success: true, message: '密码修改成功' })
 }))
 

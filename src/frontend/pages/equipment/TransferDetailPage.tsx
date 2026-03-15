@@ -8,7 +8,7 @@ interface AccessoryItem {
   accessory_id: string
   accessory_name: string
   accessory_model: string
-  accessory_category: 'instrument' | 'fake_load' | 'cable'
+  accessory_category: 'instrument' | 'fake_load' | 'accessory'
   accessory_quantity: number
   is_required: boolean
   accessory_notes: string | null
@@ -24,7 +24,7 @@ interface TransferItem {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'cable'
+  category: 'instrument' | 'fake_load' | 'accessory'
   unit: string
   manage_code: string | null
   serial_number: string | null
@@ -93,6 +93,8 @@ interface TransferOrder {
   received_at: string | null
   received_by: string | null
   receive_comment: string | null
+  shipping_no: string | null
+  shipping_attachment: string | null
   shipping_package_images?: string[]
   receiving_package_images?: string[]
   
@@ -150,7 +152,7 @@ export default function TransferDetailPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_URL.BASE}/api/equipment/transfers/${id}`, {
+      const response = await fetch(`${API_URL.BASE}/api/equipment/v3/transfer/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const result = await response.json()
@@ -164,6 +166,9 @@ export default function TransferDetailPage() {
           });
         }
         setOrder(result.data)
+      } else if (result.id || result.order_no) {
+        console.log('[TransferDetail] 调拨单数据:', result);
+        setOrder(result)
       } else {
         alert('调拨单不存在')
         navigate('/approvals/mine')
@@ -265,29 +270,30 @@ export default function TransferDetailPage() {
     setActionLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_URL.BASE}/api/equipment/transfers/${order.id}/ship`, {
-        method: 'PUT',
+      const response = await fetch(`${API_URL.BASE}/api/equipment/v3/transfer/${order.id}/dispatch`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          shipped_at: shippingData.shipped_at || undefined,
-          shipping_no: shippingData.shipping_no || undefined,
-          shipping_attachment: shippingData.shipping_attachment || undefined,
-          item_images: shippingData.item_images,
-          package_images: shippingData.package_images
+          dispatch_overall_image: shippingData.package_images?.[0] || '',
+          dispatcher_id: localStorage.getItem('userId') || '',
+          items: order.items.map((item: any) => ({
+            item_id: item.id,
+            dispatch_item_image: shippingData.item_images?.[0] || ''
+          }))
         })
       })
       
       const result = await response.json()
-      if (result.success) {
+      if (result.success || response.ok) {
         alert('发货成功')
         setShowShippingDialog(false)
         setShippingData({ shipped_at: '', shipping_no: '', shipping_attachment: '', item_images: [], package_images: [] })
         loadOrder()
       } else {
-        alert('发货失败：' + result.error)
+        alert('发货失败：' + (result.error || '未知错误'))
       }
     } catch (error) {
       console.error('发货失败:', error)
@@ -316,30 +322,31 @@ export default function TransferDetailPage() {
     setActionLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`${API_URL.BASE}/api/equipment/transfers/${order.id}/receive`, {
-        method: 'PUT',
+      const response = await fetch(`${API_URL.BASE}/api/equipment/v3/transfer/${order.id}/receive`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          received_at: receivingData.received_at || undefined,
-          receive_status: receivingData.receive_status || undefined,
-          receive_comment: receivingData.receive_comment || undefined,
-          item_images: receivingData.item_images,
-          package_images: receivingData.package_images,
-          received_items: receivingData.received_items
+          receive_overall_image: receivingData.package_images?.[0] || '',
+          receiver_id: localStorage.getItem('userId') || '',
+          items: order.items.map((item: any, idx: number) => ({
+            item_id: item.id,
+            actual_qty: receivingData.received_items?.[idx]?.received_quantity || item.quantity || 1,
+            receive_item_image: receivingData.item_images?.[0] || ''
+          }))
         })
       })
       
       const result = await response.json()
-      if (result.success) {
+      if (result.success || response.ok) {
         alert('收货成功')
         setShowReceivingDialog(false)
         setReceivingData({ received_at: '', receive_status: 'normal', receive_comment: '', item_images: [], package_images: [], received_items: [] })
         loadOrder()
       } else {
-        alert('收货失败：' + result.error)
+        alert('收货失败：' + (result.error || '未知错误'))
       }
     } catch (error) {
       console.error('收货失败:', error)
@@ -519,7 +526,7 @@ export default function TransferDetailPage() {
     const labels: Record<string, string> = {
       instrument: '仪器类',
       fake_load: '假负载类',
-      cable: '线材类'
+      accessory: '配件类'
     }
     return labels[category] || category
   }
@@ -720,7 +727,7 @@ export default function TransferDetailPage() {
                               'bg-green-100 text-green-700'
                             }`}>
                               {accessory.accessory_category === 'instrument' ? '仪器类' :
-                               accessory.accessory_category === 'fake_load' ? '假负载类' : '线材类'}
+                               accessory.accessory_category === 'fake_load' ? '假负载类' : '配件类'}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm">{accessory.accessory_quantity}</td>
@@ -998,7 +1005,7 @@ export default function TransferDetailPage() {
                             item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                             'bg-green-100 text-green-700'
                           }`}>
-                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                           </span>
                           {item.category !== 'instrument' && <span className="text-sm text-gray-500 ml-2">x{item.quantity}</span>}
                         </div>
@@ -1169,7 +1176,7 @@ export default function TransferDetailPage() {
                             item.category === 'fake_load' ? 'bg-orange-100 text-orange-700' :
                             'bg-green-100 text-green-700'
                           }`}>
-                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '线材类'}
+                            {item.category === 'instrument' ? '仪器类' : item.category === 'fake_load' ? '假负载类' : '配件类'}
                           </span>
                           {item.category !== 'instrument' && <span className="text-sm text-gray-500 ml-2">x{item.quantity}</span>}
                         </div>

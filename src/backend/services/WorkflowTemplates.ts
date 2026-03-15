@@ -1061,9 +1061,9 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
             required: true,
             placeholder: '请选择设备类别',
             options: [
-              { label: '仪器类', value: 'instrument' },
-              { label: '假负载类', value: 'fake_load' },
-              { label: '线材类', value: 'cable' }
+              { label: '仪器', value: 'instrument' },
+              { label: '假负载', value: 'fake_load' },
+              { label: '独立配件', value: 'accessory' }
             ]
           },
           {
@@ -1133,18 +1133,33 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
             placeholder: '请输入单价'
           },
           {
-            name: 'serial_numbers',
-            label: '序列号',
+            name: 'manage_code',
+            label: '管理编码',
             type: 'text',
             required: false,
-            placeholder: '请输入序列号'
+            placeholder: '请输入管理编码（选填）',
+            visibleOn: ['start', 'warehouse-manager'],
+            editableOn: ['start']
+          },
+          {
+            name: 'serial_numbers',
+            label: '机身序列号',
+            type: 'text',
+            required: false,
+            placeholder: '请输入机身序列号（选填）',
+            visibleOn: ['start', 'warehouse-manager'],
+            editableOn: ['start']
           },
           {
             name: 'manufacturer',
-            label: '生产厂家',
+            label: '品牌',
             type: 'text',
             required: false,
-            placeholder: '请输入生产厂家'
+            placeholder: '请输入品牌',
+            visibleWhen: {
+              field: 'category',
+              in: ['instrument', 'fake_load']
+            }
           },
           {
             name: 'technical_params',
@@ -1152,35 +1167,44 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
             type: 'textarea',
             required: false,
             placeholder: '请输入技术参数',
-            rows: 2
+            rows: 2,
+            visibleWhen: {
+              field: 'category',
+              in: ['instrument', 'fake_load']
+            }
           },
           {
             name: 'certificate_no',
             label: '校准证书编号',
             type: 'text',
             required: false,
-            placeholder: '请输入证书编号'
+            placeholder: '请输入证书编号',
+            visibleWhen: {
+              field: 'category',
+              equals: 'instrument'
+            }
           },
           {
             name: 'certificate_issuer',
             label: '发证单位',
             type: 'text',
             required: false,
-            placeholder: '请输入发证单位'
+            placeholder: '请输入发证单位',
+            visibleWhen: {
+              field: 'category',
+              equals: 'instrument'
+            }
           },
           {
             name: 'certificate_expiry_date',
             label: '校准证书到期时间',
             type: 'date',
             required: false,
-            placeholder: '请输入证书到期时间'
-          },
-          {
-            name: 'accessory_desc',
-            label: '配件情况',
-            type: 'text',
-            required: false,
-            placeholder: '请输入配件描述'
+            placeholder: '请输入证书到期时间',
+            visibleWhen: {
+              field: 'category',
+              equals: 'instrument'
+            }
           },
           {
             name: 'item_notes',
@@ -1188,30 +1212,31 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
             type: 'textarea',
             required: false,
             placeholder: '请输入备注',
-            rows: 2
+            rows: 2,
+            visibleWhen: {
+              field: 'category',
+              notIn: ['accessory']
+            }
           },
           {
-            name: 'main_images',
-            label: '主机图片',
+            name: 'images',
+            label: '图片信息',
             type: 'images',
             required: false,
-            placeholder: '请上传主机图片',
-            accept: 'image/*'
-          },
-          {
-            name: 'accessory_images',
-            label: '配件图片',
-            type: 'images',
-            required: false,
-            placeholder: '请上传配件图片',
+            placeholder: '请上传图片',
             accept: 'image/*'
           },
           {
             name: 'attachments',
-            label: '附件信息',
+            label: '附件',
             type: 'files',
             required: false,
-            placeholder: '请上传附件'
+            placeholder: '请上传附件',
+            accept: '*',
+            visibleWhen: {
+              field: 'category',
+              in: ['instrument', 'fake_load']
+            }
           },
           {
             name: 'accessory_list',
@@ -1219,9 +1244,9 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
             type: 'array',
             required: false,
             placeholder: '请添加配件清单',
-            showCondition: {
+            visibleWhen: {
               field: 'category',
-              value: 'instrument'
+              in: ['instrument', 'accessory']
             },
             arrayConfig: {
               fields: [
@@ -1231,6 +1256,13 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
                   type: 'text',
                   required: true,
                   placeholder: '请输入配件名称'
+                },
+                {
+                  name: 'is_independent_code',
+                  label: '独立编码',
+                  type: 'boolean',
+                  required: false,
+                  defaultValue: false
                 },
                 {
                   name: 'accessory_model',
@@ -1253,19 +1285,42 @@ export const EQUIPMENT_INBOUND_TEMPLATE: WorkflowTemplate = {
                   type: 'select',
                   required: false,
                   placeholder: '请选择单位',
-                  defaultValue: 'piece',
+                  defaultValue: '个',
                   options: [
-                    { label: '个', value: 'piece' },
-                    { label: '套', value: 'set' },
-                    { label: '件', value: 'item' },
-                    { label: '台', value: 'unit' },
-                    { label: '把', value: 'handle' },
-                    { label: '根', value: 'root' },
-                    { label: '块', value: 'block' },
-                    { label: '张', value: 'sheet' },
-                    { label: '条', value: 'strip' },
-                    { label: '支', value: 'branch' }
+                    { label: '个', value: '个' },
+                    { label: '套', value: '套' },
+                    { label: '件', value: '件' },
+                    { label: '台', value: '台' },
+                    { label: '把', value: '把' },
+                    { label: '根', value: '根' },
+                    { label: '块', value: '块' },
+                    { label: '张', value: '张' },
+                    { label: '条', value: '条' },
+                    { label: '支', value: '支' }
                   ]
+                },
+                {
+                  name: 'accessory_purchase_price',
+                  label: '采购单价',
+                  type: 'number',
+                  required: false,
+                  placeholder: '请输入采购单价'
+                },
+                {
+                  name: 'accessory_images',
+                  label: '图片',
+                  type: 'images',
+                  required: false,
+                  placeholder: '请上传配件图片',
+                  accept: 'image/*'
+                },
+                {
+                  name: 'accessory_notes',
+                  label: '备注',
+                  type: 'textarea',
+                  required: false,
+                  placeholder: '请输入备注',
+                  rows: 2
                 }
               ]
             }
@@ -1744,9 +1799,8 @@ export const EQUIPMENT_REPAIR_TEMPLATE: WorkflowTemplate = {
           type: 'select',
           required: true,
           options: [
-            { label: '仪器类', value: 'instrument' },
-            { label: '假负载类', value: 'fake_load' },
-            { label: '线材类', value: 'cable' }
+            { label: '仪器', value: 'instrument' },
+            { label: '假负载', value: 'fake_load' }
           ]
         },
         {

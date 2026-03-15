@@ -6,10 +6,10 @@ import { API_URL, parseJWTToken } from '../config/api'
 interface MenuItem {
   label: string
   path?: string
-  icon: string
+  icon?: string
   badge?: number
   adminOnly?: boolean
-  children?: { label: string; path: string; badge?: number; adminOnly?: boolean }[]
+  children?: MenuItem[]
 }
 
 // 图标定义
@@ -193,26 +193,30 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc]">
+    <div className="flex h-screen bg-[#f8fafc] bg-mesh overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 flex flex-col shadow-2xl z-50">
+      <aside className="w-72 bg-slate-900 flex flex-col shadow-2xl z-50 relative overflow-hidden group/sidebar">
+        {/* 背景装饰 */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
+
         {/* Logo区域 */}
-        <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="p-8 relative z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/40 group-hover/sidebar:scale-105 transition-transform duration-500">
+              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-white font-black tracking-tight text-lg leading-tight">项目管理系统</h1>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Enterprise OS</p>
+              <h1 className="text-white font-black tracking-tighter text-xl leading-none">四为项目</h1>
+              <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.3em] mt-1 opacity-70">Management</p>
             </div>
           </div>
         </div>
 
         {/* 导航菜单 */}
-        <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar pt-4">
+        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto custom-scrollbar pt-4 relative z-10">
           {menuConfig.map((item) => (
             <div key={item.label} className="space-y-1">
               {item.children ? (
@@ -220,20 +224,22 @@ export default function Layout({ children }: { children: ReactNode }) {
                   {/* 有子菜单的项 */}
                   <button
                     onClick={() => setExpanded(prev => ({ ...prev, [item.label]: !prev[item.label] }))}
-                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all group ${
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all group ${
                       expanded[item.label] 
-                        ? 'text-white bg-slate-800' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        ? 'text-white bg-white/5' 
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <svg className="w-5 h-5 opacity-70 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[item.icon]} />
-                      </svg>
-                      <span className="text-sm font-bold tracking-tight">{item.label}</span>
+                    <div className="flex items-center gap-3.5">
+                      <div className={`p-1.5 rounded-lg transition-colors ${expanded[item.label] ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon ? icons[item.icon] : ''} />
+                        </svg>
+                      </div>
+                      <span className="text-[13px] font-bold tracking-tight">{item.label}</span>
                     </div>
                     <svg 
-                      className={`w-4 h-4 transition-transform duration-300 ${expanded[item.label] ? 'rotate-180' : ''}`} 
+                      className={`w-4 h-4 transition-transform duration-500 ${expanded[item.label] ? 'rotate-180' : ''} text-slate-600`} 
                       fill="none" 
                       viewBox="0 0 24 24" 
                       stroke="currentColor"
@@ -244,28 +250,31 @@ export default function Layout({ children }: { children: ReactNode }) {
                   
                   {/* 子菜单 */}
                   {expanded[item.label] && (
-                    <div className="pl-12 space-y-1 animate-in slide-in-from-top-2 duration-300">
+                    <div className="pl-12 pr-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-500">
                       {item.children.map(child => (
                         <button
-                          key={child.path}
-                          onClick={() => navigate(child.path)}
-                          className={`w-full text-left px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-between ${
-                            isActivePath(child.path) 
+                          key={child.path || child.label}
+                          onClick={() => child.path && navigate(child.path)}
+                          className={`w-full text-left px-4 py-2.5 text-xs font-bold rounded-xl transition-all flex items-center justify-between group/sub ${
+                            child.path && isActivePath(child.path) 
                               ? 'text-blue-400 bg-blue-500/10' 
-                              : 'text-slate-500 hover:text-slate-300'
+                              : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
                           }`}
                         >
-                          <span>{child.label}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`w-1 h-1 rounded-full transition-all ${child.path && isActivePath(child.path) ? 'bg-blue-400 scale-150' : 'bg-slate-700 group-hover/sub:bg-slate-500'}`}></span>
+                            <span>{child.label}</span>
+                          </div>
                           {/* 显示待办数量徽章 */}
                           {child.label === '待我处理' && pendingCount > 0 && (
-                            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                            <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black min-w-[20px] text-center shadow-lg shadow-red-500/20">
                               {pendingCount > 99 ? '99+' : pendingCount}
                             </span>
                           )}
                           {/* 管理员标识 */}
                           {child.adminOnly && (
-                            <span className="text-[8px] bg-purple-500/20 text-purple-400 px-1 py-0.5 rounded">
-                              管
+                            <span className="text-[8px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded-md font-black">
+                              ROOT
                             </span>
                           )}
                         </button>
@@ -277,19 +286,26 @@ export default function Layout({ children }: { children: ReactNode }) {
                 // 无子菜单的项
                 <button
                   onClick={() => item.path && navigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
+                  className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all group ${
                     isActivePath(item.path || '') 
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' 
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      ? 'bg-blue-600 text-white shadow-2xl shadow-blue-500/40 relative overflow-hidden' 
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons[item.icon]} />
-                  </svg>
-                  <span className="text-sm font-bold tracking-tight">{item.label}</span>
+                  {isActivePath(item.path || '') && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]"></div>
+                  )}
+                  <div className={`p-1.5 rounded-lg transition-colors ${isActivePath(item.path || '') ? 'bg-white/20 text-white' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon ? icons[item.icon] : ''} />
+                    </svg>
+                  </div>
+                  <span className="text-[13px] font-bold tracking-tight">{item.label}</span>
                   {/* 工作台显示待办总数 */}
                   {item.label === '工作台' && pendingCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-black min-w-[20px] text-center shadow-lg ${
+                      isActivePath(item.path || '') ? 'bg-white text-blue-600' : 'bg-red-500 text-white shadow-red-500/20'
+                    }`}>
                       {pendingCount > 99 ? '99+' : pendingCount}
                     </span>
                   )}
@@ -300,24 +316,27 @@ export default function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         {/* 用户信息 */}
-        <div className="p-6">
-          <div className="bg-slate-800/50 rounded-2xl p-4 flex items-center gap-3 border border-slate-700/50">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shadow-inner">
+        <div className="p-6 relative z-10 border-t border-white/5">
+          <div className="bg-white/5 backdrop-blur-md rounded-3xl p-4 flex items-center gap-3 border border-white/5 hover:bg-white/10 transition-colors group/user">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-lg shadow-xl shadow-indigo-500/20 group-hover/user:scale-110 transition-transform">
               {user?.name?.[0] || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-bold truncate">{user?.name || '管理员'}</p>
-              <p className="text-[10px] text-slate-500 font-bold truncate">
-                {user?.role === 'admin' || user?.role === 'root' ? '系统管理员' : '普通员工'}
-              </p>
+              <p className="text-white text-[13px] font-black truncate">{user?.name || '管理员'}</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                <p className="text-[10px] text-slate-500 font-bold tracking-tight">
+                  {user?.role === 'admin' || user?.role === 'root' ? 'ROOT ADMIN' : 'STAFF MEMBER'}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-col items-center gap-1">
               <button
                 onClick={() => navigate('/settings/password')}
-                className="p-2 text-slate-500 hover:text-blue-400 transition-colors"
-                title="修改密码"
+                className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all"
+                title="安全设置"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </button>
@@ -326,10 +345,10 @@ export default function Layout({ children }: { children: ReactNode }) {
                   localStorage.clear(); 
                   window.location.href = '/';
                 }}
-                className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                title="退出登录"
+                className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                title="退出连接"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
               </button>
@@ -339,57 +358,29 @@ export default function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 relative">
         {/* 顶部导航栏 */}
-        <header className="h-16 bg-white/70 backdrop-blur-xl border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-40">
+        <header className="h-20 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 px-10 flex items-center justify-between sticky top-0 z-40">
           {/* 面包屑导航 */}
-          <div className="flex items-center text-sm">
-            <span className="text-slate-400 font-medium">
-              {currentPath === '/' ? '工作台' : ''}
-            </span>
-            {currentPath !== '/' && (
-              <nav className="flex items-center space-x-2">
-                <span className="text-slate-400">/</span>
-                <span className="text-slate-800 font-semibold">
-                  {currentPath.split('/')[1] === 'dashboard' && '工作台'}
-                  {currentPath.split('/')[1] === 'projects' && '项目管理'}
-                  {currentPath.split('/')[1] === 'tasks' && '项目管理'}
-                  {currentPath.split('/')[1] === 'approvals' && '审批中心'}
-                  {currentPath.split('/')[1] === 'personnel' && '人员管理'}
-                  {currentPath.split('/')[1] === 'equipment' && '设备管理'}
-                  {currentPath.split('/')[1] === 'organization' && '组织架构'}
-                  {currentPath.split('/')[1] === 'customers' && '组织架构'}
-                  {currentPath.split('/')[1] === 'admin' && '系统管理'}
-                  {currentPath.split('/')[1] === 'workflow' && '系统管理'}
-                  {currentPath.split('/')[1] === 'forms' && '系统管理'}
-                  {currentPath.split('/')[1] === 'settings' && '系统管理'}
+          <div className="flex items-center">
+            {currentPath === '/' ? (
+              <span className="text-xl font-black text-slate-900 tracking-tight">工作合规工作台</span>
+            ) : (
+              <nav className="flex items-center space-x-3">
+                <div className="bg-slate-100 p-2 rounded-xl text-slate-400">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons.home} />
+                  </svg>
+                </div>
+                <span className="text-slate-300 text-lg">/</span>
+                <span className="text-lg font-black text-slate-900 tracking-tight capitalize">
+                  {currentPath.split('/')[1]?.replace('-', ' ')}
                 </span>
                 {currentPath.split('/')[2] && (
                   <>
-                    <span className="text-slate-400">/</span>
-                    <span className="text-slate-600">
-                      {currentPath.split('/')[2] === 'create' && '新建项目'}
-                      {currentPath.split('/')[2] === 'board' && '任务看板'}
-                      {currentPath.split('/')[2] === 'new' && '发起审批'}
-                      {currentPath.split('/')[2] === 'pending' && '待我处理'}
-                      {currentPath.split('/')[2] === 'mine' && '我已发起'}
-                      {currentPath.split('/')[2] === 'onboard' && '入职办理'}
-                      {currentPath.split('/')[2] === 'offboard' && '离职办理'}
-                      {currentPath.split('/')[2] === 'regular' && '转正申请'}
-                      {currentPath.split('/')[2] === 'leave' && '请假申请'}
-                      {currentPath.split('/')[2] === 'trip' && '出差申请'}
-                      {currentPath.split('/')[2] === 'transfer' && '调岗申请'}
-                      {currentPath.split('/')[2] === 'inbound' && '入库登记'}
-                      {currentPath.split('/')[2] === 'outbound' && '出库领用'}
-                      {currentPath.split('/')[2] === 'return' && '归还入库'}
-                      {currentPath.split('/')[2] === 'repair' && '维修报废'}
-                      {currentPath.split('/')[2] === 'departments' && '部门管理'}
-                      {currentPath.split('/')[2] === 'positions' && '岗位管理'}
-                      {currentPath.split('/')[2] === 'workflow-monitor' && '流程监控'}
-                      {currentPath.split('/')[2] === 'users' && '用户管理'}
-                      {currentPath.split('/')[2] === 'definitions' && '流程定义'}
-                      {currentPath.split('/')[2] === 'templates' && '表单设计'}
-                      {currentPath.split('/')[2] === 'metadata' && '数据字典'}
+                    <span className="text-slate-300 text-lg">/</span>
+                    <span className="text-slate-500 font-bold text-sm">
+                      {currentPath.split('/')[2]?.replace('-', ' ')}
                     </span>
                   </>
                 )}
@@ -398,28 +389,50 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
           
           {/* 右侧操作区 */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
+            {/* 搜索框 */}
+            <div className="hidden md:flex relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <svg className="w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input 
+                type="text" 
+                placeholder="快速索引..."
+                className="bg-slate-100/50 border-none rounded-2xl pl-11 pr-4 py-2.5 text-xs font-bold w-64 focus:ring-4 focus:ring-blue-500/10 focus:bg-white transition-all outline-none"
+              />
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
+                <span className="text-[10px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-md">⌘ K</span>
+              </div>
+            </div>
+
             {/* 系统状态 */}
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] font-black text-slate-500">运行正常</span>
+            <div className="flex items-center bg-emerald-50 border border-emerald-100 rounded-full px-4 py-1.5 gap-2.5 shadow-sm">
+              <div className="relative">
+                <span className="block w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute inset-0"></span>
+                <span className="block w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
+              </div>
+              <span className="text-[11px] font-black text-emerald-700 uppercase tracking-wider">Cloud Connected</span>
             </div>
             
             {/* 通知按钮 */}
-            <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-all">
+            <button className="relative w-11 h-11 flex items-center justify-center bg-white rounded-2xl border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icons.bell} />
               </svg>
               {pendingCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                <span className="absolute top-2.5 right-2.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-bounce"></span>
               )}
             </button>
           </div>
         </header>
         
         {/* 页面内容 */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          {children}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-10 animate-fade-in">
+          <div className="max-w-[1600px] mx-auto">
+            {children}
+          </div>
         </div>
       </main>
     </div>

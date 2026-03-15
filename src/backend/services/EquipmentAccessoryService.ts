@@ -17,12 +17,12 @@ export interface AccessoryInstance {
   location_status: 'warehouse' | 'in_project' | 'repairing' | 'transferring';
   location_id?: string;
   host_equipment_id?: string;
-  bound_at?: string;
-  source_type?: 'inbound_bundle' | 'inbound_separate';
   keeper_id?: string;
   purchase_date?: string;
   purchase_price?: number;
   notes?: string;
+  source_type?: string;
+  bound_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +56,11 @@ export interface CreateAccessoryDto {
   purchase_price?: number;
   notes?: string;
   source_type?: 'inbound_bundle' | 'inbound_separate';
+  status?: 'normal' | 'lost' | 'damaged';
+  health_status?: 'normal' | 'slightly_damaged' | 'affected_use' | 'repairing' | 'scrapped';
+  usage_status?: 'idle' | 'in_use';
+  location_status?: 'warehouse' | 'in_project' | 'repairing' | 'transferring';
+  location_id?: string;
 }
 
 export interface CreateAccessoryRelationDto {
@@ -71,12 +76,15 @@ export class EquipmentAccessoryService {
   async createAccessoryInstance(dto: CreateAccessoryDto): Promise<AccessoryInstance> {
     const id = uuidv4();
     
+    // 如果是序列化追踪但没有提供管理编码，自动生成一个
+    const manageCode = dto.manage_code || `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    
     await db.execute(
       `INSERT INTO equipment_accessory_instances (
         id, accessory_name, model_no, brand, category, unit, quantity,
         serial_number, manage_code, health_status, usage_status, location_status,
-        location_id, host_equipment_id, bound_at, source_type, keeper_id, purchase_date, purchase_price, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        location_id, host_equipment_id, keeper_id, purchase_date, purchase_price, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         dto.accessory_name,
@@ -86,14 +94,12 @@ export class EquipmentAccessoryService {
         dto.unit || '个',
         dto.quantity || 1,
         dto.serial_number || null,
-        dto.manage_code || null,
-        'normal',
-        'idle',
-        'warehouse',
-        null,
+        manageCode,
+        dto.health_status || 'normal',
+        dto.usage_status || 'idle',
+        dto.location_status || 'warehouse',
+        dto.location_id || null,
         dto.host_equipment_id || null,
-        dto.host_equipment_id ? new Date() : null,
-        dto.source_type || 'inbound_separate',
         dto.keeper_id || null,
         dto.purchase_date || null,
         dto.purchase_price || null,
@@ -140,15 +146,43 @@ export class EquipmentAccessoryService {
   }
 
   async getAccessoryById(id: string): Promise<AccessoryInstance | null> {
-    const [rows] = await db.query(
-      'SELECT * FROM equipment_accessory_instances WHERE id = ?',
+    const rows = await db.query(
+      `SELECT ai.*, 
+        w.name as location_name,
+        e.name as keeper_name,
+        eq.equipment_name as host_equipment_name
+       FROM equipment_accessory_instances ai
+       LEFT JOIN warehouses w ON ai.location_id = w.id
+       LEFT JOIN employees e ON ai.keeper_id = e.id
+       LEFT JOIN equipment_instances eq ON ai.host_equipment_id = eq.id
+       WHERE ai.id = ?`,
       [id]
     );
-    return rows && rows.length > 0 ? rows[0] : null;
+    
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+    
+    const accessory = rows[0];
+    
+    // 查询关联的图片
+    const images = await db.query(
+      `SELECT image_url FROM equipment_images 
+       WHERE equipment_id = ? AND image_type = 'accessory'
+       ORDER BY created_at ASC`,
+      [id]
+    );
+    
+    if (images && images.length > 0) {
+      accessory.accessory_images = images.map((img: any) => img.image_url);
+      accessory.images = images.map((img: any) => img.image_url);
+    }
+    
+    return accessory;
   }
 
   async getRelationById(id: string): Promise<AccessoryRelation | null> {
-    const [rows] = await db.query(
+    const rows = await db.query(
       'SELECT * FROM equipment_accessories WHERE id = ?',
       [id]
     );
@@ -156,7 +190,7 @@ export class EquipmentAccessoryService {
   }
 
   async getAccessoriesByHost(hostEquipmentId: string): Promise<AccessoryInstance[]> {
-    const [rows] = await db.query(
+    const rows = await db.query(
       `SELECT ai.* FROM equipment_accessory_instances ai
        INNER JOIN equipment_accessories ea ON ai.id = ea.accessory_id
        WHERE ea.host_equipment_id = ?
@@ -167,7 +201,7 @@ export class EquipmentAccessoryService {
   }
 
   async getRelationsByHost(hostEquipmentId: string): Promise<AccessoryRelation[]> {
-    const [rows] = await db.query(
+    const rows = await db.query(
       'SELECT * FROM equipment_accessories WHERE host_equipment_id = ? ORDER BY created_at DESC',
       [hostEquipmentId]
     );
@@ -175,7 +209,7 @@ export class EquipmentAccessoryService {
   }
 
   async getAccessoriesWithDetails(hostEquipmentId: string): Promise<any[]> {
-    const [rows] = await db.query(
+    const rows = await db.query(
       `SELECT 
         ai.id,
         ai.accessory_name,
@@ -248,6 +282,14 @@ export class EquipmentAccessoryService {
     if (updates.keeper_id !== undefined) {
       fields.push('keeper_id = ?');
       values.push(updates.keeper_id);
+    }
+    if (updates.purchase_date !== undefined) {
+      fields.push('purchase_date = ?');
+      values.push(updates.purchase_date);
+    }
+    if (updates.purchase_price !== undefined) {
+      fields.push('purchase_price = ?');
+      values.push(updates.purchase_price);
     }
     if (updates.notes !== undefined) {
       fields.push('notes = ?');
@@ -423,7 +465,7 @@ export class EquipmentAccessoryService {
 
     await db.execute(
       `UPDATE equipment_accessory_instances 
-       SET host_equipment_id = ?, bound_at = NOW(), status = 'normal', usage_status = 'in_use'
+       SET host_equipment_id = ?, usage_status = 'in_use'
        WHERE id = ?`,
       [hostEquipmentId, accessoryId]
     );
@@ -467,7 +509,7 @@ export class EquipmentAccessoryService {
     if (remainingRelations[0].count === 0) {
       await db.execute(
         `UPDATE equipment_accessory_instances 
-         SET host_equipment_id = NULL, bound_at = NULL, usage_status = 'idle'
+         SET host_equipment_id = NULL, usage_status = 'idle'
          WHERE id = ?`,
         [accessoryId]
       );
@@ -491,7 +533,7 @@ export class EquipmentAccessoryService {
     }
 
     await db.execute(
-      `UPDATE equipment_accessory_instances SET status = 'lost' WHERE id = ?`,
+      `UPDATE equipment_accessory_instances SET usage_status = 'idle', health_status = 'scrapped' WHERE id = ?`,
       [accessoryId]
     );
 
@@ -527,7 +569,7 @@ export class EquipmentAccessoryService {
     }
 
     await db.execute(
-      `UPDATE equipment_accessory_instances SET status = 'normal' WHERE id = ?`,
+      `UPDATE equipment_accessory_instances SET health_status = 'normal' WHERE id = ?`,
       [accessoryId]
     );
 
@@ -567,7 +609,7 @@ export class EquipmentAccessoryService {
 
     sql += ' ORDER BY created_at DESC';
 
-    const [rows] = await db.query(sql, params);
+    const rows = await db.query(sql, params);
     return rows;
   }
 
@@ -577,6 +619,7 @@ export class EquipmentAccessoryService {
     location_status?: string;
     bound?: boolean;
     keyword?: string;
+    location_id?: string;
     page?: number;
     pageSize?: number;
   }): Promise<{ list: AccessoryInstance[]; total: number }> {
@@ -598,6 +641,11 @@ export class EquipmentAccessoryService {
       params.push(options.location_status);
     }
 
+    if (options?.location_id) {
+      whereClause += ' AND location_id = ?';
+      params.push(options.location_id);
+    }
+
     if (options?.bound !== undefined) {
       if (options.bound) {
         whereClause += ' AND host_equipment_id IS NOT NULL';
@@ -613,18 +661,54 @@ export class EquipmentAccessoryService {
     }
 
     const countSql = `SELECT COUNT(*) as total FROM equipment_accessory_instances WHERE ${whereClause}`;
-    const [countResult] = await db.query(countSql, params);
-    const total = countResult[0].total;
+    const countResult = await db.query<any>(countSql, params);
+    const total = countResult[0]?.total || 0;
 
-    let querySql = `SELECT * FROM equipment_accessory_instances WHERE ${whereClause}`;
+    let querySql = `SELECT ai.*, 
+      w.name as location_name,
+      e.name as keeper_name,
+      eq.equipment_name as host_equipment_name
+     FROM equipment_accessory_instances ai
+     LEFT JOIN warehouses w ON ai.location_id = w.id
+     LEFT JOIN employees e ON ai.keeper_id = e.id
+     LEFT JOIN equipment_instances eq ON ai.host_equipment_id = eq.id
+     WHERE ${whereClause}`;
+    
+    querySql += ' ORDER BY ai.created_at DESC';
     
     if (options?.page && options?.pageSize) {
       querySql += ` LIMIT ${(options.page - 1) * options.pageSize}, ${options.pageSize}`;
     }
 
-    querySql += ' ORDER BY created_at DESC';
-
-    const [rows] = await db.query(querySql, params);
+    const rows = await db.query(querySql, params);
+    
+    // 批量查询所有配件的图片
+    if (rows && rows.length > 0) {
+      const accessoryIds = rows.map((r: any) => r.id);
+      const imagesResult = await db.query(
+        `SELECT equipment_id, image_url FROM equipment_images 
+         WHERE equipment_id IN (?) AND image_type = 'accessory'
+         ORDER BY created_at ASC`,
+        [accessoryIds]
+      );
+      
+      // 按配件ID分组图片
+      const imagesMap: Record<string, string[]> = {};
+      if (imagesResult && imagesResult.length > 0) {
+        for (const img of imagesResult) {
+          if (!imagesMap[img.equipment_id]) {
+            imagesMap[img.equipment_id] = [];
+          }
+          imagesMap[img.equipment_id].push(img.image_url);
+        }
+      }
+      
+      // 合并图片到配件数据
+      for (const row of rows) {
+        row.accessory_images = imagesMap[row.id] || [];
+        row.images = imagesMap[row.id] || [];
+      }
+    }
 
     return { list: rows, total };
   }
@@ -640,7 +724,7 @@ export class EquipmentAccessoryService {
 
     sql += ' ORDER BY lost_at DESC';
 
-    const [rows] = await db.query(sql, params);
+    const rows = await db.query(sql, params);
     return rows;
   }
 }
