@@ -41,26 +41,55 @@ const getPathName = (path: string | undefined): string => {
   const pathMap: Record<string, string> = {
     'dashboard': '工作台',
     'projects': '项目管理',
-    'equipment': '设备管理',
-    'workflow': '工作流',
-    'admin': '系统管理',
-    'settings': '设置',
-    'users': '用户管理',
-    'warehouses': '仓库管理',
-    'organizations': '组织架构',
-    'reports': '报表',
-    'approvals': '审批中心',
     'tasks': '任务管理',
-    'notifications': '通知',
-    'transfers': '调拨管理',
-    'inbound': '入库管理',
-    'outbound': '出库管理',
-    'maintenance': '维修管理',
-    'accessories': '配件管理',
+    'equipment': '设备管理',
+    'personnel': '人员管理',
+    'customers': '客户管理',
+    'warehouses': '仓库管理',
+    'approvals': '审批中心',
+    'workflow': '工作流管理',
+    'purchase': '采购管理',
+    'reports': '报表中心',
+    'notifications': '通知中心',
+    'organization': '组织架构',
+    'forms': '表单管理',
+    'settings': '系统设置',
+    'admin': '系统管理',
+    'users': '用户管理',
+    'roles': '角色管理',
+    'permissions': '权限管理',
+    'departments': '部门管理',
+    'positions': '岗位管理',
     'detail': '详情',
     'create': '创建',
     'edit': '编辑',
-    'list': '列表'
+    'list': '列表',
+    'new': '新建',
+    'designer': '设计器',
+    'definitions': '流程定义',
+    'visualization': '可视化',
+    'instance': '流程实例',
+    'pending': '待审批',
+    'completed': '已审批',
+    'mine': '我的审批',
+    'draft': '草稿箱',
+    'templates': '模板管理',
+    'metadata': '元数据配置',
+    'linkage': '数据关联',
+    'password': '修改密码',
+    'data': '数据管理',
+    'workflow-monitor': '工作流监控',
+    'statistics': '统计分析',
+    'accessories': '配件管理',
+    'scrap-sales': '报废销售',
+    'repairs': '维修管理',
+    'transfers': '调拨管理',
+    'transfer': '调拨',
+    'onboard': '入职办理',
+    'board': '看板',
+    'request': '采购申请',
+    'alerts': '预警管理',
+    'dashboard': '仪表板'
   }
   return pathMap[path || ''] || path || ''
 }
@@ -71,29 +100,69 @@ const getSubPathName = (parentPath: string | undefined, subPath: string | undefi
   const subPathMap: Record<string, Record<string, string>> = {
     'equipment': {
       'transfers': '调拨列表',
-      'inbound': '入库列表',
-      'outbound': '出库列表',
-      'maintenance': '维修列表',
+      'list': '调拨列表',
+      'create': '创建调拨',
+      'statistics': '设备统计',
       'accessories': '配件列表',
-      'create': '创建',
-      'list': '列表',
-      'detail': '详情'
+      'scrap-sales': '报废销售列表',
+      'repairs': '维修列表',
+      'create': '创建'
     },
     'projects': {
       'create': '创建项目',
       'list': '项目列表',
+      'completion': '项目结项',
       'detail': '项目详情'
     },
     'workflow': {
-      'create': '创建流程',
-      'list': '流程列表',
-      'detail': '流程详情'
+      'definitions': '流程定义列表',
+      'designer': '流程设计器',
+      'visualization': '流程可视化',
+      'detail': '流程详情',
+      'instance': '流程实例详情'
+    },
+    'approvals': {
+      'pending': '待审批',
+      'completed': '已审批',
+      'mine': '我的审批',
+      'draft': '草稿箱',
+      'new': '新建流程',
+      'workflow': '工作流表单'
+    },
+    'personnel': {
+      'transfer': '人员调拨',
+      'onboard': '入职办理',
+      'detail': '员工详情'
+    },
+    'warehouses': {
+      'detail': '仓库详情'
+    },
+    'notifications': {
+      'alerts': '预警管理'
+    },
+    'organization': {
+      'departments': '部门管理',
+      'positions': '岗位管理'
+    },
+    'forms': {
+      'templates': '表单模板',
+      'designer': '表单设计器'
+    },
+    'settings': {
+      'metadata': '元数据配置',
+      'linkage': '数据关联',
+      'password': '修改密码'
     },
     'admin': {
+      'data': '数据管理',
       'users': '用户管理',
-      'roles': '角色管理',
-      'permissions': '权限管理',
-      'settings': '系统设置'
+      'workflow-monitor': '工作流监控'
+    },
+    'reports': {
+      'dashboard': '日报看板'
+    },
+    'purchase': {
+      'request': '采购申请'
     }
   }
   
