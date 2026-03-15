@@ -82,6 +82,7 @@ export default function TransferCreatePage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [hoveredEquipmentId, setHoveredEquipmentId] = useState<string | null>(null)
 
   useEffect(() => {
     loadBaseData()
@@ -189,7 +190,9 @@ export default function TransferCreatePage() {
               serial_number: acc.serial_number || '',
               is_accessory: true,
               location_id: acc.location_id,
-              location_status: acc.location_status
+              location_status: acc.location_status,
+              main_image: (acc.accessory_images && acc.accessory_images[0]) || (acc.images && acc.images[0]) || null,
+              images: acc.images || acc.accessory_images || []
             }));
           
           allFoundEquipment = [...allFoundEquipment, ...mappedAccessories];
@@ -780,11 +783,34 @@ export default function TransferCreatePage() {
                               <img
                                 src={eq.main_image}
                                 alt={eq.equipment_name}
-                                className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-500"
+                                className="w-10 h-10 object-cover rounded border border-gray-200 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all duration-200"
                                 onClick={() => setPreviewImage(eq.main_image!)}
                               />
                             )}
-                            <span>{eq.equipment_name}</span>
+                            <div className="relative">
+                              <span 
+                                className="cursor-pointer text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200"
+                                onMouseEnter={() => setHoveredEquipmentId(eq.id)}
+                                onMouseLeave={() => setHoveredEquipmentId(null)}
+                              >
+                                {eq.equipment_name}
+                              </span>
+                              {hoveredEquipmentId === eq.id && eq.main_image && (
+                                <div className="absolute z-[100] left-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl p-2 min-w-[240px] transform transition-all duration-200 origin-top-left">
+                                  <div className="flex items-center justify-between mb-2 px-1">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">图片预览</span>
+                                    <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">高清</span>
+                                  </div>
+                                  <div className="rounded-lg overflow-hidden border border-gray-100 bg-gray-50 aspect-video flex items-center justify-center">
+                                    <img
+                                      src={eq.main_image}
+                                      alt="预览"
+                                      className="max-w-full max-h-48 object-contain transition-transform duration-500 hover:scale-110"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm">{eq.model_no}</td>

@@ -104,14 +104,35 @@ export class EquipmentServiceV3 {
       [...values, pageSize, offset]
     );
 
-    // 为每个设备获取配件信息
-    for (const instance of instances) {
-      const accessories = await db.query<any>(
-        `SELECT * FROM equipment_accessory_instances 
-         WHERE host_equipment_id = ?`,
-        [instance.id]
+    // 为每个设备获取配件和图片信息
+    if (instances && instances.length > 0) {
+      const instanceIds = instances.map(i => i.id);
+      
+      // 批量获取图片
+      const imagesResult = await db.query<any>(
+        `SELECT equipment_id, image_url FROM equipment_images 
+         WHERE equipment_id IN (?) AND image_type = 'main'`,
+        [instanceIds]
       );
-      instance.accessories = accessories;
+      
+      const imagesMap: Record<string, string> = {};
+      if (imagesResult && imagesResult.length > 0) {
+        for (const img of imagesResult) {
+          imagesMap[img.equipment_id] = img.image_url;
+        }
+      }
+
+      for (const instance of instances) {
+        // 配件
+        const accessories = await db.query<any>(
+          `SELECT * FROM equipment_accessory_instances 
+           WHERE host_equipment_id = ?`,
+          [instance.id]
+        );
+        instance.accessories = accessories;
+        // 图片
+        instance.main_image = imagesMap[instance.id] || null;
+      }
     }
 
     return {

@@ -259,7 +259,7 @@ const getMenus = (role: string): MenuItem[] => {
 export default function Layout({ children }: { children: ReactNode }) {
   const { user } = useUser()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 
-    '项目管理': true,
+    '项目管理': false,
     '审批中心': true 
   })
   const [menuConfig, setMenuConfig] = useState<MenuItem[]>([])
@@ -317,7 +317,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen bg-[#f8fafc] bg-mesh overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-72 bg-slate-900 flex flex-col shadow-2xl z-50 relative overflow-hidden group/sidebar">
+      <aside className="w-64 bg-slate-900 flex flex-col shadow-2xl z-50 relative overflow-hidden group/sidebar">
         {/* 背景装饰 */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -ml-16 -mb-16"></div>
