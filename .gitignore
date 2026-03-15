@@ -1,6 +1,7 @@
 /.claude
 /.env
 /.vscode
+/.trae
 /node_modules
 /logs
 /uploads
