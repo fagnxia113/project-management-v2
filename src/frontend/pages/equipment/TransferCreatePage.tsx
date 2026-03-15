@@ -129,58 +129,80 @@ export default function TransferCreatePage() {
   }
 
   const loadEquipment = async () => {
-    setLoading(true)
+    if (!fromLocationId) return;
+    setLoading(true);
+    setEquipment([]);
+
     try {
-      const token = localStorage.getItem('token')
-      const params = new URLSearchParams({
-        page: '1',
-        pageSize: '100',
-        location_status: fromLocationType === 'warehouse' ? 'warehouse' : 'in_project',
-        location_id: fromLocationId
-      })
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Authorization': `Bearer ${token}` };
 
-      const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      const result = await response.json()
-
-      setEquipment(result.data || [])
-
-      // 加载独立配件
-      const accParams = new URLSearchParams({
+      // 加载仪器和假负载 (v3 接口更成熟)
+      const eqParams = new URLSearchParams({
         location_id: fromLocationId,
+        location_status: fromLocationType === 'warehouse' ? 'warehouse' : 'in_project',
         pageSize: '1000'
-      })
-      const accResponse = await fetch(`${API_URL.BASE}/api/equipment/accessories?${accParams}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      const accResult = await accResponse.json()
-      
-      if (accResult.success && accResult.list && Array.isArray(accResult.list)) {
-        const accessoryEquipment = accResult.list
-          .filter((acc: any) => !acc.host_equipment_id) // 只显示独立配件（散件）
-          .map((acc: any) => ({
-            id: acc.id,
-            equipment_name: acc.accessory_name || '未命名配件',
-            model_no: acc.model_no || acc.accessory_model || '',
-            brand: acc.brand || acc.accessory_brand || '',
-            category: 'accessory' as const,
-            unit: acc.unit || acc.accessory_unit || '个',
-            quantity: acc.quantity || acc.accessory_quantity || 1,
-            manage_code: acc.manage_code || '',
-            serial_number: acc.serial_number || '',
-            is_accessory: true,
-            location_id: acc.location_id,
-            location_status: acc.location_status
-          }))
-        setEquipment(prev => [...prev, ...accessoryEquipment])
+      });
+
+      // 并行获取
+      const [eqResponse, accResponse] = await Promise.all([
+        fetch(`${API_URL.BASE}/api/equipment/v3/instances?${eqParams}`, { headers }),
+        fetch(`${API_URL.BASE}/api/equipment/accessories?pageSize=2000`, { headers })
+      ]);
+
+      const [eqResult, accResult] = await Promise.all([
+        eqResponse.json(),
+        accResponse.json()
+      ]);
+
+      let allFoundEquipment: any[] = [];
+
+      // 1. 处理设备/仪器数据
+      // 兼容多种返回格式：{ success: true, data: [] } 或 { data: [] } 或 { list: [] }
+      const eqData = eqResult.data || eqResult.list || (Array.isArray(eqResult) ? eqResult : []);
+      if (Array.isArray(eqData)) {
+        allFoundEquipment = [...eqData];
       }
+
+      // 2. 处理配件数据
+      if (accResult) {
+        // 后端可能返回 { success: true, list: [] } 或 { data: [] } 或 直接 []
+        const rawList = accResult.list || accResult.data || (Array.isArray(accResult) ? accResult : []);
+        if (Array.isArray(rawList)) {
+          console.log(`[Debug] Total accessories fetched: ${rawList.length}`);
+          const mappedAccessories = rawList
+            .filter((acc: any) => {
+              // 必须是独立配件（没有主机）并且在当前位置
+              const isUnbound = !acc.host_equipment_id;
+              const matchesLocation = String(acc.location_id) === String(fromLocationId);
+              return isUnbound && matchesLocation;
+            })
+            .map((acc: any) => ({
+              id: acc.id,
+              equipment_name: acc.accessory_name || '未命名配件',
+              model_no: acc.model_no || acc.accessory_model || '',
+              brand: acc.brand || acc.accessory_brand || '',
+              category: 'accessory' as const,
+              unit: acc.unit || acc.accessory_unit || '个',
+              quantity: acc.quantity || acc.accessory_quantity || 1,
+              manage_code: acc.manage_code || '',
+              serial_number: acc.serial_number || '',
+              is_accessory: true,
+              location_id: acc.location_id,
+              location_status: acc.location_status
+            }));
+          
+          allFoundEquipment = [...allFoundEquipment, ...mappedAccessories];
+        }
+      }
+      
+      setEquipment(allFoundEquipment);
     } catch (error) {
-      console.error('加载设备/配件失败:', error)
+      console.error('加载设备/配件失败:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loadFromManager = async () => {
     try {

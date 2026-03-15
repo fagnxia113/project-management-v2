@@ -215,10 +215,6 @@ const getMenus = (role: string): MenuItem[] => {
           { label: '入职办理', path: '/personnel/onboard', adminOnly: true },
           { label: '离职办理', path: '/personnel/offboard', adminOnly: true },
         ] : []),
-        { label: '转正申请', path: '/personnel/regular' },
-        { label: '请假申请', path: '/personnel/leave' },
-        { label: '出差申请', path: '/personnel/trip' },
-        { label: '调岗申请', path: '/personnel/transfer' },
       ]
     },
     
@@ -229,13 +225,6 @@ const getMenus = (role: string): MenuItem[] => {
       children: [
         { label: '设备台账', path: '/equipment' },
         { label: '仓库管理', path: '/warehouses' },
-        { 
-          label: '设备调拨',
-          children: [
-            { label: '调拨列表', path: '/equipment/transfers/list' },
-            { label: '创建调拨', path: '/equipment/transfers/create' }
-          ]
-        },
       ]
     },
     
