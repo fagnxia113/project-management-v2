@@ -36,6 +36,70 @@ const icons: Record<string, string> = {
   bell: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
 }
 
+// 路径名称映射
+const getPathName = (path: string | undefined): string => {
+  const pathMap: Record<string, string> = {
+    'dashboard': '工作台',
+    'projects': '项目管理',
+    'equipment': '设备管理',
+    'workflow': '工作流',
+    'admin': '系统管理',
+    'settings': '设置',
+    'users': '用户管理',
+    'warehouses': '仓库管理',
+    'organizations': '组织架构',
+    'reports': '报表',
+    'approvals': '审批中心',
+    'tasks': '任务管理',
+    'notifications': '通知',
+    'transfers': '调拨管理',
+    'inbound': '入库管理',
+    'outbound': '出库管理',
+    'maintenance': '维修管理',
+    'accessories': '配件管理',
+    'detail': '详情',
+    'create': '创建',
+    'edit': '编辑',
+    'list': '列表'
+  }
+  return pathMap[path || ''] || path || ''
+}
+
+const getSubPathName = (parentPath: string | undefined, subPath: string | undefined): string => {
+  if (!parentPath || !subPath) return ''
+  
+  const subPathMap: Record<string, Record<string, string>> = {
+    'equipment': {
+      'transfers': '调拨列表',
+      'inbound': '入库列表',
+      'outbound': '出库列表',
+      'maintenance': '维修列表',
+      'accessories': '配件列表',
+      'create': '创建',
+      'list': '列表',
+      'detail': '详情'
+    },
+    'projects': {
+      'create': '创建项目',
+      'list': '项目列表',
+      'detail': '项目详情'
+    },
+    'workflow': {
+      'create': '创建流程',
+      'list': '流程列表',
+      'detail': '流程详情'
+    },
+    'admin': {
+      'users': '用户管理',
+      'roles': '角色管理',
+      'permissions': '权限管理',
+      'settings': '系统设置'
+    }
+  }
+  
+  return subPathMap[parentPath]?.[subPath] || subPath || ''
+}
+
 // 菜单配置 - 按照新设计文档重构
 const getMenus = (role: string): MenuItem[] => {
   const isAdmin = role === 'admin' || role === 'root'
@@ -326,7 +390,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <div className="flex items-center gap-1 mt-0.5">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
                 <p className="text-[10px] text-slate-500 font-bold tracking-tight">
-                  {user?.role === 'admin' || user?.role === 'root' ? 'ROOT ADMIN' : 'STAFF MEMBER'}
+                  {user?.role === 'admin' || user?.role === 'root' ? 'ROOT ADMIN' : '员工'}
                 </p>
               </div>
             </div>
@@ -374,13 +438,13 @@ export default function Layout({ children }: { children: ReactNode }) {
                 </div>
                 <span className="text-slate-300 text-lg">/</span>
                 <span className="text-lg font-black text-slate-900 tracking-tight capitalize">
-                  {currentPath.split('/')[1]?.replace('-', ' ')}
+                  {getPathName(currentPath.split('/')[1])}
                 </span>
                 {currentPath.split('/')[2] && (
                   <>
                     <span className="text-slate-300 text-lg">/</span>
                     <span className="text-slate-500 font-bold text-sm">
-                      {currentPath.split('/')[2]?.replace('-', ' ')}
+                      {getSubPathName(currentPath.split('/')[1], currentPath.split('/')[2])}
                     </span>
                   </>
                 )}
@@ -413,7 +477,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="block w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute inset-0"></span>
                 <span className="block w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
               </div>
-              <span className="text-[11px] font-black text-emerald-700 uppercase tracking-wider">Cloud Connected</span>
+              <span className="text-[11px] font-black text-emerald-700 uppercase tracking-wider">云端已连接</span>
             </div>
             
             {/* 通知按钮 */}

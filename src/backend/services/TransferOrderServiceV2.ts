@@ -322,6 +322,11 @@ export class TransferOrderServiceV2 {
                     await equipmentRepository.update(item.equipment_id, {
                         location_status: 'transferring'
                     }, tx)
+                    // 同步更新绑定配件的状态为运输中
+                    await tx.equipment_accessory_instances.updateMany({
+                        where: { host_equipment_id: item.equipment_id },
+                        data: { location_status: 'transferring' }
+                    })
                 } else {
                     // 假负载/线缆类：分拆数量
                     await equipmentRepository.splitForTransfer(item.equipment_id, item.quantity, id, tx)

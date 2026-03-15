@@ -19,6 +19,8 @@ interface Equipment {
   main_image?: string
   accessories?: any[]
   accessory_desc?: string | null
+  host_equipment_id?: string | null
+  tracking_type?: 'SERIALIZED' | 'BATCH'
 }
 
 interface Warehouse {
@@ -75,6 +77,7 @@ export default function TransferCreatePage() {
   const [estimatedArrivalDate, setEstimatedArrivalDate] = useState('')
 
   const [showEquipmentDialog, setShowEquipmentDialog] = useState(false)
+  const [activeSourceTab, setActiveSourceTab] = useState<'equipment' | 'accessory'>('equipment');
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -146,28 +149,30 @@ export default function TransferCreatePage() {
       // 加载独立配件
       const accParams = new URLSearchParams({
         location_id: fromLocationId,
-        location_status: fromLocationType === 'warehouse' ? 'warehouse' : 'in_project'
+        pageSize: '1000'
       })
       const accResponse = await fetch(`${API_URL.BASE}/api/equipment/accessories?${accParams}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const accResult = await accResponse.json()
       
-      if (accResult.success && accResult.list) {
-        const accessoryEquipment = accResult.list.map((acc: any) => ({
-          id: acc.id,
-          equipment_name: acc.accessory_name,
-          model_no: acc.model_no || '',
-          brand: acc.brand || '',
-          category: acc.category,
-          unit: acc.unit || '个',
-          quantity: acc.quantity || 1,
-          manage_code: acc.manage_code,
-          serial_number: acc.serial_number,
-          is_accessory: true,
-          location_id: acc.location_id,
-          location_status: acc.location_status
-        }))
+      if (accResult.success && accResult.list && Array.isArray(accResult.list)) {
+        const accessoryEquipment = accResult.list
+          .filter((acc: any) => !acc.host_equipment_id) // 只显示独立配件（散件）
+          .map((acc: any) => ({
+            id: acc.id,
+            equipment_name: acc.accessory_name || '未命名配件',
+            model_no: acc.model_no || acc.accessory_model || '',
+            brand: acc.brand || acc.accessory_brand || '',
+            category: 'accessory' as const,
+            unit: acc.unit || acc.accessory_unit || '个',
+            quantity: acc.quantity || acc.accessory_quantity || 1,
+            manage_code: acc.manage_code || '',
+            serial_number: acc.serial_number || '',
+            is_accessory: true,
+            location_id: acc.location_id,
+            location_status: acc.location_status
+          }))
         setEquipment(prev => [...prev, ...accessoryEquipment])
       }
     } catch (error) {
@@ -253,10 +258,16 @@ export default function TransferCreatePage() {
     }
   }
 
+  const isSystemGeneratedCode = (code: string | null) => {
+    if (!code) return true
+    // 系统生成的编号通常以 EQ 或 ACC 开头后面跟着一长串数字
+    return (code.startsWith('EQ') || code.startsWith('ACC')) && code.length > 10
+  }
+
   const handleAddEquipment = (eq: Equipment) => {
     const existingItem = transferItems.find(item =>
       item.equipment_id === eq.id ||
-      (item.category !== 'instrument' && item.equipment_name === eq.equipment_name && item.model_no === eq.model_no)
+      (item.category !== 'instrument' && !eq.is_accessory && item.equipment_name === eq.equipment_name && item.model_no === eq.model_no)
     )
 
     if (existingItem) {
@@ -271,7 +282,7 @@ export default function TransferCreatePage() {
       model_no: eq.model_no,
       brand: eq.brand || '',
       category: eq.category,
-      unit: eq.unit || '台',
+      unit: eq.unit || (eq.category === 'instrument' ? '台' : '个'),
       manage_code: eq.manage_code,
       serial_number: eq.serial_number,
       quantity: 1,
@@ -411,13 +422,20 @@ export default function TransferCreatePage() {
   }
 
   const filteredEquipment = equipment.filter(eq => {
-    const matchesSearch = !searchTerm ||
-      eq.equipment_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      eq.model_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      eq.manage_code.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = !categoryFilter || eq.category === categoryFilter
-    return matchesSearch && matchesCategory
-  })
+    const s = searchTerm.toLowerCase();
+    const matchesSearch = 
+      (eq.equipment_name || '').toLowerCase().includes(s) ||
+      (eq.model_no || '').toLowerCase().includes(s) ||
+      (eq.manage_code || '').toLowerCase().includes(s);
+    
+    // 标签页筛选
+    const matchesTab = activeSourceTab === 'equipment' 
+      ? (eq.category === 'instrument' || eq.category === 'fake_load')
+      : (eq.category === 'accessory');
+
+    const matchesCategory = categoryFilter ? eq.category === categoryFilter : true;
+    return matchesSearch && matchesTab && matchesCategory;
+  });
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -564,7 +582,9 @@ export default function TransferCreatePage() {
                             {getCategoryLabel(item.category)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm">{item.manage_code || '-'}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {isSystemGeneratedCode(item.manage_code) ? '-' : item.manage_code}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {item.category !== 'instrument' ? (item.accessory_desc || '-') : '-'}
                         </td>
@@ -576,9 +596,10 @@ export default function TransferCreatePage() {
                             value={item.quantity}
                             onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value) || 1)}
                             className="w-20 px-2 py-1 border border-gray-300 rounded text-center"
+                            disabled={item.category === 'instrument'}
                           />
                           <span className="ml-1 text-gray-500">{item.unit}</span>
-                          {item.category !== 'instrument' && (
+                          {item.category !== 'instrument' && item.available_quantity > 1 && (
                             <span className="ml-2 text-xs text-gray-400">(可用: {item.available_quantity})</span>
                           )}
                         </td>
@@ -595,10 +616,11 @@ export default function TransferCreatePage() {
                         <tr className="bg-gray-50">
                           <td colSpan={7} className="px-4 py-2 text-xs text-gray-600">
                             <div className="flex flex-wrap gap-x-6 gap-y-1">
-                              <span className="font-medium text-blue-600">仪器清单:</span>
+                              <span className="font-medium text-blue-600">所含配件 ({item.accessories.length}):</span>
                               {item.accessories.map((acc: any, idx: number) => (
                                 <span key={idx} className="bg-white px-2 py-0.5 rounded border border-gray-200">
-                                  {acc.accessory_name} ({acc.accessory_model || '通用'}) x{acc.accessory_quantity}{acc.accessory_unit || '个'}
+                                  {acc.accessory_name || acc.name} ({acc.accessory_model || acc.model_no || '通用'}) x{acc.accessory_quantity || acc.quantity || 1}{acc.accessory_unit || acc.unit || '个'}
+                                  {acc.manage_code && !isSystemGeneratedCode(acc.manage_code) && ` [${acc.manage_code}]`}
                                 </span>
                               ))}
                             </div>
@@ -670,6 +692,27 @@ export default function TransferCreatePage() {
               </button>
             </div>
 
+            <div className="flex border-b border-gray-200">
+              <button
+                className={`flex-1 py-3 text-sm font-medium ${activeSourceTab === 'equipment' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => {
+                  setActiveSourceTab('equipment');
+                  setCategoryFilter('');
+                }}
+              >
+                设备清单 (仪器/假负载)
+              </button>
+              <button
+                className={`flex-1 py-3 text-sm font-medium ${activeSourceTab === 'accessory' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => {
+                  setActiveSourceTab('accessory');
+                  setCategoryFilter('');
+                }}
+              >
+                独立配件 (散件)
+              </button>
+            </div>
+
             <div className="p-4 border-b border-gray-200 flex gap-4">
               <input
                 type="text"
@@ -678,18 +721,17 @@ export default function TransferCreatePage() {
                 placeholder="搜索设备名称、型号或编号..."
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">全部类别</option>
-                <option value="instrument">仪器类</option>
-                <option value="fake_load">假负载类</option>
-                <option value="accessory">配件类</option>
-                <option value="accessory">配件类</option>
-                <option value="accessory">配件类</option>
-              </select>
+              {activeSourceTab === 'equipment' && (
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">全部类别</option>
+                  <option value="instrument">仪器类</option>
+                  <option value="fake_load">假负载类</option>
+                </select>
+              )}
             </div>
 
             <div className="overflow-y-auto max-h-96">
@@ -725,14 +767,27 @@ export default function TransferCreatePage() {
                         </td>
                         <td className="px-4 py-3 text-sm">{eq.model_no}</td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs ${eq.category === 'instrument' ? 'bg-blue-100 text-blue-700' :
-                             'bg-orange-100 text-orange-700'
-                             }`}>
+                          <span className={`px-2 py-1 rounded text-xs ${getCategoryColorClass(eq.category)}`}>
                             {getCategoryLabel(eq.category)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm">{eq.manage_code}</td>
-                        <td className="px-4 py-3 text-sm">{eq.quantity || 1} {eq.unit}</td>
+                        <td className="px-4 py-3 text-sm">{isSystemGeneratedCode(eq.manage_code) ? '-' : eq.manage_code}</td>
+                         <td className="px-4 py-3 text-sm pb-1">
+                          <div className="font-medium">{eq.quantity || 1} {eq.unit}</div>
+                          {eq.accessories && eq.accessories.length > 0 && (
+                            <div className="mt-2 text-xs text-gray-500 border-t border-blue-50 pt-1">
+                              <div className="text-blue-600 font-medium mb-1">包含附件 ({eq.accessories.length}):</div>
+                              <ul className="space-y-0.5">
+                                {eq.accessories.map((acc: any, idx: number) => (
+                                  <li key={idx} className="flex items-center gap-1">
+                                    <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                                    {acc.accessory_name || acc.name} {acc.model_no || acc.accessory_model ? `(${acc.model_no || acc.accessory_model})` : ''} x{acc.quantity || acc.accessory_quantity || 1}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <button
                             onClick={() => handleAddEquipment(eq)}
