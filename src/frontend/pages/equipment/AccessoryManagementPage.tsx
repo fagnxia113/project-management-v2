@@ -106,6 +106,7 @@ export default function AccessoryManagementPage() {
       if (filterStatus) params.append('status', filterStatus)
       if (filterBound) params.append('bound', filterBound)
       if (keyword) params.append('keyword', keyword)
+      params.append('merge', 'true')
 
       const res = await fetch(`${API_URL.BASE}/api/equipment/accessories?${params}`, {
         headers: headers as Record<string, string>

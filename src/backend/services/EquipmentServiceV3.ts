@@ -23,6 +23,7 @@ export class EquipmentServiceV3 {
     health_status?: string;
     usage_status?: string;
     equipment_source?: string;
+    merge?: boolean;
   } = {}) {
     const {
       page = 1,
@@ -36,7 +37,8 @@ export class EquipmentServiceV3 {
       location_status,
       health_status,
       usage_status,
-      equipment_source
+      equipment_source,
+      merge = false
     } = params;
     
     const finalLocationId = location_id || locationId;
@@ -89,29 +91,66 @@ export class EquipmentServiceV3 {
       values.push(usage_status);
     }
 
-    const totalResult = await db.queryOne<{ total: number }>(
-      `SELECT COUNT(*) as total FROM equipment_instances ei ${whereClause}`,
-      values
-    );
+    let querySource = 'equipment_instances ei';
+    let countSql = `SELECT COUNT(*) as total FROM ${querySource} ${whereClause}`;
+    let selectFields = `ei.*, 
+      CASE 
+        WHEN ei.location_status = 'warehouse' THEN w.name 
+        WHEN ei.location_status IN ('project', 'project_on', 'in_project') THEN p.name 
+        ELSE NULL 
+      END as location_name, 
+      e.name as keeper_name`;
+    let groupBy = '';
+    
+    if (merge) {
+      groupBy = `GROUP BY ei.equipment_name, ei.model_no, ei.health_status, ei.usage_status, ei.location_status, ei.location_id, ei.purchase_date`;
+      countSql = `SELECT COUNT(*) as total FROM (SELECT 1 FROM ${querySource} ${whereClause} ${groupBy}) as t`;
+      selectFields = `
+        MAX(ei.id) as id, 
+        ei.equipment_name, 
+        ei.model_no, 
+        MAX(ei.brand) as brand, 
+        MAX(ei.manufacturer) as manufacturer, 
+        MAX(ei.category) as category, 
+        MAX(ei.unit) as unit,
+        SUM(ei.quantity) as quantity, 
+        GROUP_CONCAT(ei.manage_code) as manage_codes, 
+        GROUP_CONCAT(ei.id) as instance_ids,
+        ei.health_status, 
+        ei.usage_status, 
+        ei.location_status, 
+        ei.location_id, 
+        ei.purchase_date,
+        MAX(ei.purchase_price) as purchase_price,
+        CASE 
+          WHEN ei.location_status = 'warehouse' THEN MAX(w.name) 
+          WHEN ei.location_status IN ('project', 'project_on', 'in_project') THEN MAX(p.name) 
+          ELSE NULL 
+        END as location_name, 
+        MAX(e.name) as keeper_name,
+        'aggregated' as display_type
+      `;
+    }
 
+    const totalResult = await db.queryOne<{ total: number }>(countSql, values);
     const total = totalResult?.total || 0;
 
     const instances = await db.query<any>(
-      `SELECT ei.*, 
-        w.name as location_name,
-        e.name as keeper_name
-       FROM equipment_instances ei
+      `SELECT ${selectFields}
+       FROM ${querySource}
        LEFT JOIN warehouses w ON ei.location_id = w.id
+       LEFT JOIN projects p ON ei.location_id = p.id
        LEFT JOIN employees e ON ei.keeper_id = e.id
        ${whereClause} 
-       ORDER BY ei.created_at DESC 
+       ${groupBy}
+       ORDER BY ${merge ? 'MAX(ei.created_at)' : 'ei.created_at'} DESC 
        LIMIT ? OFFSET ?`,
       [...values, pageSize, offset]
     );
 
-    // 为每个设备获取配件和图片信息
+    // 为每个设备获取图片信息
     if (instances && instances.length > 0) {
-      const instanceIds = instances.map(i => i.id);
+      const instanceIds = instances.map(i => i.id); // 聚合模式下，我们用 MAX(id) 作为代表获取主图
       
       // 批量获取图片
       const imagesResult = await db.query<any>(
@@ -128,15 +167,18 @@ export class EquipmentServiceV3 {
       }
 
       for (const instance of instances) {
-        // 配件
-        const accessories = await db.query<any>(
-          `SELECT * FROM equipment_accessory_instances 
-           WHERE host_equipment_id = ?`,
-          [instance.id]
-        );
-        instance.accessories = accessories;
         // 图片
         instance.main_image = imagesMap[instance.id] || null;
+        
+        // 如果是非聚合模式，尝试获取配件
+        if (!merge) {
+          const accessories = await db.query<any>(
+            `SELECT * FROM equipment_accessory_instances 
+             WHERE host_equipment_id = ?`,
+            [instance.id]
+          );
+          instance.accessories = accessories;
+        }
       }
     }
 

@@ -395,7 +395,7 @@ export default function TransferCreatePage() {
         transferReason: transferReason,
         estimatedArrivalDate: estimatedArrivalDate,
         items: transferItems.map(item => ({
-          equipment_id: item.category === 'instrument' ? item.equipment_id : undefined,
+          equipment_id: item.equipment_id,
           equipment_name: item.equipment_name,
           model_no: item.model_no,
           brand: item.brand,

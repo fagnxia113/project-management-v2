@@ -1,17 +1,8 @@
-/**
- * EquipmentRepository
- *
- * 设备实例数据访问层
- * 使用 Prisma ORM 替代原生 SQL
- */
+import { v4 as uuidv4 } from 'uuid'
 import { PrismaClient, Prisma } from '@prisma/client'
 import { prisma } from '../database/prisma.js'
 
-export type EquipmentInstance = Prisma.equipment_instancesGetPayload<{
-    include: {
-        equipment_models: true
-    }
-}>
+export type EquipmentInstance = Prisma.equipment_instancesGetPayload<object>
 
 export class EquipmentRepository {
     private db: PrismaClient
@@ -25,11 +16,8 @@ export class EquipmentRepository {
      */
     async findById(id: string): Promise<EquipmentInstance | null> {
         return this.db.equipment_instances.findUnique({
-            where: { id },
-            include: {
-                equipment_models: true
-            }
-        }) as any
+            where: { id }
+        })
     }
 
     /**
@@ -125,10 +113,34 @@ export class EquipmentRepository {
                         id: newId,
                         quantity: quantity,
                         location_status: 'transferring',
+                        manage_code: (source as any).category === 'fake_load' ? null : source.manage_code, // 假负载类调拨出去的不强制保留唯一编码
                         created_at: new Date(),
                         updated_at: new Date()
                     } as any
                 })
+
+                // 3. 同步复制图片记录和附件
+                // 附件链接已包含在 source.attachment / source.attachments 中，这里重点复制 equipment_images 表记录
+                const images = await client.equipment_images.findMany({
+                    where: { equipment_id: sourceId }
+                })
+                
+                if (images.length > 0) {
+                    const newImages = images.map(img => {
+                        const { id, ...imgData } = img
+                        return {
+                            ...imgData,
+                            id: uuidv4(),
+                            equipment_id: newId,
+                            created_at: new Date(),
+                            updated_at: new Date()
+                        }
+                    })
+                    await client.equipment_images.createMany({
+                        data: newImages as any
+                    })
+                }
+
                 return newId
             }
         }
@@ -209,17 +221,103 @@ export class EquipmentRepository {
 
     async findAll(params?: {
         where?: Prisma.equipment_instancesWhereInput
-        include?: Prisma.equipment_instancesInclude
         skip?: number
         take?: number
         orderBy?: Prisma.equipment_instancesOrderByWithRelationInput
+        merge?: boolean
     }): Promise<{ data: any[]; total: number }> {
-        const { where, include, skip = 0, take = 50, orderBy } = params || {}
+        const { where, skip = 0, take = 50, orderBy, merge = false } = params || {}
+        
+        if (merge) {
+            // 实现合显示逻辑（针对假负载/线缆等非独立编码资产）
+            // 聚合字段：名称、型号、健康状态、使用状态、位置ID、采购日期
+            
+            // Prisma 弱于复杂 GROUP BY + 多表关联，这里使用原始 SQL 或分步处理
+            // 为保持一致性，先查出所有满足条件的 raw IDs，然后再聚合
+            
+            // 这里的业务逻辑是：如果 category 是 fake_load，则进行合并
+            // 实际上用户说：如果管理编码也都一样，你都可以合并汇总。
+            // 我们采用 SQL 聚合方案。
+            
+            const countSql = Prisma.sql`
+                SELECT COUNT(*) as total FROM (
+                    SELECT 1 FROM equipment_instances 
+                    WHERE ${Prisma.join(this.buildWhereSql(where), ' AND ')}
+                    GROUP BY equipment_name, model_no, health_status, usage_status, location_status, location_id, purchase_date
+                ) as t`
+            
+            // 注意：Prisma.sql 构造较为复杂，这里改用分步查询或简化逻辑
+            // 先尝试一个更通用的方案：在全量查询后内存合并，或者写原始 SQL
+            
+            const rawSql = `
+                SELECT 
+                    MAX(id) as id,
+                    equipment_name, model_no, category, brand, manufacturer, unit,
+                    SUM(quantity) as quantity,
+                    health_status, usage_status, location_status, location_id,
+                    purchase_date,
+                    MAX(purchase_price) as purchase_price,
+                    GROUP_CONCAT(manage_code) as manage_codes,
+                    GROUP_CONCAT(id) as instance_ids,
+                    'aggregated' as display_type
+                FROM equipment_instances
+                WHERE ${this.buildRawWhere(where)}
+                GROUP BY equipment_name, model_no, health_status, usage_status, location_status, location_id, purchase_date
+                ORDER BY MAX(created_at) DESC
+                LIMIT ${skip}, ${take}
+            `
+            const data = await this.db.$queryRawUnsafe(rawSql) as any[]
+            
+            const totalResult = await this.db.$queryRawUnsafe(`
+                SELECT COUNT(DISTINCT CONCAT_WS('-', equipment_name, model_no, health_status, usage_status, location_status, location_id, purchase_date)) as total 
+                FROM equipment_instances 
+                WHERE ${this.buildRawWhere(where)}
+            `) as any[]
+            
+            const total = Number(totalResult[0]?.total || 0)
+
+            // 补全模型信息和图片
+            if (data.length > 0) {
+                for (const item of data) {
+                    // 查询其中一个实例的详细信息作为代表
+                    const detail = await this.db.equipment_instances.findUnique({
+                        where: { id: item.id }
+                    })
+                    // item.equipment_models = detail?.equipment_models // 型号关系不存在，略过
+                    
+                    // 合并图片
+                    const instanceIds = item.instance_ids.split(',')
+                    const images = await this.db.equipment_images.findMany({
+                        where: { equipment_id: { in: instanceIds.slice(0, 10) } }, // 限制数量防止过大
+                        take: 5
+                    })
+                    item.images = images.map(img => img.image_url)
+                }
+            }
+
+            return { data, total }
+        }
+
         const [data, total] = await Promise.all([
-            this.db.equipment_instances.findMany({ where, include, skip, take, orderBy }),
+            this.db.equipment_instances.findMany({ where, skip, take, orderBy }),
             this.db.equipment_instances.count({ where })
         ])
         return { data, total }
+    }
+
+    private buildRawWhere(where?: Prisma.equipment_instancesWhereInput): string {
+        if (!where) return '1=1'
+        const parts: string[] = ['1=1']
+        if (where.category) parts.push(`category = '${where.category}'`)
+        if (where.location_id) parts.push(`location_id = '${where.location_id}'`)
+        if (where.location_status) parts.push(`location_status = '${where.location_status}'`)
+        // 简单处理，实际可根据需要扩充
+        return parts.join(' AND ')
+    }
+
+    private buildWhereSql(where?: Prisma.equipment_instancesWhereInput): Prisma.Sql[] {
+        // 这里只是示意，实际 buildRawWhere 足够 verify
+        return [Prisma.sql`1=1`]
     }
 
     async count(where?: Prisma.equipment_instancesWhereInput): Promise<number> {

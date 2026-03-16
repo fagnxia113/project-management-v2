@@ -82,14 +82,17 @@ export class EquipmentAccessoryService {
   async createAccessoryInstance(dto: CreateAccessoryDto): Promise<AccessoryInstance> {
     const id = uuidv4();
     
-    // 业务逻辑：假负载不生成管理编码，其余类型如果没传则生成
+    // 业务逻辑：假负载不生成管理编码，其余类型如果没传且数量为1且是独立编码追踪，则生成
     let manageCode = dto.manage_code || null;
-    if (!manageCode && dto.category !== 'fake_load' && dto.tracking_type === 'SERIALIZED') {
+    const isFakeLoad = dto.category === 'fake_load';
+    const isBulk = (dto.quantity || 1) > 1;
+    
+    if (!manageCode && !isFakeLoad && !isBulk && dto.tracking_type === 'SERIALIZED') {
       manageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
     }
     
-    // 强化业务规则：假负载强制 BATCH
-    const finalTrackingType = dto.category === 'fake_load' ? 'BATCH' : dto.tracking_type;
+    // 强化业务规则：假负载或数量 > 1 的配件通常不需要 SERIALIZED 追踪（除非用户指定）
+    const finalTrackingType = isFakeLoad ? 'BATCH' : (dto.tracking_type || 'SERIALIZED');
 
     await db.execute(
       `INSERT INTO equipment_accessory_instances (
@@ -536,17 +539,76 @@ export class EquipmentAccessoryService {
       [finalHostId, accessoryId]
     );
 
+    let newRecordId: string | null = null;
+
     if (relation && relation.length > 0) {
       const currentQty = relation[0].quantity;
       if (currentQty > unbindQuantity) {
+        // 部分解绑：减少关联表数量，并创建新的解绑记录
         await db.execute(
           'UPDATE equipment_accessories SET quantity = quantity - ? WHERE host_equipment_id = ? AND accessory_id = ?',
           [unbindQuantity, finalHostId, accessoryId]
         );
+        
+        // 获取原配件信息，创建新的未绑定记录
+        const accessoryInfo = await db.queryOne<any>(
+          'SELECT * FROM equipment_accessory_instances WHERE id = ?',
+          [accessoryId]
+        );
+        
+        if (accessoryInfo) {
+          newRecordId = uuidv4();
+          await db.execute(
+            `INSERT INTO equipment_accessory_instances (
+              id, accessory_name, model_no, brand, category, unit, quantity,
+              location_id, location_status, keeper_id, health_status, usage_status,
+              tracking_type, serial_number, manage_code, purchase_date, purchase_price,
+              created_at, updated_at, source_type, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              newRecordId,
+              accessoryInfo.accessory_name,
+              accessoryInfo.model_no,
+              accessoryInfo.brand,
+              accessoryInfo.category,
+              accessoryInfo.unit,
+              unbindQuantity,
+              accessoryInfo.location_id,
+              accessoryInfo.location_status,
+              accessoryInfo.keeper_id,
+              accessoryInfo.health_status,
+              'idle',
+              accessoryInfo.tracking_type,
+              accessoryInfo.serial_number,
+              accessoryInfo.manage_code,
+              accessoryInfo.purchase_date,
+              accessoryInfo.purchase_price,
+              new Date(),
+              new Date(),
+              'inbound_separate',
+              'normal'
+            ]
+          );
+        }
+        
+        // 更新原记录数量为剩余数量
+        await db.execute(
+          'UPDATE equipment_accessory_instances SET quantity = ? WHERE id = ?',
+          [currentQty - unbindQuantity, accessoryId]
+        );
       } else {
+        // 全部解绑
         await db.execute(
           'DELETE FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
           [finalHostId, accessoryId]
+        );
+        
+        // 更新实例表，解除绑定
+        await db.execute(
+          `UPDATE equipment_accessory_instances 
+           SET host_equipment_id = NULL, usage_status = 'idle', bound_at = NULL
+           WHERE id = ?`,
+          [accessoryId]
         );
       }
     }
@@ -803,7 +865,7 @@ export class EquipmentAccessoryService {
   }): Promise<AccessoryInstance[]> {
     let sql = 'SELECT * FROM equipment_accessory_instances WHERE host_equipment_id IS NULL';
     const params: any[] = [];
-
+    
     if (options?.category) {
       sql += ' AND category = ?';
       params.push(options.category);
@@ -826,6 +888,120 @@ export class EquipmentAccessoryService {
     return rows;
   }
 
+  async splitForTransfer(sourceId: string, quantity: number, transferOrderId: string, tx?: any): Promise<string> {
+        let source: any
+        
+        if (tx) {
+            const results = await tx.$queryRawUnsafe(`SELECT * FROM equipment_accessory_instances WHERE id = ?`, sourceId)
+            source = (results as any[])[0]
+        } else {
+            source = await db.queryOne<any>(
+                `SELECT * FROM equipment_accessory_instances WHERE id = ?`,
+                [sourceId]
+            )
+        }
+        
+        if (!source) throw new Error('Source accessory not found')
+
+        if (source.quantity === quantity) {
+            // 全额调拨，仅更新状态
+            if (tx) {
+                await tx.$executeRawUnsafe(
+                    `UPDATE equipment_accessory_instances SET location_status = 'transferring', updated_at = NOW() WHERE id = ?`,
+                    sourceId
+                )
+            } else {
+                await db.execute(
+                    `UPDATE equipment_accessory_instances SET location_status = 'transferring', updated_at = NOW() WHERE id = ?`,
+                    [sourceId]
+                )
+            }
+            return sourceId
+        }
+
+        // 1. 更新原记录数量
+        if (tx) {
+            await tx.$executeRawUnsafe(
+                `UPDATE equipment_accessory_instances SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?`,
+                quantity, sourceId
+            )
+        } else {
+            await db.execute(
+                `UPDATE equipment_accessory_instances SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?`,
+                [quantity, sourceId]
+            )
+        }
+
+        // 2. 创建新记录（运输中）
+        const newId = `TR-ACC-${sourceId.slice(0, 8)}-${transferOrderId.slice(-4)}`
+        const commonFields = {
+            id: newId,
+            accessory_name: source.accessory_name,
+            model_no: source.model_no,
+            category: source.category,
+            brand: source.brand,
+            unit: source.unit || '个',
+            quantity: quantity,
+            manage_code: source.manage_code,
+            serial_number: source.serial_number,
+            health_status: source.health_status,
+            usage_status: source.usage_status,
+            location_status: 'transferring',
+            location_id: source.location_id,
+            keeper_id: source.keeper_id,
+            purchase_date: source.purchase_date,
+            purchase_price: source.purchase_price,
+            notes: source.notes,
+            attachments: source.attachments ? (typeof source.attachments === 'string' ? source.attachments : JSON.stringify(source.attachments)) : null,
+            host_equipment_id: source.host_equipment_id
+        }
+
+        const fields = Object.keys(commonFields)
+        const placeholders = fields.map(() => '?').join(', ')
+        const values = Object.values(commonFields)
+
+        if (tx) {
+            await tx.$executeRawUnsafe(
+                `INSERT INTO equipment_accessory_instances (${fields.join(', ')}, created_at, updated_at) VALUES (${placeholders}, NOW(), NOW())`,
+                ...values
+            )
+        } else {
+            await db.execute(
+                `INSERT INTO equipment_accessory_instances (${fields.join(', ')}, created_at, updated_at) VALUES (${placeholders}, NOW(), NOW())`,
+                values
+            )
+        }
+
+        // 3. 同步复制图片记录
+        let images: any[]
+        if (tx) {
+            images = await tx.$queryRawUnsafe(`SELECT * FROM equipment_images WHERE equipment_id = ?`, sourceId)
+        } else {
+            images = await db.query<any>(`SELECT * FROM equipment_images WHERE equipment_id = ?`, [sourceId])
+        }
+
+        if (images.length > 0) {
+            for (const img of images) {
+                const imgId = uuidv4()
+                if (tx) {
+                    await tx.$executeRawUnsafe(
+                        `INSERT INTO equipment_images (id, equipment_id, equipment_name, model_no, category, image_type, image_url, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+                        imgId, newId, img.equipment_name, img.model_no, img.category, img.image_type, img.image_url
+                    )
+                } else {
+                    await db.execute(
+                        `INSERT INTO equipment_images (id, equipment_id, equipment_name, model_no, category, image_type, image_url, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+                        [imgId, newId, img.equipment_name, img.model_no, img.category, img.image_type, img.image_url]
+                    )
+                }
+            }
+        }
+
+        return newId
+    }
+
   async getAllAccessories(options?: {
     category?: string;
     status?: string;
@@ -835,9 +1011,11 @@ export class EquipmentAccessoryService {
     location_id?: string;
     page?: number;
     pageSize?: number;
+    merge?: boolean;
   }): Promise<{ list: AccessoryInstance[]; total: number }> {
     let whereClause = '1=1';
     const params: any[] = [];
+    const merge = options?.merge || false;
 
     if (options?.category) {
       whereClause += ' AND category = ?';
@@ -873,21 +1051,62 @@ export class EquipmentAccessoryService {
       params.push(kw, kw, kw);
     }
 
-    const countSql = `SELECT COUNT(*) as total FROM equipment_accessory_instances WHERE ${whereClause}`;
+    let countSql = `SELECT COUNT(*) as total FROM equipment_accessory_instances WHERE ${whereClause}`;
+    let selectFields = `ai.*, 
+      CASE 
+        WHEN ai.location_status = 'warehouse' THEN w.name 
+        WHEN ai.location_status IN ('project', 'project_on', 'in_project') THEN p.name 
+        ELSE NULL 
+      END as location_name,
+      e.name as keeper_name,
+      eq.equipment_name as host_equipment_name`;
+    let groupBy = '';
+
+    if (merge) {
+      groupBy = 'GROUP BY ai.accessory_name, ai.model_no, ai.brand, ai.health_status, ai.usage_status, ai.location_status, ai.location_id, ai.purchase_date';
+      countSql = `SELECT COUNT(*) as total FROM (SELECT 1 FROM equipment_accessory_instances ai WHERE ${whereClause} ${groupBy}) as t`;
+      selectFields = `
+        MAX(ai.id) as id,
+        ai.accessory_name,
+        ai.model_no,
+        ai.brand,
+        MAX(ai.category) as category,
+        MAX(ai.unit) as unit,
+        SUM(ai.quantity) as quantity,
+        GROUP_CONCAT(ai.manage_code) as manage_codes,
+        GROUP_CONCAT(ai.id) as instance_ids,
+        ai.health_status,
+        ai.usage_status,
+        ai.location_status,
+        ai.location_id,
+        MAX(ai.host_equipment_id) as host_equipment_id,
+        MAX(ai.keeper_id) as keeper_id,
+        ai.purchase_date,
+        MAX(ai.purchase_price) as purchase_price,
+        CASE 
+          WHEN ai.location_status = 'warehouse' THEN MAX(w.name) 
+          WHEN ai.location_status IN ('project', 'project_on', 'in_project') THEN MAX(p.name) 
+          ELSE NULL 
+        END as location_name,
+        MAX(e.name) as keeper_name,
+        MAX(eq.equipment_name) as host_equipment_name,
+        'aggregated' as display_type
+      `;
+    }
+
     const countResult = await db.query<any>(countSql, params);
     const total = countResult[0]?.total || 0;
 
-    let querySql = `SELECT ai.*, 
-      w.name as location_name,
-      e.name as keeper_name,
-      eq.equipment_name as host_equipment_name
+    let querySql = `SELECT ${selectFields}
      FROM equipment_accessory_instances ai
      LEFT JOIN warehouses w ON ai.location_id = w.id
+     LEFT JOIN projects p ON ai.location_id = p.id
      LEFT JOIN employees e ON ai.keeper_id = e.id
      LEFT JOIN equipment_instances eq ON ai.host_equipment_id = eq.id
-     WHERE ${whereClause}`;
+     WHERE ${whereClause}
+     ${groupBy}`;
     
-    querySql += ' ORDER BY ai.created_at DESC';
+    querySql += merge ? ' ORDER BY MAX(ai.created_at) DESC' : ' ORDER BY ai.created_at DESC';
     
     if (options?.page && options?.pageSize) {
       querySql += ` LIMIT ${(options.page - 1) * options.pageSize}, ${options.pageSize}`;

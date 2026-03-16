@@ -18,7 +18,7 @@ import {
     GetOrdersParams,
     TransferOrderWithItems,
 } from '../repository/TransferOrderRepository.js'
-import { equipmentAccessoryServiceV2 as equipmentAccessoryService } from './EquipmentAccessoryServiceV2.js'
+import { equipmentAccessoryService } from './EquipmentAccessoryService.js'
 import { equipmentRepository } from '../repository/EquipmentRepository.js'
 
 // =====================================================================
@@ -167,13 +167,20 @@ export class TransferOrderServiceV2 {
                     quantity: item.quantity,
                     notes: item.notes,
                     accessory_info: accessoryInfo,
-                    accessory_desc: item.accessory_desc
+                    accessory_desc: item.accessory_desc,
+                    is_accessory: item.is_accessory || (item as any).isAccessory
                 } satisfies CreateOrderItemData
             })
         )
 
         // 4. 一次性事务写入
-        return this.repo.createWithItems(orderData, itemsData)
+        try {
+            const order = await this.repo.createWithItems(orderData, itemsData)
+            return order
+        } catch (error) {
+            console.error('[TransferOrderServiceV2] createOrder ERROR:', error)
+            throw error
+        }
     }
 
     // -------------------------------------------------------------------
@@ -332,6 +339,16 @@ export class TransferOrderServiceV2 {
         }
     ): Promise<TransferOrderWithItems> {
         return prisma.$transaction(async (tx) => {
+            // 检查订单状态，防止重复执行
+            const existingOrder = await tx.equipment_transfer_orders.findUnique({ where: { id } })
+            if (!existingOrder) {
+                throw new Error('调拨单不存在')
+            }
+            if (existingOrder.status === 'shipping' || existingOrder.status === 'in_transit') {
+                console.log('[TransferOrderServiceV2] confirmShipping - 订单已发货，跳过库存更新')
+                return existingOrder as any
+            }
+            
             // 1. 更新订单基本信息
             await this.repo.confirmShipping(id, {
                 shipping_no: params.shipping_no,
@@ -345,15 +362,18 @@ export class TransferOrderServiceV2 {
 
             // 2. 更新库存状态（改为运输中）
             const items = await this.repo.findItems(id)
+            console.log('[TransferOrderServiceV2] confirmShipping items found:', items.length)
             for (const item of items) {
+                console.log('[TransferOrderServiceV2] processing item:', JSON.stringify(item, null, 2))
                 if (!item.equipment_id) continue
 
-                if ((item as any).is_accessory) {
-                    await tx.equipment_accessory_instances.update({
-                        where: { id: item.equipment_id },
-                        data: { location_status: 'transferring' }
-                    })
+                let newEquipmentId: string | null = null
+
+                if (item.is_accessory) {
+                    // 独立配件：分拆数量（如果数量 > 1）
+                    newEquipmentId = await equipmentAccessoryService.splitForTransfer(item.equipment_id, item.quantity, id, tx)
                 } else if (item.category === 'instrument') {
+                    // Serialized equipment: quantity 1, just update status
                     await equipmentRepository.update(item.equipment_id, {
                         location_status: 'transferring'
                     }, tx)
@@ -362,9 +382,17 @@ export class TransferOrderServiceV2 {
                         where: { host_equipment_id: item.equipment_id },
                         data: { location_status: 'transferring' }
                     })
+                    newEquipmentId = item.equipment_id
                 } else {
                     // 假负载/线缆类：分拆数量
-                    await equipmentRepository.splitForTransfer(item.equipment_id, item.quantity, id, tx)
+                    newEquipmentId = await equipmentRepository.splitForTransfer(item.equipment_id, item.quantity, id, tx)
+                }
+
+                // 如果分拆产生了新的 ID，则更新调拨单明细中的 equipment_id
+                if (newEquipmentId && newEquipmentId !== item.equipment_id) {
+                    await this.repo.updateItem(item.id, {
+                        equipment_id: newEquipmentId
+                    }, tx)
                 }
             }
 
@@ -390,6 +418,16 @@ export class TransferOrderServiceV2 {
         }
     ): Promise<boolean> {
         return prisma.$transaction(async (tx) => {
+            // 检查订单状态，防止重复执行
+            const existingOrder = await tx.equipment_transfer_orders.findUnique({ where: { id } })
+            if (!existingOrder) {
+                throw new Error('调拨单不存在')
+            }
+            if (existingOrder.status === 'completed' || existingOrder.status === 'received') {
+                console.log('[TransferOrderServiceV2] confirmReceiving - 订单已收货，跳过')
+                return true
+            }
+            
             const items = await this.repo.findItems(id)
             let isPartial = false
             let totalReceived = 0
@@ -450,21 +488,84 @@ export class TransferOrderServiceV2 {
                 const receivedQty = receivedInfo?.received_quantity ?? item.quantity
 
                 if (receivedQty <= 0) {
-                    // 如果没收到，状态应回退或标记异常
+                    // 没收到：将设备状态回退到原位置（退货）
+                    const originalLocationId = item.location_id || existingOrder.from_location_id
+                    const originalStatus = existingOrder.from_location_type === 'warehouse' ? 'warehouse' : 'in_project'
+                    
+                    if ((item as any).is_accessory) {
+                        await tx.equipment_accessory_instances.update({
+                            where: { id: item.equipment_id },
+                            data: {
+                                location_id: originalLocationId,
+                                location_status: originalStatus as any,
+                                updated_at: new Date()
+                            }
+                        })
+                    } else if (item.category === 'instrument') {
+                        await equipmentRepository.update(item.equipment_id, {
+                            location_id: originalLocationId,
+                            location_status: originalStatus,
+                            updated_at: new Date()
+                        }, tx)
+                    } else {
+                        await equipmentRepository.update(item.equipment_id, {
+                            location_id: originalLocationId,
+                            location_status: originalStatus,
+                            updated_at: new Date()
+                        }, tx)
+                    }
+                    console.log(`[TransferOrderServiceV2] 设备 ${item.equipment_name} 退货，回退到原位置`)
                     continue
                 }
 
                 if ((item as any).is_accessory) {
                     // 如果是独立配件，更新配件表
-                    await tx.equipment_accessory_instances.update({
-                        where: { id: item.equipment_id },
-                        data: {
-                            location_id: targetLocationId,
-                            location_status: targetStatus as any,
-                            keeper_id: managerId ?? undefined,
-                            updated_at: new Date()
-                        }
-                    })
+                    // 处理部分收货：拆分出未收到的数量作为退货
+                    if (receivedQty < item.quantity) {
+                        const returnQty = item.quantity - receivedQty
+                        // 创建退货记录
+                        await tx.equipment_accessory_instances.create({
+                            data: {
+                                id: uuidv4(),
+                                accessory_name: item.equipment_name,
+                                model_no: item.model_no,
+                                brand: item.brand,
+                                category: item.category as any,
+                                unit: item.unit,
+                                quantity: returnQty,
+                                location_id: existingOrder.from_location_id || item.location_id,
+                                location_status: existingOrder.from_location_type === 'warehouse' ? 'warehouse' : 'project',
+                                keeper_id: existingOrder.from_manager_id || undefined,
+                                health_status: 'normal',
+                                usage_status: 'idle',
+                                created_at: new Date(),
+                                updated_at: new Date()
+                            }
+                        })
+                        // 更新原记录数量为收到的数量
+                        await tx.equipment_accessory_instances.update({
+                            where: { id: item.equipment_id },
+                            data: {
+                                quantity: receivedQty,
+                                location_id: targetLocationId,
+                                location_status: targetStatus as any,
+                                keeper_id: managerId ?? undefined,
+                                updated_at: new Date()
+                            }
+                        })
+                        console.log(`[TransferOrderServiceV2] 配件 ${item.equipment_name} 部分收货：收到${receivedQty}，退货${returnQty}`)
+                    } else {
+                        // 全额收货
+                        await tx.equipment_accessory_instances.update({
+                            where: { id: item.equipment_id },
+                            data: {
+                                location_id: targetLocationId,
+                                location_status: targetStatus as any,
+                                keeper_id: managerId ?? undefined,
+                                updated_at: new Date()
+                            }
+                        })
+                    }
                 } else if (item.category === 'instrument') {
                     // 如果是主设备（仪器类），更新主表并同步其绑定的配件
                     await equipmentRepository.transferEquipment(item.equipment_id, {
@@ -474,12 +575,43 @@ export class TransferOrderServiceV2 {
                     }, tx)
                 } else {
                     // 非仪器类主设备（线缆/假负载）
-                    await equipmentRepository.update(item.equipment_id, {
-                        location_id: targetLocationId,
-                        location_status: targetStatus,
-                        keeper_id: managerId ?? undefined,
-                        updated_at: new Date()
-                    }, tx)
+                    // 处理部分收货：拆分出未收到的数量作为退货
+                    if (receivedQty < item.quantity) {
+                        const returnQty = item.quantity - receivedQty
+                        // 创建退货记录
+                        await equipmentRepository.create({
+                            equipment_name: item.equipment_name,
+                            model_no: item.model_no,
+                            brand: item.brand || undefined,
+                            category: item.category as any,
+                            unit: item.unit,
+                            quantity: returnQty,
+                            location_id: existingOrder.from_location_id || item.location_id,
+                            location_status: existingOrder.from_location_type === 'warehouse' ? 'warehouse' : 'in_project',
+                            keeper_id: existingOrder.from_manager_id || undefined,
+                            health_status: 'normal',
+                            usage_status: 'idle',
+                            created_at: new Date(),
+                            updated_at: new Date()
+                        } as any, tx)
+                        // 更新原记录数量为收到的数量
+                        await equipmentRepository.update(item.equipment_id, {
+                            quantity: receivedQty,
+                            location_id: targetLocationId,
+                            location_status: targetStatus,
+                            keeper_id: managerId ?? undefined,
+                            updated_at: new Date()
+                        }, tx)
+                        console.log(`[TransferOrderServiceV2] 设备 ${item.equipment_name} 部分收货：收到${receivedQty}，退货${returnQty}`)
+                    } else {
+                        // 全额收货
+                        await equipmentRepository.update(item.equipment_id, {
+                            location_id: targetLocationId,
+                            location_status: targetStatus,
+                            keeper_id: managerId ?? undefined,
+                            updated_at: new Date()
+                        }, tx)
+                    }
                 }
             }
 
@@ -513,17 +645,17 @@ export class TransferOrderServiceV2 {
         projectId?: string
     ): Promise<{ locationName: string | null; managerId: string | null; managerName: string | null }> {
         if (locationType === 'warehouse' && warehouseId) {
-            const wh = await prisma.warehouses.findUnique({
+            const warehouse = await prisma.warehouses.findUnique({
                 where: { id: warehouseId }
             })
-            if (!wh) return { locationName: null, managerId: null, managerName: null }
+            if (!warehouse) return { locationName: null, managerId: null, managerName: null }
 
             let managerName: string | null = null
-            if (wh.manager_id) {
-                const manager = await prisma.employees.findUnique({ where: { id: wh.manager_id } })
+            if (warehouse.manager_id) {
+                const manager = await prisma.employees.findUnique({ where: { id: warehouse.manager_id } })
                 managerName = manager?.name ?? null
             }
-            return { locationName: wh.name, managerId: wh.manager_id ?? null, managerName }
+            return { locationName: warehouse.name, managerId: warehouse.manager_id ?? null, managerName }
         }
 
         if ((locationType === 'project') && projectId) {

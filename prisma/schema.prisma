@@ -461,7 +461,7 @@ model equipment_instances {
   quantity           Int?                                 @default(1)
   serial_number      String?                              @db.VarChar(100)
   factory_serial_no  String?                              @db.VarChar(100)
-  manage_code        String                               @unique(map: "manage_code") @db.VarChar(50)
+  manage_code        String?                              @unique(map: "manage_code") @db.VarChar(50)
   health_status      equipment_instances_health_status?   @default(normal)
   usage_status       equipment_instances_usage_status?    @default(idle)
   location_status    equipment_instances_location_status? @default(warehouse)

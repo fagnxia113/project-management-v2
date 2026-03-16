@@ -56,6 +56,9 @@ const AccessoryDetailPage: React.FC = () => {
 
   // 绑定功能相关状态
   const [showBindModal, setShowBindModal] = useState(false)
+  const [showUnbindModal, setShowUnbindModal] = useState(false)
+  const [unbindQty, setUnbindQty] = useState(1)
+  const [unbinding, setUnbinding] = useState(false)
   const [availableEquipment, setAvailableEquipment] = useState<any[]>([])
   const [loadingEquip, setLoadingEquip] = useState(false)
   const [selectedEq, setSelectedEq] = useState<any | null>(null)
@@ -544,6 +547,14 @@ const AccessoryDetailPage: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">绑定信息</h2>
+                {isAdmin && accessory.host_equipment_id && (
+                  <button
+                    onClick={() => setShowUnbindModal(true)}
+                    className="px-3 py-1 bg-red-50 text-red-600 rounded border border-red-200 hover:bg-red-100 text-xs"
+                  >
+                    解绑
+                  </button>
+                )}
                 {isAdmin && !accessory.host_equipment_id && (
                   <button
                     onClick={() => setShowBindModal(true)}
@@ -669,6 +680,88 @@ const AccessoryDetailPage: React.FC = () => {
                         确认绑定
                       </button>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 解绑设备弹窗 */}
+            {showUnbindModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="text-lg font-bold">解绑配件</h3>
+                    <button onClick={() => { setShowUnbindModal(false); setUnbindQty(1); }} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                  </div>
+                  
+                  <div className="p-6 space-y-4">
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <div className="text-sm text-gray-500">配件名称</div>
+                      <div className="font-bold">{accessory.accessory_name}</div>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <div className="text-sm text-gray-500">当前绑定设备</div>
+                      <div className="font-bold text-blue-600">{accessory.host_equipment_name}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">解绑数量 (当前绑定: {accessory.quantity})</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max={accessory.quantity}
+                        value={unbindQty}
+                        onChange={(e) => setUnbindQty(Math.min(accessory.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-lg font-bold"
+                      />
+                      {unbindQty < accessory.quantity && (
+                        <p className="mt-2 text-sm text-orange-600 bg-orange-50 p-2 rounded">
+                          提示：解绑数量少于当前绑定数量，系统将自动拆分出一条新记录（保留在原设备上）。
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <button
+                        onClick={() => { setShowUnbindModal(false); setUnbindQty(1); }}
+                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                        disabled={unbinding}
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!accessory.id) return
+                          setUnbinding(true)
+                          try {
+                            const token = localStorage.getItem('token')
+                            const response = await fetch(`${API_URL.BASE}/api/equipment/accessories/${accessory.id}/unbind`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                              },
+                              body: JSON.stringify({ quantity: unbindQty })
+                            })
+                            const result = await response.json()
+                            if (result.success) {
+                              alert('解绑成功')
+                              setShowUnbindModal(false)
+                              setUnbindQty(1)
+                              loadAccessoryData()
+                            } else {
+                              throw new Error(result.error || '解绑失败')
+                            }
+                          } catch (err: any) {
+                            alert(err.message || '解绑失败')
+                          } finally {
+                            setUnbinding(false)
+                          }
+                        }}
+                        disabled={unbinding || unbindQty < 1}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300"
+                      >
+                        {unbinding ? '解绑中...' : '确认解绑'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

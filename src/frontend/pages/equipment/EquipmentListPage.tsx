@@ -105,7 +105,8 @@ export default function EquipmentListPage() {
         ...(filterHealthStatus && { health_status: filterHealthStatus }),
         ...(filterUsageStatus && { usage_status: filterUsageStatus }),
         ...(filterLocationStatus && { location_status: filterLocationStatus }),
-        ...(filterLocationId && { location_id: filterLocationId })
+        ...(filterLocationId && { location_id: filterLocationId }),
+        merge: 'true'
       })
 
       const response = await fetch(`${API_URL.BASE}/api/equipment/instances?${params}`, { headers })

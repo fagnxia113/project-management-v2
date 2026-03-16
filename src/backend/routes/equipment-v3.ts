@@ -58,7 +58,8 @@ router.get('/instances', async (req, res) => {
       category: req.query.category as string,
       status: req.query.status as string,
       locationId: req.query.location_id as string || req.query.locationId as string,
-      trackingType: req.query.trackingType as 'SERIALIZED' | 'BATCH'
+      trackingType: req.query.trackingType as 'SERIALIZED' | 'BATCH',
+      merge: req.query.merge === 'true' || req.query.merge === true
     };
 
     const result = await equipmentServiceV3.getInstances(params);
@@ -140,7 +141,15 @@ router.put('/equipment/:id/status', async (req, res) => {
 // 获取配件列表
 router.get('/equipment/accessories', async (req, res) => {
   try {
-    const result = await equipmentAccessoryService.getAllAccessories({});
+    const options = {
+      category: req.query.category as string,
+      status: req.query.status as string,
+      keyword: req.query.keyword as string,
+      page: parseInt(req.query.page as string) || 1,
+      pageSize: parseInt(req.query.pageSize as string) || 50,
+      merge: req.query.merge === 'true' || req.query.merge === true
+    };
+    const result = await equipmentAccessoryService.getAllAccessories(options);
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });

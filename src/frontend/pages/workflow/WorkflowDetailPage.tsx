@@ -607,6 +607,7 @@ export default function WorkflowDetailPage() {
       const isEquipmentRepair = instance.definition_key === 'equipment-repair'
       const formData = instance.variables?.formData || {}
       const transferOrderId = instance.business_id || formData.transferOrderId
+      const repairOrderId = instance.business_id || formData.repairOrderId
 
       // 设备调拨 - 调出方审批时先调用发货API
       console.log('[WorkflowDetailPage] 准备调用发货API - 条件检查:', {
@@ -719,7 +720,7 @@ export default function WorkflowDetailPage() {
         }
         
         completeParams.formData = {
-          receive_status: receiveStatus === 'normal' ? 'normal' : 'exception',
+          receive_status: receiveStatus === 'normal' ? 'normal' : 'partial',
           receive_comment: receiveComment,
           receive_items: receiveItems
         }
@@ -742,7 +743,7 @@ export default function WorkflowDetailPage() {
               'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-              receive_status: receiveStatus,
+              receive_status: receiveStatus === 'normal' ? 'normal' : 'partial',
               receive_comment: receiveComment,
               received_items: receiveItems,
               item_images: itemImages,
@@ -1504,44 +1505,239 @@ export default function WorkflowDetailPage() {
           </div>
         )}
 
-        {isEquipmentTransfer && isInboundApproval && (
+        {isEquipmentTransfer && (
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
             <h3 className="font-semibold text-blue-900 mb-4 flex items-center gap-2">
               <Send className="w-5 h-5 text-blue-600" />
               发货信息
             </h3>
-            {(formData.shipping_date || formData.shipping_no || formData.shipping_notes) ? (
+            {(formData.shipping_date || formData.shipping_no || formData.shipping_notes || transferOrder?.shipped_at || transferOrder?.shipping_no) ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {formData.shipping_date && (
+                {(formData.shipping_date || transferOrder?.shipped_at) && (
                   <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
                     <Calendar className="w-4 h-4 text-blue-600 mt-0.5" />
                     <div className="flex-1">
                       <div className="text-sm text-gray-500 mb-1">发货时间</div>
-                      <div className="text-sm text-gray-900">{formData.shipping_date}</div>
+                      <div className="text-sm text-gray-900">
+                        {formData.shipping_date || (transferOrder?.shipped_at ? String(transferOrder.shipped_at).substring(0, 16).replace('T', ' ') : '-')}
+                      </div>
                     </div>
                   </div>
                 )}
-                {formData.shipping_no && (
+                {(formData.shipping_no || transferOrder?.shipping_no) && (
                   <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
                     <FileText className="w-4 h-4 text-blue-600 mt-0.5" />
                     <div className="flex-1">
                       <div className="text-sm text-gray-500 mb-1">物流单号</div>
-                      <div className="text-sm text-gray-900">{formData.shipping_no}</div>
+                      <div className="text-sm text-gray-900">{formData.shipping_no || transferOrder?.shipping_no || '-'}</div>
                     </div>
                   </div>
                 )}
-                {formData.shipping_notes && (
+                {(formData.shipping_notes || transferOrder?.notes) && (
                   <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100 md:col-span-2">
                     <FileText className="w-4 h-4 text-blue-600 mt-0.5" />
                     <div className="flex-1">
                       <div className="text-sm text-gray-500 mb-1">发货备注</div>
-                      <div className="text-sm text-gray-900">{formData.shipping_notes}</div>
+                      <div className="text-sm text-gray-900">{formData.shipping_notes || transferOrder?.notes || '-'}</div>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
               <div className="text-center text-gray-500 py-4">暂无发货信息</div>
+            )}
+
+            {/* 发货整体照片显示 */}
+            {transferOrder?.shipping_package_images && (
+              <div className="mt-4 pt-4 border-t border-blue-100">
+                <div className="text-sm text-gray-500 mb-2 flex items-center gap-1">
+                  <Camera className="w-4 h-4" />
+                  打包整体照片
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    const imgs = transferOrder.shipping_package_images;
+                    const images = Array.isArray(imgs) ? imgs : (typeof imgs === 'string' ? (JSON.parse(imgs) || []) : []);
+                    return Array.isArray(images) ? images.map((url: string, idx: number) => (
+                      <img 
+                        key={idx} 
+                        src={url} 
+                        alt="" 
+                        className="w-24 h-24 object-cover rounded-lg border border-white shadow-sm cursor-pointer hover:opacity-80 transition-opacity" 
+                        onClick={() => window.open(url, '_blank')} 
+                      />
+                    )) : null;
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* 发货设备明细 */}
+            {transferOrder?.items && transferOrder.items.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-blue-100">
+                <div className="text-sm font-medium text-gray-700 mb-2">发货设备明细</div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-blue-50">
+                      <tr>
+                        <th className="px-2 py-1 text-left">设备名称</th>
+                        <th className="px-2 py-1 text-left">型号</th>
+                        <th className="px-2 py-1 text-left">管理编号</th>
+                        <th className="px-2 py-1 text-center">发货数量</th>
+                        <th className="px-2 py-1 text-left">图片</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white">
+                      {transferOrder.items.map((item: any, idx: number) => (
+                        <tr key={idx} className="border-b border-gray-100">
+                          <td className="px-2 py-1">{item.equipment_name}</td>
+                          <td className="px-2 py-1">{item.model_no || '-'}</td>
+                          <td className="px-2 py-1">{item.manage_code || '-'}</td>
+                          <td className="px-2 py-1 text-center">{item.quantity}</td>
+                          <td className="px-2 py-1">
+                            {item.shipping_images && item.shipping_images.length > 0 ? (
+                              <div className="flex gap-1">
+                                {item.shipping_images.slice(0, 3).map((url: string, i: number) => (
+                                  <img 
+                                    key={i} 
+                                    src={url} 
+                                    alt="" 
+                                    className="w-8 h-8 object-cover rounded border cursor-pointer hover:opacity-80" 
+                                    onClick={() => window.open(url, '_blank')} 
+                                  />
+                                ))}
+                              </div>
+                            ) : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 收货信息展示 - 流程完成后或调出方查看时显示收货信息 */}
+        {isEquipmentTransfer && transferOrder && transferOrder.receive_status && (
+          <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+            <h3 className="font-semibold text-green-900 mb-4 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              收货信息
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {transferOrder.received_at && (
+                <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                  <Calendar className="w-4 h-4 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-500 mb-1">收货时间</div>
+                    <div className="text-sm text-gray-900">{String(transferOrder.received_at).substring(0, 16).replace('T', ' ')}</div>
+                  </div>
+                </div>
+              )}
+              {transferOrder.receive_status && (
+                <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-500 mb-1">收货状态</div>
+                    <div className="text-sm text-gray-900">
+                      {transferOrder.receive_status === 'normal' ? '正常收货' : 
+                       transferOrder.receive_status === 'partial' ? '部分收货' :
+                       transferOrder.receive_status === 'damaged' ? '货损' :
+                       transferOrder.receive_status === 'missing' ? '丢失' : transferOrder.receive_status}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {transferOrder.receive_comment && (
+                <div className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100 md:col-span-2">
+                  <FileText className="w-4 h-4 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-500 mb-1">收货备注</div>
+                    <div className="text-sm text-gray-900">{transferOrder.receive_comment}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 收货整体照片显示 */}
+            {transferOrder.receiving_package_images && (
+              <div className="mt-4 pt-4 border-t border-green-100">
+                <div className="text-sm text-gray-500 mb-2 flex items-center gap-1">
+                  <Camera className="w-4 h-4" />
+                  收货整体照片
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(() => {
+                    const imgs = transferOrder.receiving_package_images;
+                    const images = Array.isArray(imgs) ? imgs : (typeof imgs === 'string' ? (JSON.parse(imgs) || []) : []);
+                    return Array.isArray(images) ? images.map((url: string, idx: number) => (
+                      <img 
+                        key={idx} 
+                        src={url} 
+                        alt="" 
+                        className="w-24 h-24 object-cover rounded-lg border border-white shadow-sm cursor-pointer hover:opacity-80 transition-opacity" 
+                        onClick={() => window.open(url, '_blank')} 
+                      />
+                    )) : null;
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* 收货设备明细 */}
+            {transferOrder?.items && transferOrder.items.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-green-100">
+                <div className="text-sm font-medium text-gray-700 mb-2">收货设备明细</div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-green-50">
+                      <tr>
+                        <th className="px-2 py-1 text-left">设备名称</th>
+                        <th className="px-2 py-1 text-left">型号</th>
+                        <th className="px-2 py-1 text-left">管理编号</th>
+                        <th className="px-2 py-1 text-center">发货数量</th>
+                        <th className="px-2 py-1 text-center">实收数量</th>
+                        <th className="px-2 py-1 text-left">图片</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white">
+                      {transferOrder.items.map((item: any, idx: number) => {
+                        const receivedQty = item.received_quantity || item.quantity;
+                        const isPartial = receivedQty < item.quantity;
+                        return (
+                          <tr key={idx} className={`border-b border-gray-100 ${isPartial ? 'bg-yellow-50' : ''}`}>
+                            <td className="px-2 py-1">{item.equipment_name}</td>
+                            <td className="px-2 py-1">{item.model_no || '-'}</td>
+                            <td className="px-2 py-1">{item.manage_code || '-'}</td>
+                            <td className="px-2 py-1 text-center">{item.quantity}</td>
+                            <td className="px-2 py-1 text-center">
+                              {isPartial && <span className="text-orange-600 font-medium">{receivedQty}</span>}
+                              {!isPartial && <span className="text-green-600">{receivedQty}</span>}
+                            </td>
+                            <td className="px-2 py-1">
+                              {item.receiving_images && item.receiving_images.length > 0 ? (
+                                <div className="flex gap-1">
+                                  {item.receiving_images.slice(0, 3).map((url: string, i: number) => (
+                                    <img 
+                                      key={i} 
+                                      src={url} 
+                                      alt="" 
+                                      className="w-8 h-8 object-cover rounded border cursor-pointer hover:opacity-80" 
+                                      onClick={() => window.open(url, '_blank')} 
+                                    />
+                                  ))}
+                                </div>
+                              ) : '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -2319,10 +2515,11 @@ export default function WorkflowDetailPage() {
                       <div className="flex flex-wrap gap-2">
                         {(() => {
                           try {
-                            const images = JSON.parse(transferOrder.shipping_package_images)
-                            return images.map((url: string, idx: number) => (
+                            const imgs = transferOrder.shipping_package_images
+                            const images = Array.isArray(imgs) ? imgs : (typeof imgs === 'string' ? JSON.parse(imgs) : [])
+                            return Array.isArray(images) ? images.map((url: string, idx: number) => (
                               <img key={idx} src={url} alt="" className="w-20 h-20 object-cover rounded border cursor-pointer hover:opacity-80" onClick={() => window.open(url, '_blank')} />
-                            ))
+                            )) : null
                           } catch (e) {
                             return null
                           }
