@@ -18,12 +18,14 @@ interface Accessory {
   location_status: 'warehouse' | 'in_project' | 'repairing' | 'transferring'
   location_id?: string
   location_name?: string
+  location_manager_id?: string
+  keeper_id?: string
+  keeper_name?: string
+  keeper_user_id?: string
   host_equipment_id?: string
   host_equipment_name?: string
   bound_at?: string
   source_type?: 'inbound_bundle' | 'inbound_separate'
-  keeper_id?: string
-  keeper_name?: string
   purchase_date?: string
   purchase_price?: number
   notes?: string
@@ -52,25 +54,93 @@ const AccessoryDetailPage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Accessory>>({})
 
+  // 绑定功能相关状态
+  const [showBindModal, setShowBindModal] = useState(false)
+  const [availableEquipment, setAvailableEquipment] = useState<any[]>([])
+  const [loadingEquip, setLoadingEquip] = useState(false)
+  const [selectedEq, setSelectedEq] = useState<any | null>(null)
+  const [bindQty, setBindQty] = useState(1)
+  const [step, setStep] = useState<'select' | 'quantity'>('select')
+  const [binding, setBinding] = useState(false)
+
   useEffect(() => {
     loadAccessoryData()
     loadCurrentUser()
   }, [id])
 
-  const loadCurrentUser = async () => {
-    try {
-      const token = localStorage.getItem('token')
-      if (!token) return
+  useEffect(() => {
+    if (showBindModal && accessory?.location_id) {
+      loadAvailableEquipment()
+    }
+  }, [showBindModal, accessory?.location_id])
 
-      const response = await fetch(`${API_URL.BASE}/api/auth/me`, {
+  const loadAvailableEquipment = async () => {
+    try {
+      setLoadingEquip(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.BASE}/api/equipment/instances?location_id=${accessory?.location_id}&pageSize=100&aggregated=false&category=instrument`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       if (response.ok) {
         const result = await response.json()
-        setCurrentUser(result.user || result)
+        // 后端 EquipmentServiceV3 返回字段名为 data
+        const list = result.data || result.list || []
+        setAvailableEquipment(list)
+        if (list.length === 0) {
+          console.warn('Backend returned empty equipment list for location:', accessory?.location_id)
+        }
       }
     } catch (err) {
-      console.error('加载用户信息失败:', err)
+      console.error('加载设备失败:', err)
+    } finally {
+      setLoadingEquip(false)
+    }
+  }
+
+  const handleConfirmBind = async () => {
+    if (!selectedEq || !accessory) return
+    
+    try {
+      setBinding(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL.BASE}/api/equipment/accessories/${accessory.id}/bind-to-host`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          host_equipment_id: selectedEq.id,
+          quantity: bindQty
+        })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        alert('绑定成功')
+        setShowBindModal(false)
+        setStep('select')
+        setSelectedEq(null)
+        // 如果产生了新 ID (拆分)，跳转到新 ID
+        if (result.newId && result.newId !== accessory.id) {
+          navigate(`/equipment/accessories/${result.newId}`)
+        } else {
+          loadAccessoryData()
+        }
+      } else {
+        throw new Error(result.error || '绑定失败')
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '绑定失败')
+    } finally {
+      setBinding(false)
+    }
+  }
+
+  const loadCurrentUser = () => {
+    const user = localStorage.getItem('user')
+    if (user) {
+      setCurrentUser(JSON.parse(user))
     }
   }
 
@@ -244,7 +314,12 @@ const AccessoryDetailPage: React.FC = () => {
     return labels[sourceType] || sourceType
   }
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'root'
+  const isAdmin = currentUser?.role === 'admin' || 
+    currentUser?.role === 'root' || 
+    (accessory && (
+      currentUser?.id === accessory.location_manager_id || 
+      currentUser?.id === accessory.keeper_user_id
+    ))
 
   if (loading) {
     return (
@@ -467,7 +542,17 @@ const AccessoryDetailPage: React.FC = () => {
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">绑定信息</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">绑定信息</h2>
+                {isAdmin && !accessory.host_equipment_id && (
+                  <button
+                    onClick={() => setShowBindModal(true)}
+                    className="px-3 py-1 bg-blue-50 text-blue-600 rounded border border-blue-200 hover:bg-blue-100 text-xs"
+                  >
+                    绑定设备
+                  </button>
+                )}
+              </div>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -500,6 +585,94 @@ const AccessoryDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* 绑定设备弹窗 */}
+            {showBindModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="text-lg font-bold">绑定到设备</h3>
+                    <button onClick={() => { setShowBindModal(false); setStep('select'); }} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                  </div>
+                  
+                  <div className="p-6 flex-1 overflow-y-auto">
+                    {step === 'select' ? (
+                      <div>
+                        <p className="text-sm text-gray-500 mb-4">请选择当前位置 ({accessory.location_name}) 内的设备：</p>
+                        <div className="space-y-2">
+                          {availableEquipment.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                              {loadingEquip ? '加载中...' : '当前位置暂无可绑定的设备'}
+                            </div>
+                          ) : (
+                            availableEquipment.map(eq => (
+                              <div 
+                                key={eq.id}
+                                className={`p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition-colors ${selectedEq?.id === eq.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}
+                                onClick={() => setSelectedEq(eq)}
+                              >
+                                <div className="font-medium">{eq.equipment_name}</div>
+                                <div className="text-xs text-gray-500 mt-1">型号: {eq.model_no || '-'} | 管理编号: {eq.manage_code || '-'}</div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <div className="text-sm text-gray-500">拟绑定设备</div>
+                          <div className="font-bold">{selectedEq?.equipment_name}</div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">绑定数量 (可用: {accessory.quantity})</label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            max={accessory.quantity}
+                            value={bindQty}
+                            onChange={(e) => setBindQty(Math.min(accessory.quantity, Math.max(1, parseInt(e.target.value) || 1)))}
+                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 text-lg font-bold"
+                          />
+                          {bindQty < accessory.quantity && (
+                            <p className="mt-2 text-sm text-orange-600 bg-orange-50 p-2 rounded">
+                              提示：绑定数量少于当前库存，系统将自动拆分出一条新记录进行绑定。
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                    <button 
+                      onClick={() => { setShowBindModal(false); setStep('select'); }}
+                      className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                    >
+                      取消
+                    </button>
+                    {step === 'select' ? (
+                      <button 
+                        disabled={!selectedEq}
+                        onClick={() => setStep('quantity')}
+                        className={`px-4 py-2 text-sm text-white rounded ${!selectedEq ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                      >
+                        下一步
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={handleConfirmBind}
+                        disabled={binding}
+                        className="px-4 py-2 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 flex items-center"
+                      >
+                        {binding && <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-white mr-2"></div>}
+                        确认绑定
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-4">采购信息</h2>

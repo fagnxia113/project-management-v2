@@ -469,7 +469,7 @@ export default function EquipmentListPage() {
                           </button>
                         )}
                       </td>
-                      <td className="px-6 py-4 sticky left-12 bg-white z-10">
+                      <td className={`px-6 py-4 sticky left-12 bg-white ${hoveredEquipment === item.id ? 'z-30' : 'z-10'}`}>
                         <div className="relative inline-block">
                           <button
                             onClick={() => handleEdit(item)}

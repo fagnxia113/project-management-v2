@@ -27,15 +27,23 @@ import { equipmentRepository } from '../repository/EquipmentRepository.js'
 
 export interface CreateTransferOrderDto {
     from_location_type: string
+    fromLocationType?: string
     from_warehouse_id?: string
     from_project_id?: string
     to_location_type: string
+    toLocationType?: string
     to_warehouse_id?: string
     to_project_id?: string
     transfer_reason?: string
-    estimated_arrival_date?: string
+    transferReason?: string
+    estimated_arrival_date?: string | null
+    estimatedArrivalDate?: string | null
     estimated_ship_date?: string
     items: TransferItemDto[]
+    fromManagerId?: string
+    toManagerId?: string
+    fromLocationId?: string
+    toLocationId?: string
 }
 
 export interface TransferItemDto {
@@ -72,10 +80,28 @@ export class TransferOrderServiceV2 {
         const id = uuidv4()
         const orderNo = this.generateOrderNo()
 
+        const fromLocationType = (dto.from_location_type || dto.fromLocationType || 'warehouse') as string
+        const toLocationType = (dto.to_location_type || dto.toLocationType || 'warehouse') as string
+        const fromLocationId = dto.from_warehouse_id || dto.from_project_id || dto.fromLocationId
+        const toLocationId = dto.to_warehouse_id || dto.to_project_id || dto.toLocationId
+
+        console.log('[TransferOrderServiceV2] createOrder dto:', JSON.stringify(dto, null, 2))
+        console.log('[TransferOrderServiceV2] fromLocationType:', fromLocationType, 'fromLocationId:', fromLocationId)
+        console.log('[TransferOrderServiceV2] toLocationType:', toLocationType, 'toLocationId:', toLocationId)
+        console.log('[TransferOrderServiceV2] estimatedArrivalDate:', dto.estimated_arrival_date || dto.estimatedArrivalDate)
+
         // 1. 并行获取源/目标位置名称
+        const warehouseId = fromLocationType === 'warehouse' ? fromLocationId : undefined
+        const projectId = fromLocationType === 'project' ? fromLocationId : undefined
+        const toWarehouseId = toLocationType === 'warehouse' ? toLocationId : undefined
+        const toProjectId = toLocationType === 'project' ? toLocationId : undefined
+        
+        console.log('[TransferOrderServiceV2] fromLocationType:', fromLocationType, 'warehouseId:', warehouseId, 'projectId:', projectId)
+        console.log('[TransferOrderServiceV2] toLocationType:', toLocationType, 'toWarehouseId:', toWarehouseId, 'toProjectId:', toProjectId)
+        
         const [fromInfo, toInfo] = await Promise.all([
-            this.resolveLocationInfo(dto.from_location_type, dto.from_warehouse_id, dto.from_project_id),
-            this.resolveLocationInfo(dto.to_location_type, dto.to_warehouse_id, dto.to_project_id),
+            this.resolveLocationInfo(fromLocationType, warehouseId, projectId),
+            this.resolveLocationInfo(toLocationType, toWarehouseId, toProjectId),
         ])
 
         // 2. 构建 order data
@@ -87,22 +113,29 @@ export class TransferOrderServiceV2 {
             applicant_id: userId,
             applicant: userName,
             apply_date: new Date(),
-            from_location_type: dto.from_location_type,
-            from_warehouse_id: dto.from_warehouse_id,
+            from_location_type: fromLocationType as any,
+            from_warehouse_id: fromLocationType === 'warehouse' ? (fromLocationId as string) : undefined,
             from_warehouse_name: fromInfo.locationName ?? undefined,
-            from_project_id: dto.from_project_id,
-            from_project_name: dto.from_location_type === 'project' ? fromInfo.locationName ?? undefined : undefined,
-            to_location_type: dto.to_location_type,
-            to_warehouse_id: dto.to_warehouse_id,
-            to_warehouse_name: dto.to_location_type === 'warehouse' ? toInfo.locationName ?? undefined : undefined,
-            to_project_id: dto.to_project_id,
-            to_project_name: dto.to_location_type === 'project' ? toInfo.locationName ?? undefined : undefined,
-            transfer_reason: dto.transfer_reason,
+            from_project_id: fromLocationType === 'project' ? (fromLocationId as string) : undefined,
+            from_project_name: fromLocationType === 'project' ? fromInfo.locationName ?? undefined : undefined,
+            to_location_type: toLocationType as any,
+            to_warehouse_id: toLocationType === 'warehouse' ? toLocationId : undefined,
+            to_warehouse_name: toLocationType === 'warehouse' ? toInfo.locationName ?? undefined : undefined,
+            to_project_id: (toLocationType === 'project' ? toLocationId : undefined) as string | undefined,
+            to_project_name: (toLocationType === 'project' ? toInfo.locationName ?? undefined : undefined) as string | undefined,
+            from_manager_id: fromInfo.managerId ?? undefined,
+            from_manager: fromInfo.managerName ?? undefined,
+            to_manager_id: toInfo.managerId ?? undefined,
+            to_manager: toInfo.managerName ?? undefined,
+            transfer_reason: (dto.transfer_reason || dto.transferReason) ?? undefined,
+            estimated_arrival_date: (dto.estimated_arrival_date || dto.estimatedArrivalDate) ? new Date((dto.estimated_arrival_date || dto.estimatedArrivalDate)!) : undefined,
             status: 'pending_from',
             total_items: dto.items.length,
             total_requested_quantity: dto.items.reduce((s, i) => s + i.quantity, 0),
             total_quantity: dto.items.reduce((s, i) => s + i.quantity, 0)
         }
+
+        console.log('[TransferOrderServiceV2] orderData:', JSON.stringify(orderData, null, 2))
 
         // 3. 构建 items data（并行获取配件信息）
         const itemsData: CreateOrderItemData[] = await Promise.all(
@@ -127,15 +160,14 @@ export class TransferOrderServiceV2 {
                     equipment_name: item.equipment_name,
                     model_no: item.model_no,
                     brand: item.brand,
-                    category: item.category,
+                    category: (item.category as 'instrument' | 'fake_load' | 'cable') || 'instrument',
                     unit: item.unit ?? '台',
                     manage_code: item.manage_code,
                     serial_number: item.serial_number,
                     quantity: item.quantity,
                     notes: item.notes,
                     accessory_info: accessoryInfo,
-                    accessory_desc: item.accessory_desc,
-                    is_accessory: item.is_accessory ?? false
+                    accessory_desc: item.accessory_desc
                 } satisfies CreateOrderItemData
             })
         )
@@ -296,6 +328,7 @@ export class TransferOrderServiceV2 {
             shipping_attachment?: string
             item_images?: { item_id: string; images: string[] }[]
             package_images?: string[]
+            shipping_notes?: string
         }
     ): Promise<TransferOrderWithItems> {
         return prisma.$transaction(async (tx) => {
@@ -305,7 +338,9 @@ export class TransferOrderServiceV2 {
                 shipped_by: params.shipped_by,
                 shipped_at: params.shipped_at ? new Date(params.shipped_at) : new Date(),
                 shipping_attachment: params.shipping_attachment,
-                shipping_package_images: params.package_images
+                shipping_package_images: params.package_images,
+                shipping_notes: params.shipping_notes,
+                item_images: params.item_images
             }, tx)
 
             // 2. 更新库存状态（改为运输中）
@@ -346,6 +381,7 @@ export class TransferOrderServiceV2 {
         id: string,
         params: {
             received_by?: string
+            received_at?: string
             receive_status?: string
             receive_comment?: string
             item_images?: { item_id: string; images: string[] }[]
@@ -358,7 +394,7 @@ export class TransferOrderServiceV2 {
             let isPartial = false
             let totalReceived = 0
 
-            // 1. 处理明细收货
+            // 1. 处理明细收货数量
             if (params.received_items && params.received_items.length > 0) {
                 for (const item of items) {
                     const receivedInfo = params.received_items.find(ri => ri.item_id === item.id)
@@ -382,23 +418,16 @@ export class TransferOrderServiceV2 {
                 }
             }
 
-            // 更新明细收货图片
-            if (params.item_images && params.item_images.length > 0) {
-                await Promise.all(
-                    params.item_images.map(img =>
-                        this.repo.updateItem(img.item_id, { receiving_images: img.images }, tx)
-                    )
-                )
-            }
-
-            // 2. 更新主单据状态
+            // 2. 更新主单据状态和明细图片
             await this.repo.confirmReceiving(id, {
                 received_by: params.received_by,
+                received_at: params.received_at ? new Date(params.received_at) : new Date(),
                 receive_status: params.receive_status,
                 receive_comment: params.receive_comment,
                 receiving_package_images: params.package_images,
                 total_received_quantity: totalReceived,
-                isPartial
+                isPartial,
+                item_images: params.item_images
             }, tx)
 
             // 3. 更新物理库存位置
@@ -421,7 +450,7 @@ export class TransferOrderServiceV2 {
                 const receivedQty = receivedInfo?.received_quantity ?? item.quantity
 
                 if (receivedQty <= 0) {
-                    // 如果没收到，状态应回退或标记异常，这里简单处理为回到在库（实际上可能需要回退到发货地）
+                    // 如果没收到，状态应回退或标记异常
                     continue
                 }
 

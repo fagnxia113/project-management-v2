@@ -1,0 +1,52 @@
+﻿=== Recent Transfer Orders ===
+
+Order: DB20260314BZ67 (f7f6bfbb-7019-46a4-8417-1ca01b959c7c)
+  from_manager: "娓哥埥" (id: 09694afa-6a5b-4885-8e1a-72588219ad16)
+  to_manager: "娓哥埥" (id: 09694afa-6a5b-4885-8e1a-72588219ad16)
+  from: 鍖椾含鎬婚儴浠撳簱
+  to: 娣卞湷鏁版嵁涓績椤圭洰
+  status: pending_from, total_items: 1
+  items in DB: 1
+
+Order: DB20260313PJVT (098372a1-1f82-4a36-b4b2-c1e8e67f6064)
+  from_manager: "娓哥埥" (id: 09694afa-6a5b-4885-8e1a-72588219ad16)
+  to_manager: "娓哥埥" (id: 09694afa-6a5b-4885-8e1a-72588219ad16)
+  from: 鍖椾含鎬婚儴浠撳簱
+  to: 娣卞湷鏁版嵁涓績椤圭洰
+  status: pending_from, total_items: 1
+  items in DB: 1
+
+=== Recent Workflow Instances ===
+
+Instance: 82302d1a-ec9f-4a3b-a244-28b64d842d65
+  title: 璁惧璋冩嫧娴佺▼
+  definition_key: equipment-transfer
+  business_id: null
+  formData keys: items, toManagerId, toLocationId, fromManagerId, _toManagerName, fromLocationId, toLocationType, transferReason, _toLocationName, _fromManagerName, fromLocationType, _fromLocationName, estimatedArrivalDate
+  formData._fromManagerName: 娓哥埥
+  formData._toManagerName: 娓哥埥
+  formData.items: array of 1
+  formData.fromManagerId: 09694afa-6a5b-4885-8e1a-72588219ad16
+  formData.fromLocationType: warehouse
+
+Instance: 67b492f3-6d05-4ed7-99ad-fc7fe2ffd419
+  title: 璁惧璋冩嫧娴佺▼
+  definition_key: equipment-transfer
+  business_id: null
+  formData keys: items, toManagerId, toLocationId, fromManagerId, fromLocationId, toLocationType, transferReason, fromLocationType, estimatedArrivalDate
+  formData._fromManagerName: undefined
+  formData._toManagerName: undefined
+  formData.items: array of 1
+  formData.fromManagerId: 09694afa-6a5b-4885-8e1a-72588219ad16
+  formData.fromLocationType: warehouse
+
+Instance: 9f0c8d2b-bc3a-4acb-99e1-e50a5c8efdbf
+  title: 璁惧璋冩嫧娴佺▼
+  definition_key: equipment-transfer
+  business_id: null
+  formData keys: items, toManagerId, toLocationId, fromManagerId, fromLocationId, toLocationType, transferReason, fromLocationType, estimatedArrivalDate
+  formData._fromManagerName: undefined
+  formData._toManagerName: undefined
+  formData.items: array of 1
+  formData.fromManagerId: 09694afa-6a5b-4885-8e1a-72588219ad16
+  formData.fromLocationType: warehouse

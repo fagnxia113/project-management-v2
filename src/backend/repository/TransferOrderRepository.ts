@@ -48,7 +48,12 @@ export interface CreateOrderData {
     to_warehouse_name?: string
     to_project_id?: string
     to_project_name?: string
+    from_manager_id?: string
+    from_manager?: string
+    to_manager_id?: string
+    to_manager?: string
     transfer_reason?: string
+    estimated_arrival_date?: Date
     status?: string
     total_items?: number
     total_requested_quantity?: number
@@ -205,7 +210,12 @@ export class TransferOrderRepository {
                     to_warehouse_name: orderData.to_warehouse_name,
                     to_project_id: orderData.to_project_id,
                     to_project_name: orderData.to_project_name,
+                    from_manager_id: orderData.from_manager_id,
+                    from_manager: orderData.from_manager,
+                    to_manager_id: orderData.to_manager_id,
+                    to_manager: orderData.to_manager,
                     transfer_reason: orderData.transfer_reason,
+                    estimated_arrival_date: orderData.estimated_arrival_date,
                     status: (orderData.status ?? 'draft') as any,
                     total_items: orderData.total_items ?? itemsData.length,
                     total_requested_quantity: orderData.total_requested_quantity ?? itemsData.reduce((s, i) => s + i.quantity, 0),
@@ -231,7 +241,7 @@ export class TransferOrderRepository {
                             notes: item.notes,
                             accessory_info: item.accessory_info ?? undefined,
                             accessory_desc: item.accessory_desc,
-                            is_accessory: (item as any).is_accessory ?? false
+                            is_accessory: item.is_accessory || false
                         } as any
                     })
                 )
@@ -298,22 +308,41 @@ export class TransferOrderRepository {
             shipped_at?: Date
             shipping_attachment?: string
             shipping_package_images?: any
+            shipping_notes?: string
+            item_images?: { item_id: string; images: string[] }[]
         },
         tx?: Prisma.TransactionClient
     ): Promise<TransferOrder> {
         const client = tx || this.db
-        return client.equipment_transfer_orders.update({
+        
+        // 1. 更新订单头信息
+        const order = await client.equipment_transfer_orders.update({
             where: { id },
             data: {
-                status: 'in_transit' as any,
+                status: 'shipping' as any,
                 shipping_no: shippingData.shipping_no,
                 shipped_by: shippingData.shipped_by,
                 shipped_at: shippingData.shipped_at ?? new Date(),
                 shipping_attachment: shippingData.shipping_attachment,
                 shipping_package_images: shippingData.shipping_package_images,
+                notes: shippingData.shipping_notes, // 使用通用 notes 字段存储发货备注
                 updated_at: new Date()
             }
         })
+
+        // 2. 更新明细项图片
+        if (shippingData.item_images && shippingData.item_images.length > 0) {
+            await Promise.all(
+                shippingData.item_images.map(img =>
+                    client.equipment_transfer_order_items.update({
+                        where: { id: img.item_id },
+                        data: { shipping_images: img.images }
+                    })
+                )
+            )
+        }
+
+        return order
     }
 
     /**
@@ -323,22 +352,26 @@ export class TransferOrderRepository {
         id: string,
         receivingData: {
             received_by?: string
+            received_at?: Date
             receive_status?: string
             receive_comment?: string
             receiving_package_images?: any
             total_received_quantity?: number
             isPartial?: boolean
+            item_images?: { item_id: string; images: string[] }[]
         },
         tx?: Prisma.TransactionClient
     ): Promise<TransferOrder> {
         const client = tx || this.db
         const status = receivingData.isPartial ? 'partial_received' : 'completed'
-        return client.equipment_transfer_orders.update({
+        
+        // 1. 更新订单头信息
+        const order = await client.equipment_transfer_orders.update({
             where: { id },
             data: {
                 status: status as any,
                 received_by: receivingData.received_by,
-                received_at: new Date(),
+                received_at: receivingData.received_at ?? new Date(),
                 receive_status: receivingData.receive_status as any ?? (receivingData.isPartial ? 'partial' : 'normal'),
                 receive_comment: receivingData.receive_comment,
                 receiving_package_images: receivingData.receiving_package_images,
@@ -346,6 +379,20 @@ export class TransferOrderRepository {
                 updated_at: new Date()
             }
         })
+
+        // 2. 更新明细项图片
+        if (receivingData.item_images && receivingData.item_images.length > 0) {
+            await Promise.all(
+                receivingData.item_images.map(img =>
+                    client.equipment_transfer_order_items.update({
+                        where: { id: img.item_id },
+                        data: { receiving_images: img.images }
+                    })
+                )
+            )
+        }
+
+        return order
     }
 
     /**

@@ -15,7 +15,8 @@ export class EquipmentServiceV3 {
     pageSize?: number;
     category?: string;
     status?: string;
-    locationId?: string;
+    location_id?: string;
+    locationId?: string; // 支持兼容性
     trackingType?: 'SERIALIZED' | 'BATCH';
     search?: string;
     location_status?: string;
@@ -28,6 +29,7 @@ export class EquipmentServiceV3 {
       pageSize = 10,
       category,
       status,
+      location_id,
       locationId,
       trackingType,
       search,
@@ -36,13 +38,16 @@ export class EquipmentServiceV3 {
       usage_status,
       equipment_source
     } = params;
+    
+    const finalLocationId = location_id || locationId;
 
     const offset = (page - 1) * pageSize;
     let whereClause = 'WHERE 1=1';
     const values: any[] = [];
 
-    // 排除报废和遗失的设备
-    whereClause += " AND ei.usage_status NOT IN ('SCRAPPED', 'LOST')";
+    // 排除报废的设备（使用数据库实际值，通常是小写）
+    whereClause += " AND (ei.health_status IS NULL OR ei.health_status != 'scrapped')";
+    whereClause += " AND (ei.usage_status IS NULL OR (ei.usage_status != 'scrapped' AND ei.usage_status != 'lost'))";
 
     if (category) {
       whereClause += ' AND ei.category = ?';
@@ -54,9 +59,9 @@ export class EquipmentServiceV3 {
       values.push(status);
     }
 
-    if (locationId) {
+    if (finalLocationId) {
       whereClause += ' AND ei.location_id = ?';
-      values.push(locationId);
+      values.push(finalLocationId);
     }
 
     if (trackingType) {
@@ -197,13 +202,15 @@ export class EquipmentServiceV3 {
   }) {
     const { tracking_type, serial_number, quantity } = data;
 
-    // 验证（不再强制要求序列号）
-    if (tracking_type === 'SERIALIZED' && quantity !== 1) {
-      throw new Error('序列化追踪模式数量必须为1');
+    const id = uuidv4();
+    // 业务逻辑：假负载不自动生成管理编码，其余类型如果没传则生成
+    let manageCode = data.manage_code;
+    if (!manageCode && data.category !== 'fake_load') {
+      manageCode = `EQ${Date.now()}${Math.floor(Math.random() * 10000)}`;
     }
 
-    const id = uuidv4();
-    const manageCode = data.manage_code || `EQ${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    // 强化业务规则：假负载强制 BATCH
+    const finalTrackingType = data.category === 'fake_load' ? 'BATCH' : tracking_type;
 
     await db.insert(
       `INSERT INTO equipment_instances 
@@ -220,7 +227,7 @@ export class EquipmentServiceV3 {
         data.manufacturer || null,
         data.technical_params || null,
         data.category,
-        tracking_type,
+        finalTrackingType,
         quantity,
         serial_number || null,
         data.unit || '台',
@@ -234,7 +241,7 @@ export class EquipmentServiceV3 {
         data.calibration_expiry || null,
         data.certificate_no || null,
         data.certificate_issuer || null,
-        manageCode,
+        manageCode || null,
         data.attachments ? JSON.stringify(data.attachments) : null,
         1
       ]

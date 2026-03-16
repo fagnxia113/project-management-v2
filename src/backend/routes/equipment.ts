@@ -257,7 +257,7 @@ router.post('/accessories/:id/bind', async (req: Request, res: Response) => {
   try {
     const { host_equipment_id, quantity } = req.body;
     const result = await equipmentAccessoryService.bindAccessoryToEquipment(
-      req.params.id,
+      req.params.id as string,
       host_equipment_id,
       quantity || 1
     );
@@ -267,13 +267,28 @@ router.post('/accessories/:id/bind', async (req: Request, res: Response) => {
   }
 });
 
+// 绑定并拆分配件
+router.post('/accessories/:id/bind-to-host', async (req: Request, res: Response) => {
+  try {
+    const { host_equipment_id, quantity } = req.body;
+    const result = await equipmentAccessoryService.splitAndBindAccessory(
+      req.params.id as string,
+      host_equipment_id,
+      quantity
+    );
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 // 解绑配件
 router.post('/accessories/:id/unbind', async (req: Request, res: Response) => {
   try {
-    const { host_equipment_id, quantity } = req.body;
+    const { host_equipment_id, equipment_id, quantity } = req.body;
     const result = await equipmentAccessoryService.unbindAccessoryFromEquipment(
-      req.params.id,
-      host_equipment_id,
+      req.params.id as string,
+      host_equipment_id || equipment_id,
       quantity || 1
     );
     res.json({ success: result });
@@ -287,7 +302,7 @@ router.post('/accessories/:id/mark-lost', async (req: Request, res: Response) =>
   try {
     const { operator_id, operator_name, reason, equipment_id, transfer_order_id } = req.body;
     const result = await equipmentAccessoryService.markAccessoryLost(
-      req.params.id,
+      req.params.id as string,
       operator_id,
       operator_name,
       reason,

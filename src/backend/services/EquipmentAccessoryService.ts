@@ -21,6 +21,11 @@ export interface AccessoryInstance {
   purchase_date?: string;
   purchase_price?: number;
   notes?: string;
+  location_name?: string;
+  location_manager_id?: string;
+  keeper_name?: string;
+  keeper_user_id?: string;
+  host_equipment_name?: string;
   source_type?: string;
   bound_at?: string;
   created_at: string;
@@ -50,6 +55,7 @@ export interface CreateAccessoryDto {
   quantity?: number;
   serial_number?: string;
   manage_code?: string;
+  tracking_type?: 'SERIALIZED' | 'BATCH';
   host_equipment_id?: string;
   keeper_id?: string;
   purchase_date?: string;
@@ -76,15 +82,21 @@ export class EquipmentAccessoryService {
   async createAccessoryInstance(dto: CreateAccessoryDto): Promise<AccessoryInstance> {
     const id = uuidv4();
     
-    // 如果是序列化追踪但没有提供管理编码，自动生成一个
-    const manageCode = dto.manage_code || `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    // 业务逻辑：假负载不生成管理编码，其余类型如果没传则生成
+    let manageCode = dto.manage_code || null;
+    if (!manageCode && dto.category !== 'fake_load' && dto.tracking_type === 'SERIALIZED') {
+      manageCode = `ACC${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    }
     
+    // 强化业务规则：假负载强制 BATCH
+    const finalTrackingType = dto.category === 'fake_load' ? 'BATCH' : dto.tracking_type;
+
     await db.execute(
       `INSERT INTO equipment_accessory_instances (
         id, accessory_name, model_no, brand, category, unit, quantity,
         serial_number, manage_code, health_status, usage_status, location_status,
-        location_id, host_equipment_id, keeper_id, purchase_date, purchase_price, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        location_id, host_equipment_id, keeper_id, purchase_date, purchase_price, notes, tracking_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         dto.accessory_name,
@@ -103,7 +115,8 @@ export class EquipmentAccessoryService {
         dto.keeper_id || null,
         dto.purchase_date || null,
         dto.purchase_price || null,
-        dto.notes || null
+        dto.notes || null,
+        finalTrackingType || 'SERIALIZED'
       ]
     );
 
@@ -148,11 +161,22 @@ export class EquipmentAccessoryService {
   async getAccessoryById(id: string): Promise<AccessoryInstance | null> {
     const rows = await db.query(
       `SELECT ai.*, 
-        w.name as location_name,
+        CASE 
+          WHEN ai.location_status = 'warehouse' THEN w.name 
+          WHEN ai.location_status = 'in_project' THEN p.name 
+          ELSE NULL 
+        END as location_name,
+        CASE 
+          WHEN ai.location_status = 'warehouse' THEN w.manager_id 
+          WHEN ai.location_status = 'in_project' THEN p.manager_id 
+          ELSE NULL 
+        END as location_manager_id,
         e.name as keeper_name,
+        e.user_id as keeper_user_id,
         eq.equipment_name as host_equipment_name
        FROM equipment_accessory_instances ai
        LEFT JOIN warehouses w ON ai.location_id = w.id
+       LEFT JOIN projects p ON ai.location_id = p.id
        LEFT JOIN employees e ON ai.keeper_id = e.id
        LEFT JOIN equipment_instances eq ON ai.host_equipment_id = eq.id
        WHERE ai.id = ?`,
@@ -376,7 +400,7 @@ export class EquipmentAccessoryService {
   }
 
   async updateHostEquipmentAccessoryCount(hostEquipmentId: string): Promise<void> {
-    const [rows] = await db.query(
+    const rows = await db.query(
       'SELECT COUNT(*) as count FROM equipment_accessories WHERE host_equipment_id = ?',
       [hostEquipmentId]
     );
@@ -476,37 +500,65 @@ export class EquipmentAccessoryService {
 
   async unbindAccessoryFromEquipment(
     accessoryId: string, 
-    hostEquipmentId: string,
+    hostEquipmentId?: string,
     unbindQuantity: number = 1
   ): Promise<boolean> {
+    let finalHostId = hostEquipmentId;
+
+    // 如果没有提供主设备ID，从数据库查找当前的关联关系
+    if (!finalHostId) {
+      // 1. 尝试从关联表查找
+      const relations = await db.query(
+        'SELECT host_equipment_id FROM equipment_accessories WHERE accessory_id = ? LIMIT 1',
+        [accessoryId]
+      );
+      if (relations && relations.length > 0) {
+        finalHostId = relations[0].host_equipment_id;
+      } else {
+        // 2. 尝试从实例表查找
+        const instance = await db.queryOne<any>(
+          'SELECT host_equipment_id FROM equipment_accessory_instances WHERE id = ?',
+          [accessoryId]
+        );
+        if (instance && instance.host_equipment_id) {
+          finalHostId = instance.host_equipment_id;
+        }
+      }
+    }
+
+    if (!finalHostId) {
+      throw new Error('配件未检测到绑定关系');
+    }
+
+    // 1. 处理关联表 (equipment_accessories)
     const relation = await db.query(
       'SELECT * FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
-      [hostEquipmentId, accessoryId]
+      [finalHostId, accessoryId]
     );
 
-    if (!relation || relation.length === 0) {
-      throw new Error('配件关联关系不存在');
+    if (relation && relation.length > 0) {
+      const currentQty = relation[0].quantity;
+      if (currentQty > unbindQuantity) {
+        await db.execute(
+          'UPDATE equipment_accessories SET quantity = quantity - ? WHERE host_equipment_id = ? AND accessory_id = ?',
+          [unbindQuantity, finalHostId, accessoryId]
+        );
+      } else {
+        await db.execute(
+          'DELETE FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
+          [finalHostId, accessoryId]
+        );
+      }
     }
 
-    const currentQty = relation[0].quantity;
-    if (currentQty > unbindQuantity) {
-      await db.execute(
-        'UPDATE equipment_accessories SET quantity = quantity - ? WHERE host_equipment_id = ? AND accessory_id = ?',
-        [unbindQuantity, hostEquipmentId, accessoryId]
-      );
-    } else {
-      await db.execute(
-        'DELETE FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
-        [hostEquipmentId, accessoryId]
-      );
-    }
-
+    // 2. 处理实例表 (equipment_accessory_instances)
+    // 检查是否还有其他关联（支持一个配件给多个设备的情况，虽然逻辑上目前较少见）
     const remainingRelations = await db.query(
       'SELECT COUNT(*) as count FROM equipment_accessories WHERE accessory_id = ?',
       [accessoryId]
     );
 
-    if (remainingRelations[0].count === 0) {
+    if (!remainingRelations || remainingRelations.length === 0 || remainingRelations[0].count === 0) {
       await db.execute(
         `UPDATE equipment_accessory_instances 
          SET host_equipment_id = NULL, usage_status = 'idle'
@@ -515,7 +567,7 @@ export class EquipmentAccessoryService {
       );
     }
 
-    await this.updateHostEquipmentAccessoryCount(hostEquipmentId);
+    await this.updateHostEquipmentAccessoryCount(finalHostId as string);
     return true;
   }
 
@@ -581,6 +633,167 @@ export class EquipmentAccessoryService {
     );
 
     return true;
+  }
+
+  async splitAndBindAccessory(
+    accessoryId: string,
+    hostEquipmentId: string,
+    bindQuantity: number
+  ): Promise<{ success: boolean; newId?: string }> {
+    return await db.executeTransaction(async (tx) => {
+      // 1. 获取原记录
+      const original = await tx.queryOne<any>(
+        'SELECT * FROM equipment_accessory_instances WHERE id = ?',
+        [accessoryId]
+      );
+      
+      if (!original) {
+        throw new Error('配件记录不存在');
+      }
+      
+      const totalQty = original.quantity;
+      
+      if (bindQuantity > totalQty) {
+        throw new Error('绑定数量不能超过现有数量');
+      }
+
+      let targetId = accessoryId;
+
+      // 2. 如果是部分绑定，执行拆分逻辑
+      if (bindQuantity < totalQty) {
+        // 更新原记录减少数量
+        await tx.execute(
+          'UPDATE equipment_accessory_instances SET quantity = quantity - ? WHERE id = ?',
+          [bindQuantity, accessoryId]
+        );
+
+        // 克隆出一条新记录
+        targetId = uuidv4();
+        await tx.execute(
+          `INSERT INTO equipment_accessory_instances (
+            id, accessory_name, model_no, brand, category, unit, quantity,
+            serial_number, manage_code, health_status, usage_status, location_status,
+            location_id, host_equipment_id, keeper_id, purchase_date, purchase_price, notes,
+            source_type, tracking_type
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            targetId,
+            original.accessory_name,
+            original.model_no,
+            original.brand,
+            original.category,
+            original.unit,
+            bindQuantity,
+            original.serial_number,
+            original.manage_code,
+            original.health_status,
+            'in_use', // 绑定后变为使用中
+            original.location_status,
+            original.location_id,
+            hostEquipmentId,
+            original.keeper_id,
+            original.purchase_date,
+            original.purchase_price,
+            original.notes,
+            original.source_type,
+            original.tracking_type
+          ]
+        );
+
+        // --- 核心修复：克隆关联图片 ---
+        const originalImages = await tx.query<any>(
+          'SELECT * FROM equipment_images WHERE equipment_id = ?',
+          [accessoryId]
+        );
+
+        if (originalImages && originalImages.length > 0) {
+          for (const img of originalImages) {
+            await tx.execute(
+              `INSERT INTO equipment_images (
+                id, equipment_id, equipment_name, model_no, category,
+                image_type, image_url, image_name, image_size, image_format,
+                business_type, business_id, uploader_id, uploader_name, notes,
+                created_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+              [
+                uuidv4(),
+                targetId,
+                img.equipment_name,
+                img.model_no,
+                img.category,
+                img.image_type,
+                img.image_url,
+                img.image_name,
+                img.image_size,
+                img.image_format,
+                img.business_type,
+                img.business_id,
+                img.uploader_id,
+                img.uploader_name,
+                img.notes
+              ]
+            );
+          }
+        }
+        // ---------------------------
+      } else {
+        // 全额绑定，仅更新状态和关联ID
+        await tx.execute(
+          `UPDATE equipment_accessory_instances 
+           SET host_equipment_id = ?, usage_status = 'in_use'
+           WHERE id = ?`,
+          [hostEquipmentId, accessoryId]
+        );
+      }
+
+      // 3. 处理关联表 (equipment_accessories)
+      const existingRelation = await tx.queryOne<any>(
+        'SELECT * FROM equipment_accessories WHERE host_equipment_id = ? AND accessory_id = ?',
+        [hostEquipmentId, targetId]
+      );
+
+      if (existingRelation) {
+        await tx.execute(
+          'UPDATE equipment_accessories SET quantity = quantity + ? WHERE host_equipment_id = ? AND accessory_id = ?',
+          [bindQuantity, hostEquipmentId, targetId]
+        );
+      } else {
+        const relationId = uuidv4();
+        await tx.execute(
+          `INSERT INTO equipment_accessories (
+            id, host_equipment_id, accessory_id, accessory_name, accessory_model, accessory_category,
+            quantity, is_required, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            relationId,
+            hostEquipmentId,
+            targetId,
+            original.accessory_name,
+            original.model_no,
+            original.category,
+            bindQuantity,
+            false,
+            null
+          ]
+        );
+      }
+
+      // 4. 更新主设备的配件统计数量
+      const row = await tx.queryOne<any>(
+        'SELECT SUM(quantity) as total_qty FROM equipment_accessories WHERE host_equipment_id = ?',
+        [hostEquipmentId]
+      );
+      const newCount = row?.total_qty || 0;
+
+      await tx.execute(
+        `UPDATE equipment_instances 
+         SET has_accessories = ?, accessory_count = ? 
+         WHERE id = ?`,
+        [newCount > 0, newCount, hostEquipmentId]
+      );
+
+      return { success: true, newId: targetId };
+    });
   }
 
   async getUnboundAccessories(options?: {
@@ -682,13 +895,13 @@ export class EquipmentAccessoryService {
 
     const rows = await db.query(querySql, params);
     
-    // 批量查询所有配件的图片
+    // 批量查询所有配件的图片 (兼容 main 和 accessory 类型)
     if (rows && rows.length > 0) {
       const accessoryIds = rows.map((r: any) => r.id);
       const imagesResult = await db.query(
-        `SELECT equipment_id, image_url FROM equipment_images 
-         WHERE equipment_id IN (?) AND image_type = 'accessory'
-         ORDER BY created_at ASC`,
+        `SELECT equipment_id, image_url, image_type FROM equipment_images 
+         WHERE equipment_id IN (?) AND image_type IN ('accessory', 'main')
+         ORDER BY (CASE WHEN image_type = 'main' THEN 0 ELSE 1 END), created_at ASC`,
         [accessoryIds]
       );
       
@@ -705,8 +918,11 @@ export class EquipmentAccessoryService {
       
       // 合并图片到配件数据
       for (const row of rows) {
-        row.accessory_images = imagesMap[row.id] || [];
-        row.images = imagesMap[row.id] || [];
+        const accessoryImages = imagesMap[row.id] || [];
+        row.accessory_images = accessoryImages;
+        row.images = accessoryImages;
+        // 增加 main_image 字段与设备清单保持一致
+        row.main_image = accessoryImages.length > 0 ? accessoryImages[0] : null;
       }
     }
 

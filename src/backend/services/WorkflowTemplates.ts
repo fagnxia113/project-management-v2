@@ -375,11 +375,11 @@ export const PROJECT_APPROVAL_TEMPLATE: WorkflowTemplate = {
  */
 export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
   id: 'equipment-transfer',
-  name: '设备调拨流程',
+  name: '设备调播流程',
   category: 'equipment',
   entityType: 'EquipmentTransfer',
-  description: '设备调拨审批流程',
-  version: '2.0.0',
+  description: '设备调拨审批流程：包含发货核对、调拨中状态、实收确认及未到货处理。',
+  version: '2.1.1',
   definition: {
     nodes: [
       {
@@ -393,26 +393,26 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       {
         id: 'from-location-manager',
         type: 'userTask',
-        name: '调出位置负责人审批',
+        name: '调出位置负责人审批并确认发货',
         config: {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
               type: 'expression',
-              value: '${formData.fromManagerId}'
+              value: '${variables.fromManagerId}'
             }
           },
           formKey: 'equipment-transfer-shipping-form'
         },
         actions: {
-          allowed: ['approve', 'reject', 'return', 'transfer', 'delegate', 'saveDraft'],
+          allowed: ['approve', 'reject', 'return', 'saveDraft'],
           defaultAction: 'approve'
         }
       },
       {
-        id: 'transfer-shipping',
+        id: 'service-task-shipping',
         type: 'serviceTask',
-        name: '更新设备状态为运输中',
+        name: '调拨中状态处理',
         config: {
           serviceType: 'transferShipping'
         }
@@ -420,13 +420,13 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       {
         id: 'to-location-manager',
         type: 'userTask',
-        name: '调入位置负责人审批',
+        name: '调入位置负责人审批并确认收货',
         config: {
           approvalConfig: {
             approvalType: 'single',
             approverSource: {
               type: 'expression',
-              value: '${formData.toManagerId}'
+              value: '${variables.toManagerId}'
             },
             allowReject: false,
             allowReturn: true,
@@ -435,14 +435,14 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
           formKey: 'equipment-transfer-receiving-form'
         },
         actions: {
-          allowed: ['approve', 'return', 'transfer', 'delegate', 'saveDraft'],
+          allowed: ['approve', 'return', 'saveDraft'],
           defaultAction: 'approve'
         }
       },
       {
-        id: 'transfer-receiving',
+        id: 'service-task-receiving',
         type: 'serviceTask',
-        name: '更新设备位置',
+        name: '收货入库处理',
         config: {
           serviceType: 'transferReceiving'
         }
@@ -450,21 +450,21 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       {
         id: 'receive-gateway',
         type: 'exclusiveGateway',
-        name: '收货状态判断',
+        name: '收货完整性判断',
         config: {
           gatewayConfig: {
             conditions: [
               {
-                id: 'condition-partial',
-                name: '异常收货',
-                expression: '${formData.receive_status === "partial"}',
-                targetNode: 'from-location-manager'
+                id: 'condition-full',
+                name: '全部收货',
+                expression: '${formData.receive_status === "normal"}',
+                targetNode: 'end-approved'
               },
               {
-                id: 'condition-normal',
-                name: '正常收货',
-                expression: '${formData.receive_status !== "partial"}',
-                targetNode: 'end-approved'
+                id: 'condition-partial',
+                name: '部分收货',
+                expression: '${formData.receive_status === "partial"}',
+                targetNode: 'unreceived-review'
               }
             ],
             defaultFlow: 'end-approved'
@@ -472,61 +472,54 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
         }
       },
       {
+        id: 'unreceived-review',
+        type: 'userTask',
+        name: '调出负责人核实未到货项目',
+        config: {
+          approvalConfig: {
+            approvalType: 'single',
+            approverSource: {
+              type: 'expression',
+              value: '${variables.fromManagerId}'
+            }
+          },
+          formKey: 'equipment-transfer-unreceived-review-form'
+        },
+        actions: {
+          allowed: ['approve', 'saveDraft'],
+          defaultAction: 'approve'
+        }
+      },
+      {
+        id: 'service-task-rollback',
+        type: 'serviceTask',
+        name: '未发货项目回转原位置',
+        config: {
+          serviceType: 'transferRollback'
+        }
+      },
+      {
         id: 'end-approved',
         type: 'endEvent',
-        name: '审批通过'
+        name: '调拨已完成'
       },
       {
         id: 'end-rejected',
         type: 'endEvent',
-        name: '审批驳回'
+        name: '流程已终止'
       }
     ],
     edges: [
-      {
-        id: 'edge-1',
-        source: 'start',
-        target: 'from-location-manager',
-        type: 'sequenceFlow'
-      },
-      {
-        id: 'edge-2',
-        source: 'from-location-manager',
-        target: 'transfer-shipping',
-        type: 'sequenceFlow'
-      },
-      {
-        id: 'edge-3',
-        source: 'transfer-shipping',
-        target: 'to-location-manager',
-        type: 'sequenceFlow'
-      },
-      {
-        id: 'edge-4',
-        source: 'to-location-manager',
-        target: 'transfer-receiving',
-        type: 'sequenceFlow'
-      },
-      {
-        id: 'edge-5',
-        source: 'transfer-receiving',
-        target: 'receive-gateway',
-        type: 'sequenceFlow'
-      },
-      {
-        id: 'edge-6',
-        source: 'receive-gateway',
-        target: 'from-location-manager',
-        type: 'sequenceFlow',
-        condition: '${formData.receive_status === "partial"}'
-      },
-      {
-        id: 'edge-7',
-        source: 'receive-gateway',
-        target: 'end-approved',
-        type: 'sequenceFlow',
-        condition: '${formData.receive_status !== "partial"}'
-      }
+      { id: 'e1', source: 'start', target: 'from-location-manager', type: 'sequenceFlow' },
+      { id: 'e2', source: 'from-location-manager', target: 'service-task-shipping', type: 'sequenceFlow', condition: '${action === "approve"}' },
+      { id: 'e3', source: 'from-location-manager', target: 'end-rejected', type: 'sequenceFlow', condition: '${action === "reject"}' },
+      { id: 'e4', source: 'service-task-shipping', target: 'to-location-manager', type: 'sequenceFlow' },
+      { id: 'e5', source: 'to-location-manager', target: 'service-task-receiving', type: 'sequenceFlow', condition: '${action === "approve"}' },
+      { id: 'e6', source: 'service-task-receiving', target: 'receive-gateway', type: 'sequenceFlow' },
+      { id: 'e7', source: 'receive-gateway', target: 'end-approved', type: 'sequenceFlow', condition: '${formData.receive_status === "normal"}' },
+      { id: 'e8', source: 'receive-gateway', target: 'unreceived-review', type: 'sequenceFlow', condition: '${formData.receive_status === "partial"}' },
+      { id: 'e9', source: 'unreceived-review', target: 'service-task-rollback', type: 'sequenceFlow' },
+      { id: 'e10', source: 'service-task-rollback', target: 'end-approved', type: 'sequenceFlow' }
     ]
   },
   formSchema: [
@@ -535,8 +528,7 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       label: '调出位置类型',
       type: 'select',
       required: true,
-      placeholder: '请选择调出位置类型',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
       editableOn: ['start']
     },
     {
@@ -544,8 +536,7 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       label: '调出位置',
       type: 'select',
       required: true,
-      placeholder: '请选择调出位置',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
       editableOn: ['start']
     },
     {
@@ -553,21 +544,15 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       label: '调出位置负责人',
       type: 'user',
       required: true,
-      placeholder: '请选择调出位置负责人',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
-      editableOn: ['start'],
-      display: {
-        type: 'user',
-        format: 'name'
-      }
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
+      editableOn: ['start']
     },
     {
       name: 'toLocationType',
       label: '调入位置类型',
       type: 'select',
       required: true,
-      placeholder: '请选择调入位置类型',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
       editableOn: ['start']
     },
     {
@@ -575,8 +560,7 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       label: '调入位置',
       type: 'select',
       required: true,
-      placeholder: '请选择调入位置',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
       editableOn: ['start']
     },
     {
@@ -584,32 +568,44 @@ export const EQUIPMENT_TRANSFER_TEMPLATE: WorkflowTemplate = {
       label: '调入位置负责人',
       type: 'user',
       required: true,
-      placeholder: '请选择调入位置负责人',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
-      editableOn: ['start'],
-      display: {
-        type: 'user',
-        format: 'name'
-      }
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
+      editableOn: ['start']
     },
     {
       name: 'transferReason',
       label: '调拨原因',
       type: 'textarea',
       required: true,
-      placeholder: '请输入调拨原因',
-      rows: 3,
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
+      visibleOn: ['start', 'from-location-manager', 'to-location-manager', 'unreceived-review'],
       editableOn: ['start']
     },
     {
-      name: 'estimatedArrivalDate',
-      label: '期望到达时间',
-      type: 'date',
+      name: 'shipped_at',
+      label: '发货时间',
+      type: 'datetime',
       required: true,
-      placeholder: '请选择期望到达时间',
-      visibleOn: ['start', 'from-location-manager', 'to-location-manager'],
-      editableOn: ['start']
+      visibleOn: ['from-location-manager', 'to-location-manager', 'unreceived-review'],
+      editableOn: ['from-location-manager']
+    },
+    {
+      name: 'received_at',
+      label: '到货时间',
+      type: 'datetime',
+      required: true,
+      visibleOn: ['to-location-manager', 'unreceived-review'],
+      editableOn: ['to-location-manager']
+    },
+    {
+      name: 'receive_status',
+      label: '收货状态',
+      type: 'select',
+      required: true,
+      options: [
+        { label: '全部收货', value: 'normal' },
+        { label: '部分收货', value: 'partial' }
+      ],
+      visibleOn: ['to-location-manager', 'unreceived-review'],
+      editableOn: ['to-location-manager']
     }
   ]
 };

@@ -160,7 +160,7 @@ router.get('/equipment/accessories/unbound', async (req, res) => {
 // 创建配件
 router.post('/equipment/accessories', async (req, res) => {
   try {
-    const result = await equipmentAccessoryService.createAccessory(req.body);
+    const result = await equipmentAccessoryService.createAccessoryInstance(req.body);
     res.json(result);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
@@ -170,7 +170,11 @@ router.post('/equipment/accessories', async (req, res) => {
 // 绑定配件
 router.post('/equipment/accessories/:id/bind', async (req, res) => {
   try {
-    const result = await equipmentAccessoryService.bindAccessoryToEquipment(req.params.id, req.body.equipment_id);
+    const result = await equipmentAccessoryService.bindAccessoryToEquipment(
+      req.params.id as string, 
+      req.body.equipment_id || req.body.host_equipment_id,
+      req.body.quantity || 1
+    );
     res.json(result);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
@@ -180,7 +184,12 @@ router.post('/equipment/accessories/:id/bind', async (req, res) => {
 // 解绑配件
 router.post('/equipment/accessories/:id/unbind', async (req, res) => {
   try {
-    const result = await equipmentAccessoryService.unbindAccessoryFromEquipment(req.params.id);
+    const { host_equipment_id, equipment_id, quantity } = req.body;
+    const result = await equipmentAccessoryService.unbindAccessoryFromEquipment(
+      req.params.id as string,
+      host_equipment_id || equipment_id,
+      quantity || 1
+    );
     res.json(result);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });

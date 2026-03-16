@@ -7,7 +7,7 @@ interface Equipment {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'accessory'
+  category: 'instrument' | 'fake_load' | 'cable'
   unit: string
   quantity: number
   manage_code: string
@@ -46,7 +46,7 @@ interface TransferItem {
   equipment_name: string
   model_no: string
   brand: string
-  category: 'instrument' | 'fake_load' | 'accessory'
+  category: 'instrument' | 'fake_load' | 'cable'
   unit: string
   manage_code: string
   serial_number: string | null
@@ -183,7 +183,7 @@ export default function TransferCreatePage() {
               equipment_name: acc.accessory_name || '未命名配件',
               model_no: acc.model_no || acc.accessory_model || '',
               brand: acc.brand || acc.accessory_brand || '',
-              category: 'accessory' as const,
+              category: 'cable' as const,
               unit: acc.unit || acc.accessory_unit || '个',
               quantity: acc.quantity || acc.accessory_quantity || 1,
               manage_code: acc.manage_code || '',
@@ -191,7 +191,7 @@ export default function TransferCreatePage() {
               is_accessory: true,
               location_id: acc.location_id,
               location_status: acc.location_status,
-              main_image: (acc.accessory_images && acc.accessory_images[0]) || (acc.images && acc.images[0]) || null,
+              main_image: acc.main_image || null,
               images: acc.images || acc.accessory_images || []
             }));
           
@@ -220,7 +220,7 @@ export default function TransferCreatePage() {
         const employeeId = project?.manager_id || ''
 
         if (employeeId) {
-          const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
+          const response = await fetch(`${API_URL.BASE}/api/personnel/employees/${employeeId}/user-id`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
           const result = await response.json()
@@ -249,7 +249,7 @@ export default function TransferCreatePage() {
         const employeeId = project?.manager_id || ''
 
         if (employeeId) {
-          const response = await fetch(`${API_URL.BASE}/api/personnel/${employeeId}/user-id`, {
+          const response = await fetch(`${API_URL.BASE}/api/personnel/employees/${employeeId}/user-id`, {
             headers: { 'Authorization': `Bearer ${token}` }
           })
           const result = await response.json()
@@ -335,7 +335,7 @@ export default function TransferCreatePage() {
     const labels: Record<string, string> = {
       instrument: '仪器类',
       'fake_load': '假负载类',
-      'accessory': '配件类'
+      'cable': '配件类'
     }
     return labels[category] || category
   }
@@ -344,7 +344,7 @@ export default function TransferCreatePage() {
     const styles: Record<string, string> = {
       instrument: 'bg-purple-100 text-purple-700',
       fake_load: 'bg-blue-100 text-blue-700',
-      accessory: 'bg-green-100 text-green-700'
+      cable: 'bg-green-100 text-green-700'
     }
     return styles[category] || 'bg-gray-100 text-gray-700'
   }
@@ -456,7 +456,7 @@ export default function TransferCreatePage() {
     // 标签页筛选
     const matchesTab = activeSourceTab === 'equipment' 
       ? (eq.category === 'instrument' || eq.category === 'fake_load')
-      : (eq.category === 'accessory');
+      : (eq.category === 'cable');
 
     const matchesCategory = categoryFilter ? eq.category === categoryFilter : true;
     return matchesSearch && matchesTab && matchesCategory;
@@ -586,7 +586,7 @@ export default function TransferCreatePage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">型号</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">类别</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">管理编号</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">配件信息</th>
+
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">数量</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                   </tr>
@@ -610,9 +610,7 @@ export default function TransferCreatePage() {
                         <td className="px-4 py-3 text-sm">
                           {isSystemGeneratedCode(item.manage_code) ? '-' : item.manage_code}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {item.category !== 'instrument' ? (item.accessory_desc || '-') : '-'}
-                        </td>
+
                         <td className="px-4 py-3 text-sm">
                           <input
                             type="number"
@@ -639,7 +637,7 @@ export default function TransferCreatePage() {
                       </tr>
                       {item.category === 'instrument' && item.accessories && item.accessories.length > 0 && (
                         <tr className="bg-gray-50">
-                          <td colSpan={7} className="px-4 py-2 text-xs text-gray-600">
+                          <td colSpan={6} className="px-4 py-2 text-xs text-gray-600">
                             <div className="flex flex-wrap gap-x-6 gap-y-1">
                               <span className="font-medium text-blue-600">所含配件 ({item.accessories.length}):</span>
                               {item.accessories.map((acc: any, idx: number) => (
@@ -705,9 +703,9 @@ export default function TransferCreatePage() {
       </div>
 
       {showEquipmentDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pl-64">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col mr-4">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <h3 className="font-medium text-gray-900">选择设备</h3>
               <button
                 onClick={() => setShowEquipmentDialog(false)}
@@ -717,7 +715,7 @@ export default function TransferCreatePage() {
               </button>
             </div>
 
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-gray-200 flex-shrink-0">
               <button
                 className={`flex-1 py-3 text-sm font-medium ${activeSourceTab === 'equipment' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                 onClick={() => {
@@ -738,7 +736,7 @@ export default function TransferCreatePage() {
               </button>
             </div>
 
-            <div className="p-4 border-b border-gray-200 flex gap-4">
+            <div className="p-4 border-b border-gray-200 flex gap-4 flex-shrink-0">
               <input
                 type="text"
                 value={searchTerm}
@@ -759,7 +757,7 @@ export default function TransferCreatePage() {
               )}
             </div>
 
-            <div className="overflow-y-auto max-h-96">
+            <div className="overflow-y-auto flex-1">
               {loading ? (
                 <p className="text-center py-8 text-gray-500">加载中...</p>
               ) : filteredEquipment.length > 0 ? (
@@ -777,7 +775,7 @@ export default function TransferCreatePage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredEquipment.map(eq => (
                       <tr key={eq.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm relative">
+                        <td className={`px-4 py-3 text-sm relative ${hoveredEquipmentId === eq.id ? 'z-20' : 'z-10'}`}>
                           <div className="flex items-center gap-2 group">
                             {eq.main_image && (
                               <img

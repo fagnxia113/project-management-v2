@@ -181,11 +181,11 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
     throw new ValidationError('不能删除管理员账号')
   }
 
-  await db.executeTransaction(async (connection) => {
-    await connection.execute('DELETE FROM users WHERE id = ?', [id])
-    await connection.execute('DELETE FROM employees WHERE user_id = ?', [id])
+  await db.executeTransaction(async (tx) => {
+    await tx.execute('DELETE FROM users WHERE id = ?', [id])
+    await tx.execute('DELETE FROM employees WHERE user_id = ?', [id])
 
-    const definitions = await connection.query<any>(
+    const definitions = await tx.query<any>(
       'SELECT id, node_config FROM workflow_definitions'
     )
 
@@ -218,19 +218,19 @@ router.delete('/users/:id', asyncHandler(async (req: Request, res: Response) => 
       }
 
       if (updated) {
-        await connection.execute(
+        await tx.execute(
           'UPDATE workflow_definitions SET node_config = ? WHERE id = ?',
           [JSON.stringify(nodeConfig), def.id]
         )
       }
     }
 
-    await connection.execute(
+    await tx.execute(
       'DELETE FROM workflow_tasks WHERE assignee_id = ? AND status = "assigned"',
       [id]
     )
 
-    await connection.execute(
+    await tx.execute(
       'UPDATE workflow_tasks SET assignee_id = NULL, assignee_name = NULL WHERE assignee_id = ?',
       [id]
     )

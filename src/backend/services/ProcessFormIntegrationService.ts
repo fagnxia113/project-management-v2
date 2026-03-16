@@ -155,35 +155,55 @@ export class ProcessFormIntegrationService {
       const { fromLocationType, fromLocationId, toLocationType, toLocationId } = formData;
       const result: any = {};
 
-      // 获取调出负责人
+      // 获取调出负责人和位置名称
       if (fromLocationType === 'warehouse') {
-        const warehouse = await this.db.query('SELECT manager_id FROM warehouses WHERE id = ?', [fromLocationId]);
+        const warehouse = await this.db.query('SELECT name, manager_id FROM warehouses WHERE id = ?', [fromLocationId]);
         if (warehouse && warehouse.length > 0) {
           result.fromManagerId = warehouse[0].manager_id;
+          result._fromLocationName = warehouse[0].name;
+          if (warehouse[0].manager_id) {
+            const manager = await this.db.query('SELECT name FROM employees WHERE id = ?', [warehouse[0].manager_id]);
+            if (manager && manager.length > 0) result._fromManagerName = manager[0].name;
+          }
         }
       } else if (fromLocationType === 'project') {
-        const project = await this.db.query('SELECT manager_id FROM projects WHERE id = ?', [fromLocationId]);
+        const project = await this.db.query('SELECT name, manager_id FROM projects WHERE id = ?', [fromLocationId]);
         if (project && project.length > 0) {
           result.fromManagerId = project[0].manager_id;
+          result._fromLocationName = project[0].name;
+          if (project[0].manager_id) {
+            const manager = await this.db.query('SELECT name FROM employees WHERE id = ?', [project[0].manager_id]);
+            if (manager && manager.length > 0) result._fromManagerName = manager[0].name;
+          }
         }
       }
 
-      // 获取调入负责人
+      // 获取调入负责人和位置名称
       if (toLocationType === 'warehouse') {
-        const warehouse = await this.db.query('SELECT manager_id FROM warehouses WHERE id = ?', [toLocationId]);
+        const warehouse = await this.db.query('SELECT name, manager_id FROM warehouses WHERE id = ?', [toLocationId]);
         if (warehouse && warehouse.length > 0) {
           result.toManagerId = warehouse[0].manager_id;
+          result._toLocationName = warehouse[0].name;
+          if (warehouse[0].manager_id) {
+            const manager = await this.db.query('SELECT name FROM employees WHERE id = ?', [warehouse[0].manager_id]);
+            if (manager && manager.length > 0) result._toManagerName = manager[0].name;
+          }
         }
       } else if (toLocationType === 'project') {
-        const project = await this.db.query('SELECT manager_id FROM projects WHERE id = ?', [toLocationId]);
+        const project = await this.db.query('SELECT name, manager_id FROM projects WHERE id = ?', [toLocationId]);
         if (project && project.length > 0) {
           result.toManagerId = project[0].manager_id;
+          result._toLocationName = project[0].name;
+          if (project[0].manager_id) {
+            const manager = await this.db.query('SELECT name FROM employees WHERE id = ?', [project[0].manager_id]);
+            if (manager && manager.length > 0) result._toManagerName = manager[0].name;
+          }
         }
       }
 
       return result;
     } catch (error) {
-      console.error('[ProcessFormIntegrationService] 获取位置负责人失败:', error);
+      console.error('[ProcessFormIntegrationService] 获取位置详情失败:', error);
       return {};
     }
   }
@@ -199,7 +219,7 @@ export class ProcessFormIntegrationService {
       }
 
       // 验证表单数据
-      const formFields = await this.getFormFields(params.presetId);
+      const formFields = await this.getFormFields(params.presetId, 'start');
       const validationResult = formDataValidator.sanitizeFormData(params.formData, formFields);
       if (!validationResult.isValid) {
         return {
@@ -210,12 +230,15 @@ export class ProcessFormIntegrationService {
       }
 
       // 清理表单数据（使用验证后的数据）
-      const cleanedFormData = validationResult.sanitizedData;
+      // 使用扩展运算符创建一个新对象，避免修改冻结的对象或触发不期望的引用共享
+      const cleanedFormData = { ...validationResult.sanitizedData };
 
-      // 获取流程定义
-      const definition = await definitionService.getDefinition(preset.workflowTemplateId);
-      if (!definition) {
-        return { success: false, message: '流程定义不存在' };
+      // 将原始表单数据中不在清理后数据中的字段合并进来（如 items, estimatedArrivalDate 等）
+      // 这对于非动态表单（如设备调拨这种在页面上硬编码表单项和数据结构的业务）非常重要
+      for (const key of Object.keys(params.formData)) {
+        if (!(key in cleanedFormData)) {
+          cleanedFormData[key] = params.formData[key];
+        }
       }
 
       // 准备流程变量
@@ -226,18 +249,42 @@ export class ProcessFormIntegrationService {
         businessType: preset.businessType
       };
 
-      // 特殊业务处理逻辑
+      // 业务ID，默认为传入的ID或生成一个临时的
+      let businessId = params.businessId;
+
+      // 特殊业务处理逻辑 - 启动前处理
       if (preset.businessType === 'EquipmentTransfer') {
         const locationInfo = await this.getLocationInfo(cleanedFormData);
         Object.assign(variables, locationInfo);
         Object.assign(cleanedFormData, locationInfo);
+        
+        // 创建真实的调拨单，从而获得有效的 businessId
+        try {
+          console.log('[ProcessFormIntegrationService] 为设备调拨创建调拨单...');
+          const order = await transferOrderService.createOrder(
+            cleanedFormData as any, 
+            params.initiator.id, 
+            params.initiator.name
+          );
+          if (order && order.id) {
+            businessId = order.id;
+            // 将业务ID也放入formData中，方便前端使用
+            cleanedFormData.transferOrderId = order.id;
+            console.log(`[ProcessFormIntegrationService] 调拨单创建成功: ${order.id}`);
+          }
+        } catch (orderError) {
+          console.error('[ProcessFormIntegrationService] 创建调拨单失败:', orderError);
+          // 如果创建订单失败，视情况是否继续。通常对于设备调拨，核心数据就是这张单子，如果失败了后续审批无法进行设备显示，甚至报错。
+          // 这里我们选择抛出错误，阻止流程启动，让用户修正数据。
+          throw new Error(`创建调拨单失败: ${orderError instanceof Error ? orderError.message : '未知错误'}`);
+        }
       }
 
-      // 启动流程实例
-      const instance = await instanceService.createInstance({
-        definitionId: definition.id,
+      // 启动流程实例（通过流程引擎启动，以确保执行开始节点并创建任务）
+      const instance = await enhancedWorkflowEngine.startProcess({
+        processKey: preset.workflowTemplateId,
         businessKey: params.businessKey || `BF-${Date.now()}`,
-        businessId: params.businessId,
+        businessId: businessId,
         title: params.title || preset.name,
         variables,
         initiator: params.initiator
@@ -293,11 +340,14 @@ export class ProcessFormIntegrationService {
         }
       } else if (preset.businessType === 'EquipmentTransfer') {
         try {
+          console.log('[ProcessFormIntegrationService] 创建调拨单 - cleanedFormData:', JSON.stringify(cleanedFormData, null, 2));
+          console.log('[ProcessFormIntegrationService] 创建调拨单 - estimatedArrivalDate:', cleanedFormData.estimatedArrivalDate);
           const order = await transferOrderService.createOrder(
             cleanedFormData as any,
             params.initiator.id,
             params.initiator.name
           );
+          console.log('[ProcessFormIntegrationService] 调拨单创建结果:', order);
           if (order) {
             await instanceService.updateInstance(instance.id, { business_id: order.id });
           }
@@ -365,7 +415,7 @@ export class ProcessFormIntegrationService {
   /**
    * 获取流程表单的字段定义
    */
-  async getFormFields(presetId: string): Promise<any[]> {
+  async getFormFields(presetId: string, nodeId?: string): Promise<any[]> {
     const preset = this.presets.get(presetId);
     if (!preset) return [];
 
@@ -376,9 +426,19 @@ export class ProcessFormIntegrationService {
     const workflowTemplate = WorkflowTemplatesService.getTemplateById(preset.workflowTemplateId);
 
     // 如果工作流模板有预设字段，则使用工作流模板的字段，否则使用表单模板的字段
-    const fields = workflowTemplate && workflowTemplate.stages && workflowTemplate.stages.length > 0
-      ? (workflowTemplate.stages[0].formFields as any[] || formTemplate.fields)
+    let fields = workflowTemplate && workflowTemplate.formSchema && workflowTemplate.formSchema.length > 0
+      ? (workflowTemplate.formSchema as any[])
       : formTemplate.fields;
+
+    // 如果指定了节点ID，则根据 visibleOn 进行过滤
+    if (nodeId && fields && fields.length > 0) {
+      fields = fields.filter(field => {
+        // 如果字段没有 visibleOn 属性，默认可见（向后兼容）
+        if (!field.visibleOn || !Array.isArray(field.visibleOn)) return true;
+        // 检查当前节点是否在可见列表中
+        return field.visibleOn.includes(nodeId);
+      });
+    }
 
     return fields;
   }

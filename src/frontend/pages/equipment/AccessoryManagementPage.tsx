@@ -417,7 +417,7 @@ export default function AccessoryManagementPage() {
             ) : (
               accessories.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 sticky left-0 bg-white z-10">
+                  <td className={`px-4 py-3 sticky left-0 bg-white ${hoveredAccessory === item.id ? 'z-20' : 'z-10'}`}>
                     <div className="relative inline-block">
                       <span
                         onClick={() => navigate(`/equipment/accessories/${item.id}`)}
@@ -428,8 +428,8 @@ export default function AccessoryManagementPage() {
                         {item.accessory_name}
                       </span>
                       {hoveredAccessory === item.id && ((item.images && item.images.length > 0) || (item.accessory_images && item.accessory_images.length > 0)) && (
-                        <div className="absolute z-[100] left-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[150px] max-w-[200px]">
-                          <div className="text-xs text-gray-500 mb-1">配件图片</div>
+                        <div className="absolute z-[100] left-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px] max-w-[300px]">
+                          <div className="text-xs text-gray-500 mb-1 font-semibold border-b pb-1">配件图片预览</div>
                           <img
                             src={(item.accessory_images && item.accessory_images[0]) || (item.images && item.images[0])}
                             alt="配件图片"
@@ -461,36 +461,12 @@ export default function AccessoryManagementPage() {
                   <td className="px-4 py-3 text-sm text-gray-900">{formatDate(item.purchase_date)}</td>
                   <td className="px-4 py-3 text-sm text-gray-900">{formatCurrency(item.purchase_price)}</td>
                   <td className="px-4 py-3 sticky right-0 bg-white z-10">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEdit(item)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        编辑
-                      </button>
-                      {item.status === 'normal' && (
-                        <button
-                          onClick={() => handleMarkLost(item.id)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          标记遗失
-                        </button>
-                      )}
-                      {item.status === 'lost' && (
-                        <button
-                          onClick={() => handleRecover(item.id)}
-                          className="text-green-600 hover:text-green-800 text-sm"
-                        >
-                          恢复
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        className="text-gray-600 hover:text-gray-800 text-sm"
-                      >
-                        删除
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => navigate(`/equipment/accessories/${item.id}`)}
+                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      详情
+                    </button>
                   </td>
                 </tr>
               ))

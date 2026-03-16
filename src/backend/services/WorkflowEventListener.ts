@@ -147,66 +147,56 @@ export class WorkflowEventListener {
         return;
       }
 
-      if (nodeId === 'from-location-manager' || nodeId === 'from_manager' || nodeId === 'from-manager' || nodeId === 'from-manager-approval') {
+      if (nodeId === 'from-location-manager') {
         if (action === 'approve' || action === 'approved') {
+          // 处理发货确认
+          const shipData = params.formData || {};
+          await transferOrderService.confirmShipping(transferOrderId, {
+            shipped_by: operator.id,
+            shipped_at: shipData.shipped_at || new Date().toISOString(),
+            shipping_no: shipData.shipping_no || `AUTO-${Date.now()}`,
+            shipping_attachment: shipData.shipping_attachment,
+            item_images: shipData.item_images || [],
+            package_images: shipData.package_images || [],
+            shipping_notes: shipData.shipping_notes || comment
+          });
           await transferOrderService.approveFromLocation(transferOrderId, operator.id, comment);
-
-          await transferOrderService.confirmShipping(transferOrderId, {
-            shipped_by: operator.id,
-            shipped_at: new Date().toISOString(),
-            shipping_no: `AUTO-${Date.now()}`,
-            shipping_attachment: undefined,
-            item_images: [],
-            package_images: []
-          });
         } else if (action === 'reject' || action === 'rejected') {
-          await transferOrderService.rejectOrder(transferOrderId, operator.id, operator.name, comment || '');
+          await transferOrderService.rejectOrder(transferOrderId, operator.id, operator.name, comment || '调出位置拒绝');
         }
-      } else if (nodeId === 'shipping' || nodeId === 'ship') {
+      } else if (nodeId === 'to-location-manager') {
         if (action === 'approve' || action === 'approved') {
-          const shipFormData = params.formData || {};
-          await transferOrderService.confirmShipping(transferOrderId, {
-            shipped_by: operator.id,
-            shipped_at: shipFormData.shipped_at,
-            shipping_no: shipFormData.shipping_no,
-            shipping_attachment: shipFormData.shipping_attachment,
-            item_images: shipFormData.item_images,
-            package_images: shipFormData.package_images
-          });
-        }
-      } else if (nodeId === 'to-location-manager' || nodeId === 'receiving' || nodeId === 'receive') {
-        if (action === 'approve' || action === 'approved') {
-          await transferOrderService.approveToLocation(transferOrderId, operator.id, comment);
-
+          // 处理收货确认
+          const receiveData = params.formData || {};
           const order = await transferOrderService.getById(transferOrderId);
-          if (!order) {
-            return;
-          }
+          if (!order) return;
 
-          await transferOrderService.confirmShipping(transferOrderId, {
-            shipped_by: operator.id,
-            shipped_at: new Date().toISOString(),
-            shipping_no: `AUTO-${Date.now()}`,
-            shipping_attachment: undefined,
-            item_images: [],
-            package_images: []
+          const receivedItems = (order.items || []).map((item: any) => {
+            // 从表单数据中提取实收数量，如果没提供则默认为申请数量
+            const actualQty = receiveData.items?.find((i: any) => i.item_id === item.id)?.received_quantity;
+            return {
+              item_id: item.id,
+              received_quantity: actualQty !== undefined ? actualQty : item.quantity
+            };
           });
 
-          const items = order.items || [];
-          const receivedItems = items.map((item: any) => ({
-            item_id: item.id,
-            received_quantity: item.quantity
-          }));
-
-          const receiveFormData = params.formData || {};
           await transferOrderService.confirmReceiving(transferOrderId, {
             received_by: operator.id,
-            receive_status: receiveFormData.receive_status || 'normal',
-            receive_comment: comment || '审批通过自动收货',
-            item_images: receiveFormData.item_images || [],
-            package_images: receiveFormData.package_images || [],
+            received_at: receiveData.received_at || new Date().toISOString(),
+            receive_status: receiveData.receive_status || 'normal',
+            receive_comment: comment || '确认收货',
+            item_images: receiveData.item_images || [],
+            package_images: receiveData.package_images || [],
             received_items: receivedItems
           });
+          
+          await transferOrderService.approveToLocation(transferOrderId, operator.id, comment);
+        }
+      } else if (nodeId === 'unreceived-review') {
+        if (action === 'approve' || action === 'approved') {
+          // 调出负责人完成核实未到货项目
+          // 这里可以调用相关的业务方法来处理最终的库存调整
+          console.log(`[WorkflowEventListener] 调出负责人完成核实: ${transferOrderId}`);
         }
       }
     } catch (error) {

@@ -76,11 +76,15 @@ export class EquipmentInboundServiceV2 {
   }) {
     const { quantity, category, images, attachments } = data;
 
+    // 业务逻辑：假负载强制使用 BATCH 模式，且不生成管理编码
+    const finalTrackingType = category === 'fake_load' ? 'BATCH' : data.tracking_type;
+    const finalManageCode = category === 'fake_load' ? undefined : data.manage_code;
+
     // 如果提供了管理编码，校验唯一性
-    if (data.manage_code) {
-      const isUnique = await this.checkManageCodeUnique(data.manage_code);
+    if (finalManageCode) {
+      const isUnique = await this.checkManageCodeUnique(finalManageCode);
       if (!isUnique) {
-        throw new Error(`管理编码 "${data.manage_code}" 已存在，请使用其他编码`);
+        throw new Error(`管理编码 "${finalManageCode}" 已存在，请使用其他编码`);
       }
     }
 
@@ -98,10 +102,10 @@ export class EquipmentInboundServiceV2 {
       equipment_name: data.equipment_name,
       model_no: data.model_no,
       category: data.category,
-      tracking_type: data.tracking_type,
+      tracking_type: finalTrackingType,
       quantity: data.quantity,
       serial_number: data.serial_number,
-      manage_code: data.manage_code,
+      manage_code: finalManageCode,
       unit: data.unit,
       location_status: resolvedLocationStatus as any,
       location_id: data.location_id,
@@ -170,11 +174,15 @@ export class EquipmentInboundServiceV2 {
   }) {
     const { images } = data;
 
+    // 业务逻辑：假负载强制使用 BATCH 模式，且不生成管理编码
+    const finalTrackingType = data.category === 'fake_load' ? 'BATCH' : data.tracking_type;
+    const finalManageCode = data.category === 'fake_load' ? undefined : data.manage_code;
+
     // 如果提供了管理编码，校验唯一性
-    if (data.manage_code) {
-      const isUnique = await this.checkManageCodeUnique(data.manage_code);
+    if (finalManageCode) {
+      const isUnique = await this.checkManageCodeUnique(finalManageCode);
       if (!isUnique) {
-        throw new Error(`管理编码 "${data.manage_code}" 已存在，请使用其他编码`);
+        throw new Error(`管理编码 "${finalManageCode}" 已存在，请使用其他编码`);
       }
     }
 
@@ -194,7 +202,7 @@ export class EquipmentInboundServiceV2 {
       category: data.category,
       quantity: data.quantity,
       serial_number: data.serial_number,
-      manage_code: data.manage_code,
+      manage_code: finalManageCode,
       unit: data.unit,
       location_id: data.location_id,
       location_status: resolvedLocationStatus as any,
@@ -203,7 +211,8 @@ export class EquipmentInboundServiceV2 {
       purchase_price: typeof data.purchase_price === 'string' ? parseFloat(data.purchase_price) : data.purchase_price,
       host_equipment_id: data.host_equipment_id,
       usage_status: data.usage_status || (data.host_equipment_id ? 'in_use' : 'idle'),
-      source_type: data.source_type || 'inbound_separate'
+      source_type: data.source_type || 'inbound_separate',
+      tracking_type: finalTrackingType
     });
 
     // 保存配件图片到 equipment_images 表

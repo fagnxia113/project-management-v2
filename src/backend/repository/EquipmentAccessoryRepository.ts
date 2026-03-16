@@ -19,7 +19,7 @@ export interface EquipmentAccessory {
 
 export interface EquipmentAccessoryInstance {
   id: string
-  equipment_id: string
+  host_equipment_id: string
   accessory_id: string
   quantity?: number
   accessory_desc?: string
@@ -53,7 +53,7 @@ export class EquipmentAccessoryRepository {
 
   async findByEquipmentId(equipmentId: string): Promise<EquipmentAccessoryInstance[]> {
     return await prisma.equipment_accessory_instances.findMany({
-      where: { equipment_id: equipmentId },
+      where: { host_equipment_id: equipmentId },
       include: { accessories: true }
     }) as any as EquipmentAccessoryInstance[]
   }
@@ -66,8 +66,7 @@ export class EquipmentAccessoryRepository {
 
   async findWithDetails(equipmentId: string): Promise<any[]> {
     return await prisma.equipment_accessory_instances.findMany({
-      where: { equipment_id: equipmentId },
-      include: { accessories: true }
+      where: { host_equipment_id: equipmentId }
     })
   }
 
@@ -96,7 +95,7 @@ export class EquipmentAccessoryRepository {
   }
 
   async deleteByEquipmentId(equipmentId: string): Promise<void> {
-    await prisma.equipment_accessory_instances.deleteMany({ where: { equipment_id: equipmentId } })
+    await prisma.equipment_accessory_instances.deleteMany({ where: { host_equipment_id: equipmentId } })
   }
 
   async createRelation(data: Partial<AccessoryRelation>): Promise<AccessoryRelation> {

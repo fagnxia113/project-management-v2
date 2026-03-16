@@ -115,7 +115,8 @@ const FORM_GROUP_CONFIG: Record<string, { title: string; fields: string[]; icon?
     { title: '调拨信息', fields: ['fromLocationType', 'toLocationType', 'transferReason', 'estimatedArrivalDate'], icon: FileText },
     { title: '调出位置', fields: ['_fromLocationName', '_fromManagerName'], icon: FileText },
     { title: '调入位置', fields: ['_toLocationName', '_toManagerName'], icon: FileText },
-    { title: '发货信息', fields: ['shippingDate', 'waybillNo', 'shippingNotes'], icon: FileText },
+    { title: '调拨设备', fields: ['items'], icon: FileText },
+    { title: '发货信息', fields: ['shippingDate', 'shipping_no', 'shippingNotes'], icon: FileText },
     { title: '收货信息', fields: ['receiveStatus', 'receiveComment'], icon: FileText }
   ],
   'default': [
@@ -329,7 +330,7 @@ export default function ProcessInstanceDetailPage() {
     setDynamicOptions(options)
   }
 
-  const getDisplayValue = (fieldName: string, value: any): string => {
+  const getDisplayValue = (fieldName: string, value: any): React.ReactNode => {
     console.log('[ProcessInstanceDetailPage] getDisplayValue called:', { fieldName, value, dynamicOptionsKeys: Object.keys(dynamicOptions) })
 
     if (value === null || value === undefined || value === '') return '-'
@@ -362,6 +363,29 @@ export default function ProcessInstanceDetailPage() {
       try {
         return new Date(value).toLocaleDateString('zh-CN')
       } catch { }
+    }
+
+    if (Array.isArray(value)) {
+      if (fieldName === 'items') {
+        return (
+          <div className="space-y-2 w-full mt-1">
+            {value.map((item: any, i: number) => (
+              <div key={i} className="text-sm bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between items-center">
+                <div>
+                  <div className="font-medium text-gray-900">{item.equipment_name || item.name}</div>
+                  <div className="text-gray-500 text-xs mt-1">
+                    型号: {item.model_no || '-'} | 分类: {item.category === 'instrument' ? '仪器' : item.category === 'fake_load' ? '假负载' : item.category || '-'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-medium text-blue-600">{item.quantity}</span> {item.unit || '件'}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+      return JSON.stringify(value)
     }
 
     if (typeof value === 'object') return JSON.stringify(value)
@@ -452,14 +476,14 @@ export default function ProcessInstanceDetailPage() {
     return config.map((group: any) => {
       let fields: string[]
       if (group.fields.length === 0) {
-        fields = Object.keys(formData)
+        fields = Object.keys(formData).filter((f: string) => !f.startsWith('_'))
       } else {
         fields = group.fields.filter((f: string) => formData.hasOwnProperty(f))
       }
       
       return {
         title: group.title,
-        fields: fields.filter((f: string) => !f.startsWith('_'))
+        fields: fields
       }
     }).filter((g: any) => g.fields.length > 0)
   }
@@ -585,12 +609,24 @@ export default function ProcessInstanceDetailPage() {
                         const field = formFields.find(f => f.name === fieldName)
                         const value = instance.variables?.formData?.[fieldName]
                         
+                        const labelMap: Record<string, string> = {
+                          '_fromLocationName': '调出位置',
+                          '_fromManagerName': '调出负责人 (姓名)',
+                          '_toLocationName': '调入位置',
+                          '_toManagerName': '调入负责人 (姓名)',
+                          'items': '设备明细',
+                          'shippingDate': '发货时间',
+                          'shipping_no': '物流单号',
+                          'shippingNotes': '发货备注',
+                          'receiveStatus': '收货状态',
+                          'receiveComment': '收货备注'
+                        }
                         return (
-                          <div key={fieldName} className="group">
+                          <div key={fieldName} className={`group ${fieldName === 'items' ? 'col-span-2' : ''}`}>
                             <label className="text-sm font-medium text-gray-600 mb-1.5 block">
-                              {field?.label || fieldName}
+                              {field?.label || labelMap[fieldName] || fieldName}
                             </label>
-                            <div className="px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 text-gray-900 text-sm min-h-[42px] flex items-center">
+                            <div className={`px-3 py-2.5 bg-gray-50 rounded-lg border border-gray-100 text-gray-900 text-sm min-h-[42px] ${fieldName === 'items' ? '' : 'flex items-center'}`}>
                               {getDisplayValue(fieldName, value)}
                             </div>
                           </div>

@@ -83,9 +83,22 @@ async function initializeDefaultWorkflowDefinitions() {
     let createdCount = 0
     
     for (const template of templates) {
-      const existingDefinition = await definitionService.getLatestDefinition(template.id)
+      const existingDefinition = await definitionService.getDefinitionByKey(template.id)
       
-      if (!existingDefinition) {
+      let shouldUpdate = !existingDefinition
+      
+      if (existingDefinition) {
+        // 比较节点和连线配置是否有变化
+        const existingConfig = JSON.stringify(existingDefinition.node_config)
+        const templateConfig = JSON.stringify(template.definition)
+        
+        if (existingConfig !== templateConfig) {
+          shouldUpdate = true
+          logger.info(`流程定义 ${template.name} 检测到变更，准备升级版本`)
+        }
+      }
+      
+      if (shouldUpdate) {
         const definition = await definitionService.createDefinition({
           key: template.id,
           name: template.name,
@@ -94,11 +107,9 @@ async function initializeDefaultWorkflowDefinitions() {
           nodes: template.definition.nodes,
           edges: template.definition.edges,
           form_schema: template.formSchema,
-          version: 1,
-          status: 'active',
         })
         
-        logger.info(`创建流程定义: ${template.name}`)
+        logger.info(`${existingDefinition ? '升级' : '创建'}流程定义: ${template.name} (版本: ${definition.version})`)
         createdCount++
       }
     }

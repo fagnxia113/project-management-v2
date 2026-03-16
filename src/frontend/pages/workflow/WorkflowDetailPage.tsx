@@ -255,20 +255,20 @@ export default function WorkflowDetailPage() {
                 }
                 
                 const definitionKey = definitionResult.data.key || definitionResult.data.definition_key
-                if (definitionKey === 'equipment-transfer' || definitionKey === 'equipment_transfer') {
+                if (definitionKey === 'equipment-transfer' || definitionKey === 'equipment_transfer' || definitionKey === 'preset-equipment-transfer') {
                   setFormFields([
                     { name: 'fromLocationType', label: '调出位置类型', type: 'select', required: true, placeholder: '请选择调出位置类型', options: [
                       { label: '仓库', value: 'warehouse' },
                       { label: '项目', value: 'project' }
                     ] },
-                    { name: 'fromLocationId', label: '调出位置', type: 'select', required: true, placeholder: '请选择调出位置', options: [] },
-                    { name: 'fromManagerId', label: '调出位置负责人', type: 'select', required: true, placeholder: '请选择调出位置负责人', options: [] },
+                    { name: 'fromLocationId', label: '调出位置', type: 'select', required: true, placeholder: '请选择调出位置', options: [], display: { type: 'lookup', format: 'name' } },
+                    { name: 'fromManagerId', label: '调出位置负责人', type: 'user', required: true, placeholder: '请选择调出位置负责人', display: { type: 'user', format: 'name' } },
                     { name: 'toLocationType', label: '调入位置类型', type: 'select', required: true, placeholder: '请选择调入位置类型', options: [
                       { label: '仓库', value: 'warehouse' },
                       { label: '项目', value: 'project' }
                     ] },
-                    { name: 'toLocationId', label: '调入位置', type: 'select', required: true, placeholder: '请选择调入位置', options: [] },
-                    { name: 'toManagerId', label: '调入位置负责人', type: 'select', required: true, placeholder: '请选择调入位置负责人', options: [] },
+                    { name: 'toLocationId', label: '调入位置', type: 'select', required: true, placeholder: '请选择调入位置', options: [], display: { type: 'lookup', format: 'name' } },
+                    { name: 'toManagerId', label: '调入位置负责人', type: 'user', required: true, placeholder: '请选择调入位置负责人', display: { type: 'user', format: 'name' } },
                     { name: 'transferReason', label: '调拨原因', type: 'textarea', required: true, placeholder: '请输入调拨原因', rows: 3 },
                     { name: 'estimatedArrivalDate', label: '期望到达时间', type: 'date', required: true, placeholder: '请选择期望到达时间' }
                   ])
@@ -445,7 +445,7 @@ export default function WorkflowDetailPage() {
           
           if (userIds.length > 0) {
             loadPromises.push(
-              fetchWithTimeout(`${API_URL.BASE}/api/personnel`, {
+              fetchWithTimeout(`${API_URL.BASE}/api/personnel/employees`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               }).then(async (res) => {
                 if (res.ok) {
@@ -468,18 +468,14 @@ export default function WorkflowDetailPage() {
           // 并行加载所有数据
           await Promise.allSettled(loadPromises)
           
-          // 设备调拨 - 如果是调入方审批节点，加载调拨单详情获取发货信息
-          const isEquipmentTransfer = instanceResult.data.definition_key === 'equipment_transfer' || instanceResult.data.definition_key === 'equipment-transfer'
-          const transferOrderId = instanceResult.data.business_id || formData.transferOrderId
+          // 设备调拨 - 加载调拨单详情获取设备明细和发货信息（所有审批节点都需要）
+          const workflowFormData = instanceResult.data.variables?.formData || {}
+          const isEquipmentTransfer = instanceResult.data.definition_key === 'equipment_transfer' || instanceResult.data.definition_key === 'equipment-transfer' || instanceResult.data.definition_key === 'preset-equipment-transfer'
+          const transferOrderId = instanceResult.data.business_id || workflowFormData.transferOrderId
           console.log('[WorkflowDetailPage] 加载调拨单 - isEquipmentTransfer:', isEquipmentTransfer)
-          console.log('[WorkflowDetailPage] 加载调拨单 - instanceResult.data:', instanceResult.data)
+          console.log('[WorkflowDetailPage] 加载调拨单 - instanceResult.data.definition_key:', instanceResult.data.definition_key)
           console.log('[WorkflowDetailPage] 加载调拨单 - instanceResult.data.business_id:', instanceResult.data.business_id)
-          console.log('[WorkflowDetailPage] 加载调拨单 - formData:', formData)
-          console.log('[WorkflowDetailPage] 加载调拨单 - formData.fromLocationType:', formData.fromLocationType)
-          console.log('[WorkflowDetailPage] 加载调拨单 - formData.fromLocationId:', formData.fromLocationId)
-          console.log('[WorkflowDetailPage] 加载调拨单 - formData.toLocationType:', formData.toLocationType)
-          console.log('[WorkflowDetailPage] 加载调拨单 - formData.toLocationId:', formData.toLocationId)
-          console.log('[WorkflowDetailPage] 加载调拨单 - formData.transferOrderId:', formData.transferOrderId)
+          console.log('[WorkflowDetailPage] 加载调拨单 - workflowFormData.transferOrderId:', workflowFormData.transferOrderId)
           console.log('[WorkflowDetailPage] 加载调拨单 - transferOrderId:', transferOrderId)
           if (isEquipmentTransfer && transferOrderId) {
             try {
@@ -488,8 +484,10 @@ export default function WorkflowDetailPage() {
               })
               if (transferRes.ok) {
                 const transferResult = await transferRes.json()
+                console.log('[WorkflowDetailPage] 调拨单详情加载结果:', transferResult)
                 if (transferResult.success && transferResult.data) {
                   setTransferOrder(transferResult.data)
+                  console.log('[WorkflowDetailPage] 调拨单items:', transferResult.data.items)
                 }
               }
             } catch (e) {
@@ -529,7 +527,7 @@ export default function WorkflowDetailPage() {
   const handleApprove = async () => {
     if (!currentTask || !instance) return
     
-    const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer'
+    const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer' || instance.definition_key === 'preset-equipment-transfer'
     const isEquipmentRepair = instance.definition_key === 'equipment-repair'
     const formData = instance.variables?.formData || {}
     const transferOrderId = instance.business_id || formData.transferOrderId
@@ -604,6 +602,11 @@ export default function WorkflowDetailPage() {
           console.warn('Token解析失败')
         }
       }
+
+      const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer' || instance.definition_key === 'preset-equipment-transfer'
+      const isEquipmentRepair = instance.definition_key === 'equipment-repair'
+      const formData = instance.variables?.formData || {}
+      const transferOrderId = instance.business_id || formData.transferOrderId
 
       // 设备调拨 - 调出方审批时先调用发货API
       console.log('[WorkflowDetailPage] 准备调用发货API - 条件检查:', {
@@ -1391,7 +1394,8 @@ export default function WorkflowDetailPage() {
     const currentNodeId = currentTask?.node_id || instance?.current_node_id || 'start'
     const isReadonly = instance.status === 'completed' || instance.status === 'terminated' || !currentTask
     
-    const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer'
+    const isEquipmentTransfer = instance.definition_key === 'equipment_transfer' || instance.definition_key === 'equipment-transfer' || instance.definition_key === 'preset-equipment-transfer'
+    const isOutboundApproval = currentTask?.node_id && (currentTask.node_id === 'from-location-manager' || currentTask.node_id.includes('from'))
     const isInboundApproval = currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to'))
 
     const handleFormDataChange = (name: string, value: any) => {
@@ -2028,7 +2032,7 @@ export default function WorkflowDetailPage() {
             )}
             
             {/* 设备调拨 - 调出方审批时显示发货信息 */}
-            {actionType === 'approve' && (instance?.definition_key === 'equipment_transfer' || instance?.definition_key === 'equipment-transfer') && 
+            {actionType === 'approve' && (instance?.definition_key === 'equipment_transfer' || instance?.definition_key === 'equipment-transfer' || instance?.definition_key === 'preset-equipment-transfer') && 
              currentTask?.node_id && (currentTask.node_id === 'from-location-manager' || currentTask.node_id.includes('from')) && (
               <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <h4 className="font-medium text-blue-800 mb-3">发货信息填写</h4>
@@ -2071,7 +2075,7 @@ export default function WorkflowDetailPage() {
                 </div>
                 
                 {/* 设备明细图片上传 */}
-                {transferOrder?.items && transferOrder.items.length > 0 && (
+                {transferOrder?.items && transferOrder.items.length > 0 ? (
                   <div className="mt-4 border-t border-blue-200 pt-4">
                     <h5 className="font-medium text-blue-800 mb-3">设备明细图片</h5>
                     <div className="space-y-4">
@@ -2150,6 +2154,10 @@ export default function WorkflowDetailPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 border-t border-blue-200 pt-4 text-center text-gray-500 text-sm">
+                    暂无设备明细数据，请检查调拨单是否正确加载
                   </div>
                 )}
                 
@@ -2244,7 +2252,7 @@ export default function WorkflowDetailPage() {
             )}
 
             {/* 设备调拨 - 调入方确认时显示收货信息 */}
-            {actionType === 'approve' && (instance?.definition_key === 'equipment_transfer' || instance?.definition_key === 'equipment-transfer') && 
+            {actionType === 'approve' && (instance?.definition_key === 'equipment_transfer' || instance?.definition_key === 'equipment-transfer' || instance?.definition_key === 'preset-equipment-transfer') && 
              currentTask?.node_id && (currentTask.node_id === 'to-location-manager' || currentTask.node_id.includes('to')) && (
               <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
                 <h4 className="font-medium text-green-800 mb-3">收货确认</h4>

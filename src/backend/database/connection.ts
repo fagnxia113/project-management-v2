@@ -30,8 +30,8 @@ class Database {
         charset: 'utf8mb4',
         multipleStatements: false,
         namedPlaceholders: true,
-        flags: '+MULTI_STATEMENTS,-FOUND_ROWS'
-      });
+        flags: ['+MULTI_STATEMENTS', '-FOUND_ROWS']
+      } as any);
 
       // 测试连接
       const connection = await this.pool.getConnection();
@@ -129,12 +129,46 @@ class Database {
   }
 
   /**
-   * 自动包裹事务的执行工具
+   * 为连接提供统一的 API 封装
    */
-  async executeTransaction<T>(callback: (connection: mysql.PoolConnection) => Promise<T>): Promise<T> {
+  use(connection: mysql.PoolConnection) {
+    return {
+      query: async <T = any>(sql: string, params?: any[]): Promise<T[]> => {
+        const [rows] = await connection.query(sql, params);
+        return rows as T[];
+      },
+      queryOne: async <T = any>(sql: string, params?: any[]): Promise<T | null> => {
+        const [rows] = await connection.query(sql, params) as any[];
+        return rows.length > 0 ? rows[0] : null;
+      },
+      execute: async (sql: string, params?: any[]): Promise<any> => {
+        const safeParams = params ? params.map(p => p === undefined ? null : p) : [];
+        const [result] = await connection.execute(sql, safeParams);
+        return result;
+      },
+      insert: async (sql: string, params?: any[]): Promise<any> => {
+        return this.use(connection).execute(sql, params);
+      },
+      update: async (sql: string, params?: any[]): Promise<any> => {
+        return this.use(connection).execute(sql, params);
+      },
+      delete: async (sql: string, params?: any[]): Promise<any> => {
+        return this.use(connection).execute(sql, params);
+      }
+    };
+  }
+
+  /**
+   * 自动包裹事务的执行工具
+   * 回调参数现在提供一个封装好的上下文对象，其 API 与 db 实例一致
+   */
+  async executeTransaction<T>(
+    callback: (tx: ReturnType<Database['use']>, connection: mysql.PoolConnection) => Promise<T>
+  ): Promise<T> {
     const connection = await this.beginTransaction();
     try {
-      const result = await callback(connection);
+      const tx = this.use(connection);
+      const result = await callback(tx, connection);
       await connection.commit();
       return result;
     } catch (error) {

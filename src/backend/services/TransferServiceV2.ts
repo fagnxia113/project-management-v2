@@ -27,9 +27,9 @@ export class TransferServiceV2 {
     const orderId = uuidv4();
 
     // 开始事务
-    await db.executeTransaction(async (connection) => {
+    await db.executeTransaction(async (tx) => {
       // 创建主单
-      await connection.execute(
+      await tx.execute(
         `INSERT INTO workflow_orders 
          (id, order_no, type, status, from_location_id, to_location_id, dispatcher_id)
          VALUES (?, ?, 'transfer', 'CREATED', ?, ?, ?)`,
@@ -37,7 +37,7 @@ export class TransferServiceV2 {
       );
 
       // 创建设备明细
-      await connection.execute(
+      await tx.execute(
         `INSERT INTO workflow_order_items 
          (id, order_id, item_type, item_id, plan_qty, status)
          VALUES (?, ?, 'equipment', ?, ?, 'PENDING')`,
@@ -47,7 +47,7 @@ export class TransferServiceV2 {
       // 自动关联配件
       if (equipment.accessories && equipment.accessories.length > 0) {
         for (const accessory of equipment.accessories) {
-          await connection.execute(
+          await tx.execute(
             `INSERT INTO workflow_order_items 
              (id, order_id, item_type, item_id, plan_qty, status)
              VALUES (?, ?, 'accessory', ?, ?, 'PENDING')`,
@@ -154,12 +154,12 @@ export class TransferServiceV2 {
     }
 
     // 开始事务
-    await db.executeTransaction(async (connection) => {
+    await db.executeTransaction(async (tx) => {
       // 获取订单明细
-      const [orderItems] = await connection.query(
+      const orderItems = await tx.query<any>(
         'SELECT * FROM workflow_order_items WHERE order_id = ?',
         [orderId]
-      ) as any[];
+      );
 
       // 构建 item_id 到 dispatchData 的映射
       const itemMap = new Map();
@@ -186,14 +186,14 @@ export class TransferServiceV2 {
         }
 
         // 更新明细
-        await connection.execute(
+        await tx.execute(
           'UPDATE workflow_order_items SET status = ?, dispatch_item_image = ? WHERE id = ?',
           ['DISPATCHED', dispatchData.dispatch_item_image, orderItem.id]
         );
       }
 
       // 更新主单
-      await connection.execute(
+      await tx.execute(
         'UPDATE workflow_orders SET status = ?, dispatch_overall_image = ? WHERE id = ?',
         ['DISPATCHED', dispatch_overall_image, orderId]
       );
@@ -260,12 +260,12 @@ export class TransferServiceV2 {
     const locationStatus = loc.type || 'warehouse';
 
     // 开始事务
-    await db.executeTransaction(async (connection) => {
+    await db.executeTransaction(async (tx) => {
       // 查询订单明细
-      const [orderItems] = await connection.query(
+      const orderItems = await tx.query<any>(
         'SELECT * FROM workflow_order_items WHERE order_id = ?',
         [orderId]
-      ) as any[];
+      );
 
       // 构建 items Map
       const itemMap = new Map();
@@ -300,7 +300,7 @@ export class TransferServiceV2 {
 
         if (receiveData.actual_qty >= item.plan_qty) {
           // 全数收货 (或超收)
-          await connection.execute(
+          await tx.execute(
             'UPDATE workflow_order_items SET status = ?, actual_qty = ?, receive_item_image = ? WHERE id = ?',
             ['RECEIVED', receiveData.actual_qty, receiveData.receive_item_image, item.id]
           );
@@ -335,7 +335,7 @@ export class TransferServiceV2 {
           }
         } else if (receiveData.actual_qty < item.plan_qty) {
           // 部分收货
-          await connection.execute(
+          await tx.execute(
             'UPDATE workflow_order_items SET status = ?, actual_qty = ?, receive_item_image = ? WHERE id = ?',
             ['EXCEPTION', receiveData.actual_qty, receiveData.receive_item_image, item.id]
           );
@@ -382,7 +382,7 @@ export class TransferServiceV2 {
 
       // 更新主单
       if (exceptionItems.length > 0) {
-        await connection.execute(
+        await tx.execute(
           'UPDATE workflow_orders SET status = ?, receive_overall_image = ?, receiver_id = ? WHERE id = ?',
           ['EXCEPTION_CONFIRMING', receive_overall_image, receiver_id, orderId]
         );
@@ -390,7 +390,7 @@ export class TransferServiceV2 {
         // 创建异常任务
         for (const exception of exceptionItems) {
           const taskId = uuidv4();
-          await connection.execute(
+          await tx.execute(
             `INSERT INTO exception_tasks 
              (id, order_id, item_id, type, description, responsible_id)
              VALUES (?, ?, ?, 'SHORTAGE', ?, ?)`,
@@ -404,7 +404,7 @@ export class TransferServiceV2 {
           );
         }
       } else {
-        await connection.execute(
+        await tx.execute(
           'UPDATE workflow_orders SET status = ?, receive_overall_image = ?, receiver_id = ? WHERE id = ?',
           ['COMPLETED', receive_overall_image, receiver_id, orderId]
         );
@@ -437,25 +437,23 @@ export class TransferServiceV2 {
     }
 
     // 开始事务
-    await db.executeTransaction(async (connection) => {
+    await db.executeTransaction(async (tx) => {
       for (const exceptionId of exception_ids) {
         // 验证异常任务
-        const [exceptionResult] = await connection.query(
+        const exception = await tx.queryOne<any>(
           'SELECT * FROM exception_tasks WHERE id = ? AND order_id = ?',
           [exceptionId, orderId]
-        ) as any[];
-        const exception = exceptionResult && exceptionResult[0];
+        );
 
         if (!exception) {
           throw new Error('异常任务不存在');
         }
 
         // 获取关联的明细
-        const [itemResult] = await connection.query(
+        const item = await tx.queryOne<any>(
           'SELECT * FROM workflow_order_items WHERE id = ?',
           [exception.item_id]
-        ) as any[];
-        const item = itemResult && itemResult[0];
+        );
 
         if (!item) {
           throw new Error('明细不存在');
@@ -476,14 +474,14 @@ export class TransferServiceV2 {
         }
 
         // 更新异常任务状态
-        await connection.execute(
+        await tx.execute(
           'UPDATE exception_tasks SET status = ? WHERE id = ?',
           ['CONFIRMED', exceptionId]
         );
       }
 
       // 关闭订单
-      await connection.execute(
+      await tx.execute(
         'UPDATE workflow_orders SET status = ? WHERE id = ?',
         ['CLOSED', orderId]
       );
