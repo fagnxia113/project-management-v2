@@ -5,6 +5,7 @@
  */
 import { EmployeeRepository, employeeRepository } from '../repository/EmployeeRepository.js'
 import { Prisma } from '@prisma/client'
+import { BaseService } from './BaseService.js'
 
 export interface Employee {
   id: string
@@ -27,11 +28,9 @@ export interface Employee {
   updated_at: string
 }
 
-export class EmployeeServiceV2 {
-  private repo: EmployeeRepository
-
+export class EmployeeServiceV2 extends BaseService<Employee> {
   constructor(repo: EmployeeRepository = employeeRepository) {
-    this.repo = repo
+    super(repo)
   }
 
   async getEmployees(filters: {
@@ -56,7 +55,7 @@ export class EmployeeServiceV2 {
     if (department_id) where.department_id = department_id
     if (role) where.role = role as any
 
-    const result = await this.repo.findAll({
+    const result = await this.getAll({
       where,
       orderBy: { created_at: 'desc' },
       skip: (page - 1) * pageSize,
@@ -71,27 +70,27 @@ export class EmployeeServiceV2 {
   }
 
   async getEmployeeById(id: string): Promise<Employee | null> {
-    return (await this.repo.findById(id)) as Employee | null
+    return (await this.getById(id)) as Employee | null
   }
 
   async getActiveEmployees(): Promise<Employee[]> {
-    return (await this.repo.findActive()) as Employee[]
+    return (await (this.repo as any).findActive()) as Employee[]
   }
 
   async createEmployee(data: Partial<Employee>): Promise<Employee> {
-    return (await this.repo.create(data as any)) as Employee
+    return (await this.create(data as any)) as Employee
   }
 
   async updateEmployee(id: string, data: Partial<Employee>): Promise<Employee> {
-    return (await this.repo.update(id, data as any)) as Employee
+    return (await this.update(id, data as any)) as Employee
   }
 
   async deleteEmployee(id: string): Promise<void> {
-    await this.repo.delete(id)
+    await this.delete(id)
   }
 
   async getEmployeeByUserId(userId: string): Promise<Employee | null> {
-    return (await this.repo.findByUserId(userId)) as Employee | null
+    return (await (this.repo as any).findByUserId(userId)) as Employee | null
   }
 }
 

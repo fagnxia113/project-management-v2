@@ -111,11 +111,16 @@ export const performanceCollector = new PerformanceCollector()
 
 export function performanceMiddleware(req: Request, res: Response, next: NextFunction) {
   const startTime = Date.now()
+  const startMemory = process.memoryUsage().heapUsed
 
   res.on('finish', () => {
     const duration = Date.now() - startTime
+    const endMemory = process.memoryUsage().heapUsed
+    const memoryUsage = endMemory - startMemory
     const sessionId = req.sessionID || 'unknown'
     const userId = (req as any).user?.id
+    const contentLength = res.get('content-length') || 0
+    const isError = res.statusCode >= 400
 
     performanceCollector.collectReport(sessionId, {
       userId,
@@ -129,7 +134,36 @@ export function performanceMiddleware(req: Request, res: Response, next: NextFun
           metadata: {
             method: req.method,
             path: req.path,
-            statusCode: res.statusCode
+            statusCode: res.statusCode,
+            isError
+          }
+        },
+        {
+          name: 'memory_usage',
+          value: memoryUsage,
+          timestamp: Date.now(),
+          metadata: {
+            method: req.method,
+            path: req.path
+          }
+        },
+        {
+          name: 'response_size',
+          value: parseInt(contentLength as string) || 0,
+          timestamp: Date.now(),
+          metadata: {
+            method: req.method,
+            path: req.path
+          }
+        },
+        {
+          name: 'http_status_code',
+          value: res.statusCode,
+          timestamp: Date.now(),
+          metadata: {
+            method: req.method,
+            path: req.path,
+            isError
           }
         }
       ]

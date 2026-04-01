@@ -9,11 +9,16 @@
     "dev:backend": "tsx watch src/backend/server.ts",
     "init:db": "tsx src/backend/database/init.ts",
     "build": "tsc && vite build",
+    "build:analyze": "tsc && vite build --analyze",
+    "build:prod": "NODE_ENV=production tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext ts,tsx",
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@formily/core": "^2.3.7",
